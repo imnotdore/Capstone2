@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const Class = require("../models/Class");
-const authMiddleware = require("../middleware/auth");
+const Class = require("../models/class");
+const authMiddleware = require("../middleware/authMiddleware");
 
 // Get classes joined by student
 router.get("/classes", authMiddleware, async (req, res) => {

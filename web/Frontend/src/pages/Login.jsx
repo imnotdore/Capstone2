@@ -4,7 +4,7 @@ import api from "../lib/api";
 import { useNavigate, Link } from "react-router-dom";
 
 export default function Login() {
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ email: "", password: "", role: "student" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -21,7 +21,13 @@ export default function Login() {
       const res = await api.post("/auth/login", form);
       localStorage.setItem("token", res.data.token);
       alert("✅ Login successful!");
-      navigate("/student/dashboard");
+
+      // Redirect based on role
+      if (form.role === "student") {
+        navigate("/student/dashboard");
+      } else if (form.role === "teacher") {
+        navigate("/teacher/dashboard");
+      }
     } catch (err) {
       setError(err.response?.data?.message || "❌ Login failed");
     } finally {
@@ -40,11 +46,22 @@ export default function Login() {
       </div>
 
       {/* Login Form */}
-      <div style={styles.formWrapper}>
+      <div style={styles.rightPanel}>
         <div style={styles.card}>
           <h2 style={styles.title}>Login</h2>
           {error && <p style={styles.error}>{error}</p>}
           <form onSubmit={handleSubmit} style={styles.form}>
+            {/* Role Selector */}
+            <select
+              name="role"
+              value={form.role}
+              onChange={handleChange}
+              style={styles.select}
+            >
+              <option value="student">Student</option>
+              <option value="teacher">Teacher</option>
+            </select>
+
             <input
               type="email"
               name="email"
@@ -79,19 +96,19 @@ export default function Login() {
 const styles = {
   wrapper: {
     display: "flex",
-    minHeight: "100vh",
-    width: "100%",
-    background: "linear-gradient(135deg,#0f2027,#203a43,#2c5364)", // full gradient background
+    height: "100vh",
+    width: "100vw",
+    overflow: "hidden",
+    background: "linear-gradient(135deg,#0f2027,#203a43,#2c5364)",
     color: "#fff",
-    padding: "40px",
   },
   leftText: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
-    alignItems: "flex-start", // nasa gilid (left aligned)
-    paddingLeft: "60px",
+    alignItems: "flex-start",
+    paddingLeft: "20px",
   },
   brand: {
     fontSize: "3rem",
@@ -100,9 +117,9 @@ const styles = {
   tagline: {
     fontSize: "1.3rem",
     lineHeight: 1.5,
-    maxWidth: "400px",
+    maxWidth: "250px",
   },
-  formWrapper: {
+  rightPanel: {
     flex: 1,
     display: "flex",
     justifyContent: "center",
@@ -111,11 +128,11 @@ const styles = {
   card: {
     background: "#fff",
     color: "#333",
-    padding: "40px",
+    padding: "50px",
     borderRadius: "12px",
     width: "100%",
     maxWidth: "400px",
-    boxShadow: "0 8px 16px rgba(0,0,0,0.2)",
+    boxShadow: "0 8px 16px rgba(0,0,0,0.3)",
     textAlign: "center",
   },
   title: {
@@ -136,6 +153,14 @@ const styles = {
     borderRadius: "8px",
     border: "1px solid #ccc",
     fontSize: "1rem",
+    outline: "none",
+  },
+  select: {
+    padding: "12px",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+    fontSize: "1rem",
+    outline: "none",
   },
   button: {
     background: "#28a745",

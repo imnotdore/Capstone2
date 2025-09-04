@@ -1,14 +1,14 @@
+// models/Class.js
 const mongoose = require("mongoose");
 
-const classSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true },   // e.g. "MOBAP"
-    code: { type: String, required: true, unique: true }, // class code na ginagamit ng students
-    teacher: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    students: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-    exams: [{ type: mongoose.Schema.Types.ObjectId, ref: "Exam" }],
-  },
-  { timestamps: true }
-);
+const classSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  code: { type: String, required: true },
+  teacherId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  students: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  exams: [{ type: mongoose.Schema.Types.ObjectId, ref: "Exam" }],
+  createdAt: { type: Date, default: Date.now },
+});
 
-module.exports = mongoose.model("Class", classSchema);
+// ✅ check muna kung may existing model bago gumawa ulit
+module.exports = mongoose.models.Class || mongoose.model("Class", classSchema);

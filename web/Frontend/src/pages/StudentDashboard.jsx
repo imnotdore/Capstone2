@@ -1,227 +1,203 @@
-// web/src/pages/StudentDashboard.jsx
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { FaBell } from "react-icons/fa";
-import api from "../lib/api";
+  import { useState, useEffect } from "react";
+  import api from "../lib/api";
+  import "./StudentDashboard.css";
 
-export default function StudentDashboard() {
-  const [classes, setClasses] = useState([]);
-  const [classCode, setClassCode] = useState("");
-  const [notifications, setNotifications] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const navigate = useNavigate();
+  export default function StudentDashboard() {
+    const [profile, setProfile] = useState({ name: "Loading...", avatar: null });
+    const [classes, setClasses] = useState([]);
+    const [selectedClass, setSelectedClass] = useState(null);
+    const [exams, setExams] = useState([]);
+    const [showJoinModal, setShowJoinModal] = useState(false);
+    const [joinCode, setJoinCode] = useState("");
 
-  // Fetch classes na sinalihan ng student
-  useEffect(() => {
-    const fetchData = async () => {
+    // Fetch student profile
+    useEffect(() => {
+      const fetchProfile = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const res = await api.get("/auth/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const { name } = res.data;
+          setProfile({
+            name,
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+              name
+            )}&background=203a43&color=fff`,
+          });
+        } catch {
+          setProfile({ name: "User", avatar: null });
+        }
+      };
+      fetchProfile();
+    }, []);
+
+    // Fetch student classes
+    const fetchClasses = async () => {
       try {
+        const token = localStorage.getItem("token");
         const res = await api.get("/student/classes", {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         setClasses(res.data);
       } catch (err) {
-        console.error(err);
-        addNotification("❌ Failed to load classes", "error");
+        console.error("Failed to fetch classes", err);
+        setClasses([]);
       }
     };
-    fetchData();
-  }, []);
 
-  // Add notification
-  const addNotification = (text, type) => {
-    const newNotif = { id: Date.now(), text, type };
-    setNotifications((prev) => [newNotif, ...prev]);
-    setTimeout(() => {
-      setNotifications((prev) => prev.filter((n) => n.id !== newNotif.id));
-    }, 5000); // auto-hide after 5s
-  };
+    useEffect(() => {
+      fetchClasses();
+    }, []);
 
-  // Join class
-  const joinClass = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await api.post(
-        "/student/join",
-        { classCode },
-        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
-      );
-      setClasses([...classes, res.data]);
-      addNotification("✅ Joined class successfully!", "success");
-      setClassCode("");
-    } catch (err) {
-      addNotification(err.response?.data?.message || "❌ Failed to join class", "error");
-    }
-  };
+    // Join a class
+    const joinClass = async (e) => {
+      e.preventDefault();
+      if (!joinCode) return alert("Enter class code");
+      try {
+        const token = localStorage.getItem("token");
+        const res = await api.post(
+          "/class/join",
+          { code: joinCode },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        fetchClasses();
+        setShowJoinModal(false);
+        setJoinCode("");
+        alert("Joined class successfully!");
+      } catch (err) {
+        console.error(err);
+        alert("Failed to join class. Check the code.");
+      }
+    };
 
-  // Sign out
-  const handleSignout = () => {
-    localStorage.removeItem("token");
-    navigate("/login");
-  };
+    // Select a class and fetch exams
+    const handleSelectClass = async (c) => {
+      setSelectedClass(c);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await api.get(`/exams/${c._id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setExams(res.data);
+      } catch (err) {
+        console.error("Failed to fetch exams", err);
+        setExams([]);
+      }
+    };
 
-  return (
-    <div style={styles.container}>
-      {/* 🔹 Header */}
-      <header style={styles.header}>
-        <h2 style={{ margin: 0 }}>🎓 Student Dashboard</h2>
-        <div style={styles.headerRight}>
-          {/* Notification Bell */}
-          <div style={{ position: "relative" }}>
-            <FaBell
-              size={22}
-              style={{ cursor: "pointer" }}
-              onClick={() => setShowDropdown(!showDropdown)}
-            />
-            {notifications.length > 0 && (
-              <span style={styles.notifBadge}>{notifications.length}</span>
-            )}
+    const handleLogout = () => {
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    };
 
-            {showDropdown && (
-              <div style={styles.dropdown}>
-                {notifications.length === 0 ? (
-                  <p style={{ padding: "10px" }}>No notifications</p>
+    return (
+      <div className="dashboard-wrapper">
+        {/* HEADER */}
+        <header className="dashboard-header">
+          <h1 className="logo">Student Dashboard</h1>
+          <div className="header-right">
+            <div className="profile">
+              {profile.avatar && <img src={profile.avatar} alt="avatar" />}
+              <span>{profile.name}</span>
+            </div>
+            <button className="logout-btn" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        </header>
+
+        {/* MAIN LAYOUT */}
+        <main className="dashboard-main">
+          {/* Sidebar */}
+          <aside className="sidebar">
+            <h2>📚 My Classes</h2>
+            <button
+              className="primary-btn"
+              onClick={() => setShowJoinModal(true)}
+            >
+              + Join Class
+            </button>
+
+            <ul className="class-list">
+              {classes.length === 0 ? (
+                <li>No classes yet.</li>
+              ) : (
+                classes.map((c) => (
+                  <li
+                    key={c._id}
+                    onClick={() => handleSelectClass(c)}
+                    className={selectedClass?._id === c._id ? "selected" : ""}
+                  >
+                    {c.name}
+                  </li>
+                ))
+              )}
+            </ul>
+          </aside>
+
+          {/* Main content */}
+          <div className="main-content">
+            {selectedClass ? (
+              <>
+                <h3>{selectedClass.name}</h3>
+                <p>
+                  Class Code: <strong>{selectedClass.code}</strong>
+                </p>
+
+                <h4>Exams</h4>
+                {exams.length === 0 ? (
+                  <p>No exams yet.</p>
                 ) : (
-                  notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      style={{
-                        ...styles.dropdownItem,
-                        background:
-                          n.type === "success" ? "#d4edda" : "#f8d7da",
-                        color: n.type === "success" ? "#155724" : "#721c24",
-                      }}
-                    >
-                      {n.text}
-                    </div>
-                  ))
+                  <div className="exam-list">
+                    {exams.map((exam) => (
+                      <div className="exam-item" key={exam._id}>
+                        <div className="exam-info">
+                          <h3>{exam.title}</h3>
+                          <p>
+                            📅 {exam.scheduledAt
+                              ? new Date(exam.scheduledAt).toLocaleString()
+                              : "No schedule"}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </div>
+              </>
+            ) : (
+              <p>Select a class from the sidebar.</p>
             )}
           </div>
+        </main>
 
-          {/* Sign Out */}
-          <button onClick={handleSignout} style={styles.signoutBtn}>
-            Sign Out
-          </button>
-        </div>
-      </header>
-
-      {/* 🔹 Join class form */}
-      <form onSubmit={joinClass} style={styles.form}>
-        <input
-          type="text"
-          placeholder="Enter Class Code"
-          value={classCode}
-          onChange={(e) => setClassCode(e.target.value)}
-          required
-          style={styles.input}
-        />
-        <button type="submit" style={styles.button}>
-          Join Class
-        </button>
-      </form>
-
-      {/* 🔹 Class list */}
-      <h3>📚 My Classes</h3>
-      <ul style={styles.classList}>
-        {classes.map((c) => (
-          <li key={c._id} style={styles.classItem}>
-            <strong>{c.name}</strong>{" "}
-            <span style={{ color: "#666" }}>({c.code})</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-const styles = {
-  container: {
-    minHeight: "100vh",
-    background: "#f4f7f9",
-    padding: "20px 40px",
-    fontFamily: "Arial, sans-serif",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "20px",
-    padding: "15px 20px",
-    background: "#2c5364",
-    color: "#fff",
-    borderRadius: "8px",
-  },
-  headerRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: "20px",
-  },
-  signoutBtn: {
-    background: "#e63946",
-    color: "#fff",
-    border: "none",
-    padding: "8px 15px",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  notifBadge: {
-    position: "absolute",
-    top: "-6px",
-    right: "-6px",
-    background: "red",
-    color: "#fff",
-    borderRadius: "50%",
-    padding: "2px 6px",
-    fontSize: "0.8rem",
-    fontWeight: "bold",
-  },
-  dropdown: {
-    position: "absolute",
-    top: "28px",
-    right: 0,
-    background: "#fff",
-    boxShadow: "0 4px 10px rgba(0,0,0,0.1)",
-    borderRadius: "6px",
-    width: "250px",
-    zIndex: 100,
-  },
-  dropdownItem: {
-    padding: "10px",
-    borderBottom: "1px solid #ddd",
-    fontSize: "0.9rem",
-  },
-  form: {
-    display: "flex",
-    gap: "10px",
-    marginBottom: "20px",
-  },
-  input: {
-    flex: 1,
-    padding: "10px",
-    borderRadius: "6px",
-    border: "1px solid #ccc",
-    fontSize: "1rem",
-  },
-  button: {
-    background: "#28a745",
-    color: "#fff",
-    padding: "10px 18px",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  classList: {
-    listStyle: "none",
-    padding: 0,
-  },
-  classItem: {
-    background: "#fff",
-    padding: "12px 15px",
-    borderRadius: "8px",
-    marginBottom: "10px",
-    boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
-  },
-};
+        {/* Join Class Modal */}
+        {showJoinModal && (
+          <div className="modal">
+            <div className="modal-content" style={{ maxWidth: "400px" }}>
+              <h3>Join Class</h3>
+              <form onSubmit={joinClass}>
+                <input
+                  type="text"
+                  placeholder="Enter Class Code"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                />
+                <div className="modal-actions">
+                  <button type="submit" className="primary-btn">
+                    Join
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowJoinModal(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }

@@ -1,3 +1,4 @@
+// models/User.js
 const mongoose = require("mongoose");
 
 const UserSchema = new mongoose.Schema({
@@ -5,8 +6,8 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ["student", "teacher"], required: true },
-  studentId: { type: String }, // for students
-  teacherId: { type: String }, // for teachers
+  studentId: { type: String },
+  teacherId: { type: String },
 }, { timestamps: true });
 
-module.exports = mongoose.model("User", UserSchema);
+module.exports = mongoose.models.User || mongoose.model("User", UserSchema);
