@@ -11,7 +11,7 @@ export default function Register() {
     role: "student",
     studentId: "",
     teacherId: "",
-  }); 
+  });
 
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -24,7 +24,6 @@ export default function Register() {
     e.preventDefault();
     try {
       await api.post("/auth/register", form);
-      alert("✅ Registered successfully!");
       navigate("/login");
     } catch (err) {
       setError(err.response?.data?.message || "❌ Registration failed");
@@ -35,10 +34,20 @@ export default function Register() {
     <div style={styles.wrapper}>
       {/* Left branding text */}
       <div style={styles.leftText}>
-        <h1 style={styles.brand}>ProctorAI</h1>
+        <h1 style={styles.brand}>AI-Based Online Exam Proctoring System</h1>
         <p style={styles.tagline}>
           Secure • Smart • Reliable <br /> Online Exam Proctoring
         </p>
+
+        {/* ✅ Home button (same style as Login page) */}
+        <button
+          style={styles.homeBtn}
+          onClick={() => navigate("/")}
+          onMouseEnter={(e) => (e.target.style.background = "#218838")}
+          onMouseLeave={(e) => (e.target.style.background = "#28a745")}
+        >
+          Home
+        </button>
       </div>
 
       {/* Register Form */}
@@ -106,7 +115,9 @@ export default function Register() {
               />
             )}
 
-            <button type="submit" style={styles.button}>Register</button>
+            <button type="submit" style={styles.button}>
+              Register
+            </button>
           </form>
 
           <p style={styles.registerText}>
@@ -134,6 +145,7 @@ const styles = {
     justifyContent: "center",
     alignItems: "flex-start",
     paddingLeft: "40px",
+    gap: "20px",
   },
   brand: {
     fontSize: "3rem",
@@ -181,7 +193,7 @@ const styles = {
     outline: "none",
   },
   button: {
-    background: "#3498db",
+    background: " #28a745",
     color: "#fff",
     padding: "12px",
     border: "none",
@@ -193,5 +205,16 @@ const styles = {
   registerText: {
     marginTop: "15px",
     fontSize: "0.9rem",
+  },
+  homeBtn: {
+    marginTop: "20px",
+    padding: "14px 30px",
+    background: "#28a745",
+    color: "#fff",
+    fontSize: "1rem",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
   },
 };

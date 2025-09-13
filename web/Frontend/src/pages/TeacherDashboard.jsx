@@ -7,7 +7,7 @@ export default function TeacherDashboard() {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [activeTab, setActiveTab] = useState("Classwork");
-  const [students, setStudents] = useState([]); // People tab
+  const [students, setStudents] = useState([]);
   const [exams, setExams] = useState([]);
   const [showClassModal, setShowClassModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
@@ -97,13 +97,11 @@ export default function TeacherDashboard() {
     try {
       const token = localStorage.getItem("token");
 
-      // fetch exams
       const examsRes = await api.get(`/exams/${c._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setExams(examsRes.data);
 
-      // fetch students
       const studentsRes = await api.get(`/class/students/${c._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -215,7 +213,15 @@ export default function TeacherDashboard() {
             + Create Class
           </button>
 
+          {/* Home button */}
           <ul className="class-list">
+            <li
+              onClick={() => setSelectedClass(null)}
+              className={!selectedClass ? "selected" : ""}
+            >
+              🏠 Home
+            </li>
+
             {classes.length === 0 ? (
               <li>No classes yet.</li>
             ) : (
@@ -234,7 +240,24 @@ export default function TeacherDashboard() {
 
         {/* Main content */}
         <div className="main-content">
-          {selectedClass ? (
+          {!selectedClass ? (
+            <div className="class-grid">
+              {classes.length === 0 ? (
+                <p>No classes created yet.</p>
+              ) : (
+                classes.map((c) => (
+                  <div
+                    key={c._id}
+                    className="class-card"
+                    onClick={() => handleSelectClass(c)}
+                  >
+                    <h3>📘 {c.name}</h3>
+                    <p>Code: {c.code}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
             <>
               <h3>{selectedClass.name}</h3>
               <p>
@@ -318,34 +341,33 @@ export default function TeacherDashboard() {
               )}
 
               {activeTab === "People" && (
-  <div>
-    {students.length === 0 ? (
-      <p>No students enrolled yet.</p>
-    ) : (
-      <ul className="student-list">
-        {students.map((s) => {
-          const initials = s.name
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .toUpperCase();
+                <div>
+                  {students.length === 0 ? (
+                    <p>No students enrolled yet.</p>
+                  ) : (
+                    <ul className="student-list">
+                      {students.map((s) => {
+                        const initials = s.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase();
 
-          return (
-            <li key={s._id} className="student-item" title={s.email}>
-              <img
-                src={`https://ui-avatars.com/api/?name=${initials}&background=203a43&color=fff`}
-                alt={s.name}
-                className="student-avatar"
-              />
-              <span>{s.name}</span>
-            </li>
-          );
-        })}
-      </ul>
-    )}
-  </div>
-)}
-
+                        return (
+                          <li key={s._id} className="student-item" title={s.email}>
+                            <img
+                              src={`https://ui-avatars.com/api/?name=${initials}&background=203a43&color=fff`}
+                              alt={s.name}
+                              className="student-avatar"
+                            />
+                            <span>{s.name}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               {activeTab === "Grades" && (
                 <div>
@@ -353,100 +375,98 @@ export default function TeacherDashboard() {
                 </div>
               )}
             </>
-          ) : (
-            <p>Select a class from the sidebar.</p>
           )}
         </div>
       </main>
 
-   {/* MODALS */}
-{showClassModal && (
-  <div className="modal">
-    <div className="modal-content">
-      <h3>Create New Class</h3>
-      <form onSubmit={createClass}>
-        <input
-          type="text"
-          placeholder="Class Name"
-          value={className}
-          onChange={(e) => setClassName(e.target.value)}
-        />
-        <div className="code-row">
-          <input type="text" value={generatedCode} readOnly />
-        </div>
-        <div className="modal-actions">
-          <button type="submit" className="primary-btn">
-            Save
-          </button>
-          <button type="button" onClick={() => setShowClassModal(false)}>
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
+      {/* MODALS */}
+      {showClassModal && (
+        <div className="modal">
+          <div className="modal-content">
+            <h3>Create New Class</h3>
+            <form onSubmit={createClass}>
+              <input
+                type="text"
+                placeholder="Class Name"
+                value={className}
+                onChange={(e) => setClassName(e.target.value.toUpperCase())}
+              />
 
-{showExamModal && (
-  <div className="modal">
-    <div className="modal-content">
-      <h3>Upload Exam</h3>
-      <form onSubmit={uploadExam}>
-        <input
-          type="text"
-          placeholder="Exam Title"
-          value={examTitle}
-          onChange={(e) => setExamTitle(e.target.value)}
-        />
-        <input
-          type="datetime-local"
-          value={examDate}
-          onChange={(e) => setExamDate(e.target.value)}
-        />
-        <input
-          type="file"
-          onChange={(e) => setExamFile(e.target.files[0])}
-        />
-        <div className="modal-actions">
-          <button type="submit" className="primary-btn">
-            Upload
-          </button>
-          <button type="button" onClick={() => setShowExamModal(false)}>
-            Cancel
-          </button>
+              <div className="code-row">
+                <input type="text" value={generatedCode} readOnly />
+              </div>
+              <div className="modal-actions">
+                <button type="submit" className="primary-btn">
+                  Create
+                </button>
+                <button type="button" onClick={() => setShowClassModal(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </form>
-    </div>
-  </div>
-)}
-
-{showExamViewModal && (
-  <div
-    className="modal"
-    onClick={() => setShowExamViewModal(false)} // click outside to close
-  >
-    <div
-      className="modal-content"
-      onClick={(e) => e.stopPropagation()} // prevent closing when clicking iframe
-    >
-      {currentExamFile ? (
-        currentExamFile.endsWith(".pdf") ? (
-          <iframe src={currentExamFile} title={currentExamTitle} />
-        ) : (
-          <iframe
-            src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
-              currentExamFile
-            )}`}
-            title={currentExamTitle}
-          />
-        )
-      ) : (
-        <p style={{ textAlign: "center" }}>No preview available</p>
       )}
-    </div>
-  </div>
-)}
 
+      {showExamModal && (
+        <div className="modal">
+          <div className="modal-content">
+            <h3>Upload Exam</h3>
+            <form onSubmit={uploadExam}>
+              <input
+                type="text"
+                placeholder="Exam Title"
+                value={examTitle}
+                onChange={(e) => setExamTitle(e.target.value)}
+              />
+              <input
+                type="datetime-local"
+                value={examDate}
+                onChange={(e) => setExamDate(e.target.value)}
+              />
+              <input
+                type="file"
+                onChange={(e) => setExamFile(e.target.files[0])}
+              />
+              <div className="modal-actions">
+                <button type="submit" className="primary-btn">
+                  Upload
+                </button>
+                <button type="button" onClick={() => setShowExamModal(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showExamViewModal && (
+        <div
+          className="modal"
+          onClick={() => setShowExamViewModal(false)}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {currentExamFile ? (
+              currentExamFile.endsWith(".pdf") ? (
+                <iframe src={currentExamFile} title={currentExamTitle} />
+              ) : (
+                <iframe
+                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+                    currentExamFile
+                  )}`}
+                  title={currentExamTitle}
+                />
+              )
+            ) : (
+              <p style={{ textAlign: "center" }}>No preview available</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

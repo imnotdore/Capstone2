@@ -21,14 +21,22 @@ export default function LandingPage() {
             Secure • Smart • Reliable online exam monitoring for schools.
           </p>
           <Link to="/login">
-            <button style={styles.button}>Get Started</button>
+            <button
+  style={styles.getStartedBtn}
+  onClick={() => navigate("/")}
+  onMouseEnter={(e) => (e.target.style.background = "#218838")}
+  onMouseLeave={(e) => (e.target.style.background = "#28a745")}
+>
+  Get Started
+</button>
+
           </Link>
         </div>
         <div style={styles.heroImage}>
           <img
-            src="https://via.placeholder.com/500x350"
+            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSo9EqVisvQkc7ZKJM644tynL8HyvTbqRgRPA&s"
             alt="Hero Illustration"
-            style={{ width: "100%", borderRadius: "12px" }}
+            style={{ width: "50%", borderRadius: "12px" }}
           />
         </div>
       </header>
@@ -79,12 +87,12 @@ export default function LandingPage() {
 const styles = {
   container: {
     fontFamily: "Arial, sans-serif",
-    backgroundColor: "#f9f9f9",
+    background: "linear-gradient(to bottom , #7E7E7E, #FFFFFF, #887575, #BF3F3F, #FF0000)",
     minHeight: "100vh",
     width: "100%",
     margin: 0,
     padding: 0,
-    display: "flex",
+    display: "relative",
     flexDirection: "column",
   },
   navbar: {
@@ -92,7 +100,7 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "15px 40px",
-    backgroundColor: "#222",
+    backgroundColor: "rgba(34,34,34,0.9)", // semi-transparent para visible pa rin sa gradient
     color: "#fff",
     flexWrap: "wrap",
   },
@@ -169,4 +177,16 @@ const styles = {
     color: "#fff",
     marginTop: "40px",
   },
+    getStartedBtn: {
+    marginTop: "20px",
+    padding: "14px 30px",
+    background: "#28a745",
+    color: "#fff",
+    fontSize: "1rem",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+  },
+
 };

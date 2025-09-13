@@ -1,4 +1,3 @@
-// web/src/pages/Login.jsx
 import { useState } from "react";
 import api from "../lib/api";
 import { useNavigate, Link } from "react-router-dom";
@@ -18,15 +17,28 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const res = await api.post("/auth/login", form);
-      localStorage.setItem("token", res.data.token);
-      alert("✅ Login successful!");
+      const res = await api.post("/auth/login", {
+        email: form.email,
+        password: form.password,
+      });
 
-      // Redirect based on role
-      if (form.role === "student") {
+      const { token, user } = res.data;
+
+      if (form.role !== user.role) {
+        setError(`❌ You are not allowed to login as ${form.role}.`);
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("role", user.role);
+
+      if (user.role === "student") {
         navigate("/student/dashboard");
-      } else if (form.role === "teacher") {
+      } else if (user.role === "teacher") {
         navigate("/teacher/dashboard");
+      } else {
+        setError("❌ Invalid role");
       }
     } catch (err) {
       setError(err.response?.data?.message || "❌ Login failed");
@@ -39,10 +51,21 @@ export default function Login() {
     <div style={styles.wrapper}>
       {/* Left branding text */}
       <div style={styles.leftText}>
-        <h1 style={styles.brand}>ProctorAI</h1>
+        <h1 style={styles.brand}>AI-Based Online Exam Proctoring System</h1>
         <p style={styles.tagline}>
           Secure • Smart • Reliable <br /> Online Exam Proctoring
         </p>
+
+        {/* ✅ Home button (same style as Get Started) */}
+        <button
+  style={styles.getStartedBtn}
+  onClick={() => navigate("/")}
+  onMouseEnter={(e) => (e.target.style.background = "#218838")}
+  onMouseLeave={(e) => (e.target.style.background = "#28a745")}
+>
+  Home
+</button>
+
       </div>
 
       {/* Login Form */}
@@ -51,7 +74,6 @@ export default function Login() {
           <h2 style={styles.title}>Login</h2>
           {error && <p style={styles.error}>{error}</p>}
           <form onSubmit={handleSubmit} style={styles.form}>
-            {/* Role Selector */}
             <select
               name="role"
               value={form.role}
@@ -108,7 +130,8 @@ const styles = {
     flexDirection: "column",
     justifyContent: "center",
     alignItems: "flex-start",
-    paddingLeft: "20px",
+    paddingLeft: "40px",
+    gap: "20px",
   },
   brand: {
     fontSize: "3rem",
@@ -134,6 +157,17 @@ const styles = {
     maxWidth: "400px",
     boxShadow: "0 8px 16px rgba(0,0,0,0.3)",
     textAlign: "center",
+  },
+  getStartedBtn: {
+    marginTop: "20px",
+    padding: "14px 30px",
+    background: "#28a745",
+    color: "#fff",
+    fontSize: "1rem",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "0.3s",
   },
   title: {
     marginBottom: "20px",
@@ -163,16 +197,28 @@ const styles = {
     outline: "none",
   },
   button: {
-    background: "#28a745",
+    background: "#3498dbff",
     color: "#fff",
-    padding: "12px",
+    padding: "14px 30px",
+    fontSize: "1rem",
     border: "none",
     borderRadius: "8px",
     cursor: "pointer",
-    fontSize: "1rem",
   },
   registerText: {
     marginTop: "15px",
     fontSize: "0.9rem",
   },
+    getStartedBtn: {
+    marginTop: "20px",
+    padding: "14px 30px",
+    background: "#28a745",
+    color: "#fff",
+    fontSize: "1rem",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+  },
+
 };

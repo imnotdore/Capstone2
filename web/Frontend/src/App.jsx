@@ -1,10 +1,9 @@
-// web/src/App.jsx
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
-import ProtectedRoute from "./components/protectedroute";
+import ProtectedRoute from "./components/ProtectedRoute";
 import LandingPage from "./pages/LandingPage";
 import ClassDetails from "./pages/ClassDetails";
 
@@ -12,35 +11,36 @@ function App() {
   return (
     <Router>
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Student Dashboard */}
+        {/* Student Dashboard (student only) */}
         <Route
           path="/student/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["student"]}>
               <StudentDashboard />
             </ProtectedRoute>
           }
         />
 
-        {/* Teacher Dashboard */}
+        {/* Teacher Dashboard (teacher only) */}
         <Route
           path="/teacher/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["teacher"]}>
               <TeacherDashboard />
             </ProtectedRoute>
           }
         />
 
-        {/* Teacher Class Details */}
+        {/* Teacher Class Details (teacher only) */}
         <Route
           path="/teacher/class/:id"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["teacher"]}>
               <ClassDetails />
             </ProtectedRoute>
           }

@@ -197,3 +197,13 @@ html, body {
 .exam-info p {
   margin: 2px 0;
 }
+
+.exam-badge {
+  display: inline-block;
+  background: #e74c3c;
+  color: white;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: 12px;
+  margin-top: 8px;
+}
