@@ -15,6 +15,7 @@ const examSchema = new mongoose.Schema({
       answer: String,    // optional
     }
   ],
+  isDeployed: { type: Boolean, default: false }, // ✅ added field
   createdAt: { type: Date, default: Date.now },
 });
 

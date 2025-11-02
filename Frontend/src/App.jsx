@@ -6,6 +6,7 @@ import TeacherDashboard from "./pages/TeacherDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LandingPage from "./pages/LandingPage";
 import ClassDetails from "./pages/ClassDetails";
+import ExamRoomWrapper from "./pages/ExamRoomWrapper"; // bagong wrapper component
 
 function App() {
   return (
@@ -42,6 +43,16 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["teacher"]}>
               <ClassDetails />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Exam Room (teacher & student) */}
+        <Route
+          path="/room/:roomId"
+          element={
+            <ProtectedRoute allowedRoles={["teacher", "student"]}>
+              <ExamRoomWrapper />
             </ProtectedRoute>
           }
         />

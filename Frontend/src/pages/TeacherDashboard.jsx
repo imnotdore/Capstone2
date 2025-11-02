@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import "./TeacherDashboard.css";
 
@@ -16,6 +17,7 @@ export default function TeacherDashboard() {
   const [examTitle, setExamTitle] = useState("");
   const [examDate, setExamDate] = useState("");
   const [examFile, setExamFile] = useState(null);
+  const navigate = useNavigate();
 
   const [showExamViewModal, setShowExamViewModal] = useState(false);
   const [currentExamTitle, setCurrentExamTitle] = useState("");
@@ -50,7 +52,9 @@ export default function TeacherDashboard() {
       const res = await api.get("/class/teacher/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setClasses(res.data);
+      // Normalize _id as string
+      const normalizedClasses = res.data.map((c) => ({ ...c, _id: c._id.toString() }));
+      setClasses(normalizedClasses);
     } catch (err) {
       console.error("Failed to fetch classes", err);
     }
@@ -79,7 +83,7 @@ export default function TeacherDashboard() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       await fetchClasses();
-      setSelectedClass(res.data);
+      setSelectedClass({ ...res.data, _id: res.data._id.toString() });
       setExams([]);
       setStudents([]);
       setClassName("");
@@ -91,58 +95,79 @@ export default function TeacherDashboard() {
   };
 
   // Select class & fetch exams + students
-  const handleSelectClass = async (c) => {
-    setSelectedClass(c);
-    setActiveTab("Classwork");
-    try {
-      const token = localStorage.getItem("token");
+  // Select class & fetch exams + students
+const handleSelectClass = async (c) => {
+  setSelectedClass(c);
+  setActiveTab("Classwork");
+  try {
+    const token = localStorage.getItem("token");
 
-      const examsRes = await api.get(`/exams/${c._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setExams(examsRes.data);
+    const examsRes = await api.get(`/exams/${c._id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    
+    // Simple fix - gamitin ang data kung array, kung hindi gumamit ng empty array
+    const examsData = Array.isArray(examsRes.data) 
+      ? examsRes.data 
+      : (examsRes.data?.data || []);
+    
+    const normalizedExams = examsData.map((exam) => ({
+      ...exam,
+      _id: exam._id.toString(),
+    }));
+    
+    setExams(normalizedExams);
 
-      const studentsRes = await api.get(`/class/students/${c._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setStudents(studentsRes.data);
-    } catch (err) {
-      console.error("Failed to fetch exams or students", err);
-      alert("Failed to fetch class data.");
-    }
-  };
-
+    const studentsRes = await api.get(`/class/students/${c._id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    
+    const studentsData = Array.isArray(studentsRes.data) 
+      ? studentsRes.data 
+      : (studentsRes.data?.data || []);
+    
+    setStudents(studentsData);
+    
+  } catch (err) {
+    console.error("Failed to fetch exams or students", err);
+    alert("Failed to fetch class data.");
+  }
+};
   const uploadExam = async (e) => {
-    e.preventDefault();
-    if (!examTitle || !examDate || !examFile) return alert("Fill all fields");
-    if (!selectedClass) return alert("Select a class first");
+  e.preventDefault();
+  if (!examTitle || !examDate || !examFile) return alert("Fill all fields");
+  if (!selectedClass) return alert("Select a class first");
 
-    const formData = new FormData();
-    formData.append("title", examTitle);
-    formData.append("scheduledAt", examDate);
-    formData.append("file", examFile);
+  const formData = new FormData();
+  formData.append("title", examTitle);
+  formData.append("scheduledAt", examDate);
+  formData.append("file", examFile);
 
-    try {
-      const token = localStorage.getItem("token");
-      const res = await api.post(
-        `/exams/upload/${selectedClass._id}`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-      setExams([...exams, res.data]);
-      setExamTitle("");
-      setExamDate("");
-      setExamFile(null);
-      setShowExamModal(false);
-    } catch {
-      alert("Failed to upload exam.");
-    }
-  };
+  try {
+    const token = localStorage.getItem("token");
+    const res = await api.post(
+      `/exams/upload/${selectedClass._id}`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+    
+    // I-adjust base sa response structure
+    const newExam = res.data.data || res.data;
+    
+    setExams([...exams, { ...newExam, _id: newExam._id.toString() }]);
+    setExamTitle("");
+    setExamDate("");
+    setExamFile(null);
+    setShowExamModal(false);
+  } catch {
+    alert("Failed to upload exam.");
+  }
+};
 
   const handleViewExam = (exam) => {
     setCurrentExamTitle(exam.title);
@@ -163,21 +188,44 @@ export default function TeacherDashboard() {
     }
   };
 
-  const handleDeployExam = async (examId) => {
-    try {
-      const token = localStorage.getItem("token");
-      await api.patch(`/exams/deploy/${examId}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setExams(
-        exams.map((exam) =>
-          exam._id === examId ? { ...exam, isDeployed: true } : exam
-        )
-      );
-    } catch {
-      alert("Failed to deploy exam.");
-    }
-  };
+const handleDeployExam = async (examId) => {
+  if (!examId || examId.length !== 24) return alert("Invalid exam ID");
+
+  console.log("Deploying exam with ID:", examId);
+
+  try {
+    const token = localStorage.getItem("token");
+    const res = await api.patch(
+      `/exams/deploy/${examId}`,
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    console.log("Deploy response:", res.data);
+
+    setExams(
+      exams.map((exam) =>
+        exam._id === examId ? { ...exam, isDeployed: true } : exam
+      )
+    );
+
+    const roomId = `exam-${examId}`;
+    
+    navigate(`/room/${roomId}`, {
+      state: {
+        teacherName: profile.name,
+        teacherId: profile.id || "teacher_unique_id", // Gamitin ang actual user ID
+        classSubject: selectedClass.name
+      }
+    });
+  } catch (err) {
+    console.error("Deploy error:", err.response?.data || err);
+    alert(err.response?.data?.message || "Failed to deploy exam.");
+  }
+};
+
+ 
+
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -341,33 +389,52 @@ export default function TeacherDashboard() {
               )}
 
               {activeTab === "People" && (
-                <div>
-                  {students.length === 0 ? (
-                    <p>No students enrolled yet.</p>
-                  ) : (
-                    <ul className="student-list">
-                      {students.map((s) => {
-                        const initials = s.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase();
+  <div>
+    {/* Teacher Info */}
+    <h4>👨‍🏫 Class Owner</h4>
+    <div className="teacher-owner">
+      <img
+        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+          profile.name
+        )}&background=203a43&color=fff`}
+        alt={profile.name}
+        className="teacher-avatar"
+      />
+      <span>{profile.name} (Teacher)</span>
+    </div>
 
-                        return (
-                          <li key={s._id} className="student-item" title={s.email}>
-                            <img
-                              src={`https://ui-avatars.com/api/?name=${initials}&background=203a43&color=fff`}
-                              alt={s.name}
-                              className="student-avatar"
-                            />
-                            <span>{s.name}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              )}
+    <hr />
+
+    {/* Students List */}
+    <h4>👩‍🎓 Enrolled Students</h4>
+    {students.filter(s => s.name !== profile.name).length === 0 ? (
+      <p>No students enrolled yet.</p>
+    ) : (
+      <ul className="student-list">
+        {students
+          .filter(s => s.name !== profile.name)
+          .map((s) => {
+            const initials = s.name
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .toUpperCase();
+
+            return (
+              <li key={s._id} className="student-item" title={s.email}>
+                <img
+                  src={`https://ui-avatars.com/api/?name=${initials}&background=203a43&color=fff`}
+                  alt={s.name}
+                  className="student-avatar"
+                />
+                <span>{s.name}</span>
+              </li>
+            );
+          })}
+      </ul>
+    )}
+  </div>
+)}
 
               {activeTab === "Grades" && (
                 <div>

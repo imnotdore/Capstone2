@@ -34,12 +34,11 @@ router.get("/students/:classId", authMiddleware, async (req, res) => {
 
     if (!classData) return res.status(404).json({ message: "Class not found" });
 
-    res.json(classData.students); // babalik ang array ng students
+    res.json(classData.students);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch students" });
   }
 });
-
 
 // Join a class
 router.post("/join", authMiddleware, async (req, res) => {
@@ -50,12 +49,10 @@ router.post("/join", authMiddleware, async (req, res) => {
     const classData = await Class.findOne({ code });
     if (!classData) return res.status(404).json({ message: "Class not found" });
 
-    // Check if student already joined
     if (classData.students.includes(req.user.id)) {
       return res.status(400).json({ message: "You have already joined this class" });
     }
 
-    // Add student
     classData.students.push(req.user.id);
     await classData.save();
 

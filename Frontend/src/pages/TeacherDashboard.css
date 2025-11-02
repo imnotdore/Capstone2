@@ -482,3 +482,30 @@ html, body {
   box-shadow: 0 6px 12px rgba(0,0,0,0.12);
   border-color: #e74c3c;
 }
+
+/* ===========================
+   TEACHER OWNER SECTION
+=========================== */
+.teacher-owner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 20px;
+  background: #fff;
+  padding: 10px 15px;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.teacher-avatar {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #203a43;
+}
+
+.teacher-owner span {
+  font-weight: 600;
+  font-size: 1rem;
+}
