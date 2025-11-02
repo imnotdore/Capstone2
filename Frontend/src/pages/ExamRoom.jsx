@@ -79,6 +79,40 @@ export default function ExamRoom({ roomId }) {
     isInitializedRef.current = false;
   };
 
+  // Function to update peer media status
+  const updatePeerMediaStatus = (peerId, cameraEnabled, microphoneEnabled) => {
+    console.log(`🔄 Updating media status for ${peerId}: Camera ${cameraEnabled ? 'ON' : 'OFF'}, Mic ${microphoneEnabled ? 'ON' : 'OFF'}`);
+    
+    setPeerInfo(prev => ({
+      ...prev,
+      [peerId]: {
+        ...prev[peerId],
+        camOn: cameraEnabled,
+        micOn: microphoneEnabled
+      }
+    }));
+
+    // If camera is turned off, clear the video stream
+    if (!cameraEnabled) {
+      setPeerStreams(prev => ({
+        ...prev,
+        [peerId]: null
+      }));
+    }
+  };
+
+  // Function to broadcast local media status
+  const broadcastMediaStatus = () => {
+    if (socketRef.current) {
+      console.log(`📢 Broadcasting media status: Camera ${camOn ? 'ON' : 'OFF'}, Mic ${micOn ? 'ON' : 'OFF'}`);
+      socketRef.current.emit("media-status", {
+        roomId,
+        camOn,
+        micOn
+      });
+    }
+  };
+
   // Socket & WebRTC - IMPROVED VERSION
   useEffect(() => {
     // Prevent multiple initializations
@@ -111,6 +145,11 @@ export default function ExamRoom({ roomId }) {
         });
         console.log(`✅ ${currentUserName} joined room ${roomId}`);
 
+        // Broadcast initial media status after a short delay
+        setTimeout(() => {
+          broadcastMediaStatus();
+        }, 1000);
+
       } catch (error) {
         console.error("Error accessing media devices:", error);
         alert("Camera and microphone access is required for the exam.");
@@ -123,7 +162,6 @@ export default function ExamRoom({ roomId }) {
     socketRef.current.on("room-participants", (participants) => {
       console.log("👥 Room participants:", participants);
       
-      // Remove duplicate connections first
       participants.forEach(participant => {
         if (participant.id === socketRef.current.id) {
           return; // Skip self
@@ -144,6 +182,11 @@ export default function ExamRoom({ roomId }) {
       if (user.id !== socketRef.current.id && !peersRef.current[user.id]) {
         console.log(`🔗 Creating connection to new user ${user.name}`);
         createPeerConnection(user);
+        
+        // Send our current media status to the new user
+        setTimeout(() => {
+          broadcastMediaStatus();
+        }, 500);
       }
     });
 
@@ -215,6 +258,14 @@ export default function ExamRoom({ roomId }) {
       removePeerConnection(userId);
     });
 
+    // Handle media status updates from other users - IMPROVED
+    socketRef.current.on("media-status-update", ({ userId, camOn: remoteCamOn, micOn: remoteMicOn, name, isTeacher }) => {
+      console.log(`📹 Media status update from ${name || userId}: Camera ${remoteCamOn ? 'ON' : 'OFF'}, Mic ${remoteMicOn ? 'ON' : 'OFF'}`);
+      
+      // Update peer info with media status
+      updatePeerMediaStatus(userId, remoteCamOn, remoteMicOn);
+    });
+
     // Handle socket disconnect
     socketRef.current.on("disconnect", () => {
       console.log("🔌 Socket disconnected");
@@ -259,85 +310,91 @@ export default function ExamRoom({ roomId }) {
   };
 
   const createPeerConnection = (peerData) => {
-  // Check if peer connection already exists
-  if (peersRef.current[peerData.id]) {
-    console.log(`⚠️ Connection to ${peerData.name} already exists, returning existing`);
-    return peersRef.current[peerData.id];
-  }
+    // Check if peer connection already exists
+    if (peersRef.current[peerData.id]) {
+      console.log(`⚠️ Connection to ${peerData.name} already exists, returning existing`);
+      return peersRef.current[peerData.id];
+    }
 
-  console.log(`🔗 Creating new peer connection to ${peerData.name}`);
-  const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]
-  });
-
-  // Add local stream tracks
-  if (localStreamRef.current) {
-    localStreamRef.current.getTracks().forEach(track => {
-      pc.addTrack(track, localStreamRef.current);
+    console.log(`🔗 Creating new peer connection to ${peerData.name}`);
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
     });
-  }
 
-  // Handle incoming tracks
-  pc.ontrack = (event) => {
-    console.log(`🎬 Received track from ${peerData.name}`);
-    setPeerStreams(prev => ({
-      ...prev,
-      [peerData.id]: event.streams[0]
-    }));
-  };
-
-  // ICE candidate handling
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      socketRef.current.emit("ice-candidate", {
-        target: peerData.id,
-        candidate: event.candidate
+    // Add local stream tracks
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => {
+        pc.addTrack(track, localStreamRef.current);
       });
     }
-  };
 
-  // Connection state monitoring
-  pc.onconnectionstatechange = () => {
-    console.log(`🔗 Connection state with ${peerData.name}: ${pc.connectionState}`);
-    
-    if (pc.connectionState === 'connected') {
-      console.log(`✅ Successfully connected to ${peerData.name}`);
-    } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-      console.log(`❌ Connection to ${peerData.name} failed, removing...`);
-      removePeerConnection(peerData.id);
+    // Handle incoming tracks
+    pc.ontrack = (event) => {
+      console.log(`🎬 Received track from ${peerData.name}`);
+      
+      // Check current camera status before setting stream
+      const shouldShowStream = peerInfo[peerData.id]?.camOn !== false;
+      
+      setPeerStreams(prev => ({
+        ...prev,
+        [peerData.id]: shouldShowStream ? event.streams[0] : null
+      }));
+    };
+
+    // ICE candidate handling
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socketRef.current.emit("ice-candidate", {
+          target: peerData.id,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    // Connection state monitoring
+    pc.onconnectionstatechange = () => {
+      console.log(`🔗 Connection state with ${peerData.name}: ${pc.connectionState}`);
+      
+      if (pc.connectionState === 'connected') {
+        console.log(`✅ Successfully connected to ${peerData.name}`);
+      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        console.log(`❌ Connection to ${peerData.name} failed, removing...`);
+        removePeerConnection(peerData.id);
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(`🧊 ICE connection state with ${peerData.name}: ${pc.iceConnectionState}`);
+    };
+
+    // Store peer connection
+    peersRef.current[peerData.id] = pc;
+
+    // Store peer info with default media status
+    setPeerInfo(prev => ({
+      ...prev,
+      [peerData.id]: {
+        name: peerData.name,
+        isOwner: isTeacher && peerData.id === teacherId,
+        isTeacher: peerData.isTeacher,
+        camOn: true, // Default to on until we receive status update
+        micOn: true  // Default to on until we receive status update
+      }
+    }));
+
+    // Create offer immediately for new connections
+    if (localStreamRef.current) {
+      console.log(`📤 Creating offer for ${peerData.name}`);
+      createOffer(pc, peerData);
+    } else {
+      console.log(`⏳ Waiting for local stream before creating offer to ${peerData.name}`);
     }
+
+    return pc;
   };
-
-  pc.oniceconnectionstatechange = () => {
-    console.log(`🧊 ICE connection state with ${peerData.name}: ${pc.iceConnectionState}`);
-  };
-
-  // Store peer connection
-  peersRef.current[peerData.id] = pc;
-
-  // Store peer info
-  setPeerInfo(prev => ({
-    ...prev,
-    [peerData.id]: {
-      name: peerData.name,
-      isOwner: isTeacher && peerData.id === teacherId,
-      isTeacher: peerData.isTeacher
-    }
-  }));
-
-  // ✅ IMPORTANT: Create offer immediately for new connections
-  if (localStreamRef.current) {
-    console.log(`📤 Creating offer for ${peerData.name}`);
-    createOffer(pc, peerData);
-  } else {
-    console.log(`⏳ Waiting for local stream before creating offer to ${peerData.name}`);
-  }
-
-  return pc;
-};
 
   const createOffer = async (pc, peerData) => {
     try {
@@ -359,25 +416,28 @@ export default function ExamRoom({ roomId }) {
     }
   };
 
-  // Auto-create offers for existing connections
-  useEffect(() => {
-    if (localStreamRef.current) {
-      Object.entries(peersRef.current).forEach(([id, pc]) => {
-        const peerData = peerInfo[id];
-        if (peerData && pc.signalingState === 'stable') {
-          createOffer(pc, peerData);
-        }
-      });
-    }
-  }, [localStreamRef.current]);
-
   const toggleCam = () => {
     if (!localStreamRef.current) return;
     
     const videoTracks = localStreamRef.current.getVideoTracks();
     if (videoTracks.length > 0) {
-      videoTracks[0].enabled = !camOn;
-      setCamOn(!camOn);
+      const newCamState = !camOn;
+      videoTracks[0].enabled = newCamState;
+      setCamOn(newCamState);
+      
+      console.log(`📹 Local camera ${newCamState ? 'ENABLED' : 'DISABLED'}`);
+      
+      // Update local video display immediately
+      if (localVideoRef.current) {
+        if (newCamState) {
+          localVideoRef.current.srcObject = localStreamRef.current;
+        } else {
+          localVideoRef.current.srcObject = null;
+        }
+      }
+      
+      // Broadcast the camera status change
+      broadcastMediaStatus();
     }
   };
 
@@ -386,8 +446,14 @@ export default function ExamRoom({ roomId }) {
     
     const audioTracks = localStreamRef.current.getAudioTracks();
     if (audioTracks.length > 0) {
-      audioTracks[0].enabled = !micOn;
-      setMicOn(!micOn);
+      const newMicState = !micOn;
+      audioTracks[0].enabled = newMicState;
+      setMicOn(newMicState);
+      
+      console.log(`🎤 Local microphone ${newMicState ? 'ENABLED' : 'DISABLED'}`);
+      
+      // Broadcast the microphone status change
+      broadcastMediaStatus();
     }
   };
 
@@ -405,10 +471,10 @@ export default function ExamRoom({ roomId }) {
     setMessageInput("");
   };
 
-  const VideoFrame = ({ stream, name, isOwner, isTeacher }) => (
+  const VideoFrame = ({ stream, name, isOwner, isTeacher, camOn: peerCamOn, micOn: peerMicOn, peerId }) => (
     <div style={{
       position: "relative",
-      flexBasis: "calc(50% - 10px)",
+      flexBasis: "calc(10% - 50px)",
       height: "200px",
       border: isOwner ? "2px solid #4caf50" : (isTeacher ? "2px solid #2196f3" : "1px solid #666"),
       borderRadius: "8px",
@@ -420,18 +486,23 @@ export default function ExamRoom({ roomId }) {
         autoPlay
         playsInline
         ref={el => { 
-          if (el && stream) {
-            el.srcObject = stream;
+          if (el) {
+            if (stream && peerCamOn) {
+              el.srcObject = stream;
+            } else {
+              el.srcObject = null;
+            }
           }
         }}
         style={{ 
           width: "100%", 
           height: "100%", 
           objectFit: "cover",
-          transform: "scaleX(-1)" // Mirror effect
+          transform: "scaleX(-1)", // Mirror effect
+          display: (stream && peerCamOn) ? "block" : "none"
         }}
       />
-      {(!stream || !stream.active || stream.getTracks().length === 0) && (
+      {(!stream || !peerCamOn) && (
         <div style={{
           position: "absolute",
           top: 0, left: 0, width: "100%", height: "100%",
@@ -454,6 +525,35 @@ export default function ExamRoom({ roomId }) {
         fontSize: "14px"
       }}>
         {name} {isOwner ? "(Owner)" : (isTeacher ? "(Teacher)" : "(Student)")}
+      </div>
+      
+      {/* Peer Media Status Indicators */}
+      <div style={{
+        position: "absolute",
+        bottom: "10px",
+        right: "10px",
+        display: "flex",
+        gap: "10px",
+        backgroundColor: "rgba(0,0,0,0.5)",
+        padding: "5px 10px",
+        borderRadius: "20px"
+      }}>
+        <div style={{ 
+          color: peerCamOn ? "green" : "red", 
+          fontSize: "16px",
+          display: "flex",
+          alignItems: "center"
+        }}>
+          {peerCamOn ? <FaVideo /> : <FaVideoSlash />}
+        </div>
+        <div style={{ 
+          color: peerMicOn ? "green" : "red", 
+          fontSize: "16px",
+          display: "flex",
+          alignItems: "center"
+        }}>
+          {peerMicOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+        </div>
       </div>
     </div>
   );
@@ -502,7 +602,7 @@ export default function ExamRoom({ roomId }) {
         {/* Local Video */}
         <div style={{ 
           position: "relative", 
-          flexBasis: "calc(50% - 10px)", 
+          flexBasis: "calc(50% - 200px)", 
           height: "350px", 
           border: isTeacher ? "2px solid #4caf50" : "2px solid #2196f3", 
           borderRadius: "8px", 
@@ -518,7 +618,8 @@ export default function ExamRoom({ roomId }) {
               width: "100%", 
               height: "100%", 
               objectFit: "cover",
-              transform: "scaleX(-1)" // Mirror effect
+              transform: "scaleX(-1)", // Mirror effect
+              display: camOn ? "block" : "none"
             }}
           />
           {!camOn && (
@@ -591,6 +692,9 @@ export default function ExamRoom({ roomId }) {
               name={info.name || "User"} 
               isOwner={info.isOwner} 
               isTeacher={info.isTeacher} 
+              camOn={info.camOn !== false} // Default to true if undefined
+              micOn={info.micOn !== false} // Default to true if undefined
+              peerId={id}
             />
           );
         })}
