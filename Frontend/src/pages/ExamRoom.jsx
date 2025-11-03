@@ -3,8 +3,7 @@ import { useLocation } from "react-router-dom";
 import { io } from "socket.io-client";
 import { FaVideo, FaVideoSlash, FaMicrophone, FaMicrophoneSlash, FaUser, FaComment, FaExclamationTriangle, FaEye } from "react-icons/fa";
 
-// Face detection hook using Python backend
-// Face detection hook using Python backend
+// Face detection hook
 const useFaceDetection = (videoRef, isStudent, isEnabled = true) => {
   const [faceData, setFaceData] = useState({
     faceDetected: true,
@@ -14,23 +13,19 @@ const useFaceDetection = (videoRef, isStudent, isEnabled = true) => {
   });
   const [serverStatus, setServerStatus] = useState('checking');
 
-  // Check if Python server is running
   useEffect(() => {
     const checkServer = async () => {
       try {
         const response = await fetch('http://localhost:5000/health');
         if (response.ok) {
           setServerStatus('connected');
-          console.log('✅ Python proctoring server connected');
         } else {
           setServerStatus('error');
         }
       } catch (error) {
         setServerStatus('error');
-        console.log('❌ Python proctoring server not available');
       }
     };
-
     checkServer();
   }, []);
 
@@ -42,7 +37,6 @@ const useFaceDetection = (videoRef, isStudent, isEnabled = true) => {
         const video = videoRef.current;
         if (!video || video.readyState !== 4) return;
 
-        // Capture frame from video
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.width = video.videoWidth;
@@ -51,43 +45,31 @@ const useFaceDetection = (videoRef, isStudent, isEnabled = true) => {
         
         const imageData = canvas.toDataURL('image/jpeg', 0.8);
         
-        // Send to Python backend
         const response = await fetch('http://localhost:5000/detect-faces', {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: imageData })
         });
         
         if (response.ok) {
           const result = await response.json();
-          console.log('📊 Face detection result:', result);
           setFaceData({
             faceDetected: result.faceDetected,
             faceCount: result.faceCount,
             isLookingAway: result.isLookingAway,
             suspiciousActivities: result.suspiciousActivities || []
           });
-        } else {
-          console.log('❌ Face detection request failed');
         }
       } catch (error) {
-        console.log('Face detection temporarily unavailable:', error);
+        console.log('Face detection temporarily unavailable');
       }
     };
 
-    const interval = setInterval(captureAndDetect, 3000); // Check every 3 seconds
-
-    return () => {
-      clearInterval(interval);
-    };
+    const interval = setInterval(captureAndDetect, 3000);
+    return () => clearInterval(interval);
   }, [isStudent, isEnabled, serverStatus]);
 
-  return { 
-    ...faceData, 
-    serverStatus 
-  };
+  return { ...faceData, serverStatus };
 };
 
 export default function ExamRoom({ roomId }) {
@@ -97,10 +79,10 @@ export default function ExamRoom({ roomId }) {
     teacherId, 
     classSubject = "Subject",
     studentName = "Student",
-    studentId 
+    studentId,
+    className = "Class"
   } = location.state || {};
 
-  // Determine if current user is teacher or student
   const isTeacher = !!teacherId;
   const currentUserName = isTeacher ? teacherName : studentName;
   const currentUserId = isTeacher ? teacherId : studentId;
@@ -146,7 +128,6 @@ export default function ExamRoom({ roomId }) {
   const cleanup = () => {
     console.log("🧹 Cleaning up connections...");
     
-    // Close all peer connections
     Object.values(peersRef.current).forEach(pc => {
       if (pc && typeof pc.close === 'function') {
         pc.close();
@@ -154,7 +135,6 @@ export default function ExamRoom({ roomId }) {
     });
     peersRef.current = {};
     
-    // Stop local stream
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         track.stop();
@@ -162,11 +142,9 @@ export default function ExamRoom({ roomId }) {
       localStreamRef.current = null;
     }
     
-    // Clear peer streams and info
     setPeerStreams({});
     setPeerInfo({});
     
-    // Disconnect socket
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -177,8 +155,6 @@ export default function ExamRoom({ roomId }) {
 
   // Function to update peer media status
   const updatePeerMediaStatus = (peerId, cameraEnabled, microphoneEnabled) => {
-    console.log(`🔄 Updating media status for ${peerId}: Camera ${cameraEnabled ? 'ON' : 'OFF'}, Mic ${microphoneEnabled ? 'ON' : 'OFF'}`);
-    
     setPeerInfo(prev => ({
       ...prev,
       [peerId]: {
@@ -188,7 +164,6 @@ export default function ExamRoom({ roomId }) {
       }
     }));
 
-    // If camera is turned off, clear the video stream
     if (!cameraEnabled) {
       setPeerStreams(prev => ({
         ...prev,
@@ -200,7 +175,6 @@ export default function ExamRoom({ roomId }) {
   // Function to broadcast local media status
   const broadcastMediaStatus = () => {
     if (socketRef.current) {
-      console.log(`📢 Broadcasting media status: Camera ${camOn ? 'ON' : 'OFF'}, Mic ${micOn ? 'ON' : 'OFF'}`);
       socketRef.current.emit("media-status", {
         roomId,
         camOn,
@@ -212,7 +186,6 @@ export default function ExamRoom({ roomId }) {
   // Function to broadcast proctoring alerts to teacher
   const broadcastProctoringAlert = (alert) => {
     if (socketRef.current && !isTeacher) {
-      console.log(`🚨 Broadcasting proctoring alert: ${alert}`);
       socketRef.current.emit("proctoring-alert", {
         roomId,
         studentId: currentUserId,
@@ -232,9 +205,8 @@ export default function ExamRoom({ roomId }) {
     }
   }, [suspiciousActivities, isTeacher]);
 
-  // Socket & WebRTC - IMPROVED VERSION
+  // Socket & WebRTC
   useEffect(() => {
-    // Prevent multiple initializations
     if (isInitializedRef.current) {
       return;
     }
@@ -255,16 +227,13 @@ export default function ExamRoom({ roomId }) {
           localVideoRef.current.srcObject = stream;
         }
 
-        // Join room with user info
         socketRef.current.emit("join-room", { 
           roomId, 
           name: currentUserName, 
           id: currentUserId,
           isTeacher: isTeacher 
         });
-        console.log(`✅ ${currentUserName} joined room ${roomId}`);
 
-        // Broadcast initial media status after a short delay
         setTimeout(() => {
           broadcastMediaStatus();
         }, 1000);
@@ -279,30 +248,21 @@ export default function ExamRoom({ roomId }) {
 
     // Socket event handlers
     socketRef.current.on("room-participants", (participants) => {
-      console.log("👥 Room participants:", participants);
-      
       participants.forEach(participant => {
         if (participant.id === socketRef.current.id) {
-          return; // Skip self
+          return;
         }
         
-        // Check if connection already exists
         if (!peersRef.current[participant.id]) {
-          console.log(`🔗 Creating connection to ${participant.name}`);
           createPeerConnection(participant);
-        } else {
-          console.log(`⚠️ Connection to ${participant.name} already exists`);
         }
       });
     });
 
     socketRef.current.on("user-joined", (user) => {
-      console.log("🟢 User joined:", user);
       if (user.id !== socketRef.current.id && !peersRef.current[user.id]) {
-        console.log(`🔗 Creating connection to new user ${user.name}`);
         createPeerConnection(user);
         
-        // Send our current media status to the new user
         setTimeout(() => {
           broadcastMediaStatus();
         }, 500);
@@ -310,11 +270,7 @@ export default function ExamRoom({ roomId }) {
     });
 
     socketRef.current.on("offer", async ({ from, sdp, name, isTeacher: offerIsTeacher }) => {
-      console.log(`📨 Received offer from ${name}`);
-      
-      // Check if we already have a connection to this user
       if (peersRef.current[from]) {
-        console.log(`⚠️ Already have connection to ${name}, ignoring duplicate offer`);
         return;
       }
       
@@ -332,7 +288,6 @@ export default function ExamRoom({ roomId }) {
           name: currentUserName,
           isTeacher: isTeacher
         });
-        console.log(`📤 Sent answer to ${name}`);
       } catch (error) {
         console.error("Error handling offer:", error);
       } finally {
@@ -341,23 +296,18 @@ export default function ExamRoom({ roomId }) {
     });
 
     socketRef.current.on("answer", async ({ from, sdp, name, isTeacher: answerIsTeacher }) => {
-      console.log(`📨 Received answer from ${name}`);
       const pc = peersRef.current[from];
       
       if (!pc) {
-        console.log(`❌ No peer connection found for ${name}`);
         return;
       }
       
       if (pc.signalingState !== "stable") {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-          console.log(`✅ Set remote description for ${name}`);
         } catch (error) {
           console.error("Error setting remote description:", error);
         }
-      } else {
-        console.log(`⚠️ Peer connection to ${name} is already stable`);
       }
     });
 
@@ -373,23 +323,15 @@ export default function ExamRoom({ roomId }) {
     });
 
     socketRef.current.on("user-left", (userId) => {
-      console.log("🔴 User left:", userId);
       removePeerConnection(userId);
     });
 
-    // Handle media status updates from other users - IMPROVED
     socketRef.current.on("media-status-update", ({ userId, camOn: remoteCamOn, micOn: remoteMicOn, name, isTeacher }) => {
-      console.log(`📹 Media status update from ${name || userId}: Camera ${remoteCamOn ? 'ON' : 'OFF'}, Mic ${remoteMicOn ? 'ON' : 'OFF'}`);
-      
-      // Update peer info with media status
       updatePeerMediaStatus(userId, remoteCamOn, remoteMicOn);
     });
 
-    // Handle proctoring alerts (for teachers)
     socketRef.current.on("proctoring-alert", ({ studentName, alert, timestamp }) => {
       if (isTeacher) {
-        console.log(`🚨 Proctoring alert from ${studentName}: ${alert}`);
-        // Display in chat
         setMessages(prev => [...prev, {
           id: Date.now(),
           text: `🚨 PROCTORING ALERT: ${studentName} - ${alert}`,
@@ -400,12 +342,10 @@ export default function ExamRoom({ roomId }) {
       }
     });
 
-    // Handle socket disconnect
     socketRef.current.on("disconnect", () => {
       console.log("🔌 Socket disconnected");
     });
 
-    // Chat messages
     socketRef.current.on("receive-message", ({ name, message, isTeacher: senderIsTeacher }) => {
       setMessages(prev => [...prev, { 
         id: Date.now(), 
@@ -415,7 +355,6 @@ export default function ExamRoom({ roomId }) {
       }]);
     });
 
-    // Cleanup on component unmount
     return () => {
       console.log("🛑 Component unmounting, cleaning up...");
       cleanup();
@@ -425,7 +364,6 @@ export default function ExamRoom({ roomId }) {
   // Function to remove peer connection
   const removePeerConnection = (peerId) => {
     if (peersRef.current[peerId]) {
-      console.log(`🗑️ Removing connection to ${peerId}`);
       peersRef.current[peerId].close();
       delete peersRef.current[peerId];
     }
@@ -444,13 +382,10 @@ export default function ExamRoom({ roomId }) {
   };
 
   const createPeerConnection = (peerData) => {
-    // Check if peer connection already exists
     if (peersRef.current[peerData.id]) {
-      console.log(`⚠️ Connection to ${peerData.name} already exists, returning existing`);
       return peersRef.current[peerData.id];
     }
 
-    console.log(`🔗 Creating new peer connection to ${peerData.name}`);
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -458,18 +393,13 @@ export default function ExamRoom({ roomId }) {
       ]
     });
 
-    // Add local stream tracks
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, localStreamRef.current);
       });
     }
 
-    // Handle incoming tracks
     pc.ontrack = (event) => {
-      console.log(`🎬 Received track from ${peerData.name}`);
-      
-      // Check current camera status before setting stream
       const shouldShowStream = peerInfo[peerData.id]?.camOn !== false;
       
       setPeerStreams(prev => ({
@@ -478,7 +408,6 @@ export default function ExamRoom({ roomId }) {
       }));
     };
 
-    // ICE candidate handling
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         socketRef.current.emit("ice-candidate", {
@@ -488,43 +417,27 @@ export default function ExamRoom({ roomId }) {
       }
     };
 
-    // Connection state monitoring
     pc.onconnectionstatechange = () => {
-      console.log(`🔗 Connection state with ${peerData.name}: ${pc.connectionState}`);
-      
-      if (pc.connectionState === 'connected') {
-        console.log(`✅ Successfully connected to ${peerData.name}`);
-      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-        console.log(`❌ Connection to ${peerData.name} failed, removing...`);
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
         removePeerConnection(peerData.id);
       }
     };
 
-    pc.oniceconnectionstatechange = () => {
-      console.log(`🧊 ICE connection state with ${peerData.name}: ${pc.iceConnectionState}`);
-    };
-
-    // Store peer connection
     peersRef.current[peerData.id] = pc;
 
-    // Store peer info with default media status
     setPeerInfo(prev => ({
       ...prev,
       [peerData.id]: {
         name: peerData.name,
         isOwner: isTeacher && peerData.id === teacherId,
         isTeacher: peerData.isTeacher,
-        camOn: true, // Default to on until we receive status update
-        micOn: true  // Default to on until we receive status update
+        camOn: true,
+        micOn: true
       }
     }));
 
-    // Create offer immediately for new connections
     if (localStreamRef.current) {
-      console.log(`📤 Creating offer for ${peerData.name}`);
       createOffer(pc, peerData);
-    } else {
-      console.log(`⏳ Waiting for local stream before creating offer to ${peerData.name}`);
     }
 
     return pc;
@@ -542,7 +455,6 @@ export default function ExamRoom({ roomId }) {
         name: currentUserName,
         isTeacher: isTeacher
       });
-      console.log(`📤 Sent offer to ${peerData.name}`);
     } catch (error) {
       console.error("Error creating offer:", error);
     } finally {
@@ -559,9 +471,6 @@ export default function ExamRoom({ roomId }) {
       videoTracks[0].enabled = newCamState;
       setCamOn(newCamState);
       
-      console.log(`📹 Local camera ${newCamState ? 'ENABLED' : 'DISABLED'}`);
-      
-      // Update local video display immediately
       if (localVideoRef.current) {
         if (newCamState) {
           localVideoRef.current.srcObject = localStreamRef.current;
@@ -570,7 +479,6 @@ export default function ExamRoom({ roomId }) {
         }
       }
       
-      // Broadcast the camera status change
       broadcastMediaStatus();
     }
   };
@@ -583,10 +491,6 @@ export default function ExamRoom({ roomId }) {
       const newMicState = !micOn;
       audioTracks[0].enabled = newMicState;
       setMicOn(newMicState);
-      
-      console.log(`🎤 Local microphone ${newMicState ? 'ENABLED' : 'DISABLED'}`);
-      
-      // Broadcast the microphone status change
       broadcastMediaStatus();
     }
   };
@@ -594,7 +498,6 @@ export default function ExamRoom({ roomId }) {
   const sendMessage = () => {
     if (!messageInput.trim()) return;
     
-    // Send message via socket
     socketRef.current.emit("send-message", { 
       roomId, 
       message: messageInput,
@@ -605,150 +508,459 @@ export default function ExamRoom({ roomId }) {
     setMessageInput("");
   };
 
-  // Proctoring Alerts Component for Student
-  const ProctoringAlerts = () => {
-    if (isTeacher) return null;
-
+  // STUDENT VIEW
+  if (!isTeacher) {
     return (
       <div style={{
-        position: "absolute",
-        top: "100px",
-        right: "10px",
-        background: suspiciousActivities.length > 0 ? "rgba(255,0,0,0.8)" : "rgba(0,255,0,0.8)",
-        color: "white",
-        padding: "10px",
-        borderRadius: "5px",
-        maxWidth: "300px",
-        zIndex: 1000,
-        border: suspiciousActivities.length > 0 ? "20px solid red" : "2px solid green"
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "#f8f9fa",
+        position: "relative"
       }}>
-        <h4 style={{ margin: "0 0 8px 0", display: "flex", alignItems: "center", gap: "5px" }}>
-          <FaExclamationTriangle /> Proctoring Alerts
-          {serverStatus === 'error' && <span style={{fontSize: '100px', color: 'yellow'}}>(Offline)</span>}
-        </h4>
-        
-        {serverStatus === 'connected' ? (
-          <>
-            {suspiciousActivities.length > 0 ? (
-              <div>
-                {suspiciousActivities.map((activity, index) => (
-                  <div key={index} style={{ 
-                    margin: "5px 0", 
-                    fontSize: "20px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "5px"
+        {/* Top Bar - Subject Name & Timer */}
+        <div style={{
+          padding: "15px 20px",
+          background: "white",
+          borderBottom: "1px solid #e0e0e0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <div style={{
+              background: "#4285f4",
+              color: "white",
+              padding: "8px 16px",
+              borderRadius: "6px",
+              fontWeight: "bold",
+              fontSize: "16px"
+            }}>
+              {className}
+            </div>
+            <div style={{
+              background: "#f8f9fa",
+              border: "1px solid #dadce0",
+              borderRadius: "4px",
+              padding: "8px 16px",
+              fontWeight: "bold",
+              color: "#5f6368",
+              fontSize: "16px"
+            }}>
+              ⏱️ {formatTime(examDuration - timer)}
+            </div>
+          </div>
+          <div style={{ fontWeight: "bold", color: "#5f6368" }}>
+            {currentUserName}
+          </div>
+        </div>
+
+        {/* Main Content - Exam Form */}
+        <div style={{ 
+          flex: 1, 
+          display: "flex",
+          position: "relative",
+          overflow: "hidden"
+        }}>
+          {/* Exam Form - Takes most space */}
+          <div style={{
+            flex: 1,
+            padding: "20px",
+            overflow: "auto"
+          }}>
+            <iframe
+              src={`/exam/form/${roomId.replace('exam-', '')}`}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+                borderRadius: "8px",
+                boxShadow: "0 2px 8px rgba(116, 0, 0, 0.1)"
+              }}
+              title="Exam Form"
+            />
+          </div>
+
+          {/* Right Sidebar - Proctoring Alerts */}
+          <div style={{
+            width: "300px",
+            background: "white",
+            borderLeft: "1px solid #e0e0e0",
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "15px"
+          }}>
+            <h3 style={{ 
+              margin: "0 0 10px 0", 
+              color: "#202124",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}>
+              <FaExclamationTriangle color="#4285f4" />
+              Proctoring Monitor
+              {serverStatus === 'error' && (
+                <span style={{ fontSize: "12px", color: "orange", marginLeft: "auto" }}>
+                  (Offline)
+                </span>
+              )}
+            </h3>
+
+            {serverStatus === 'connected' ? (
+              <>
+                {/* Status Summary */}
+                <div style={{
+                  background: suspiciousActivities.length > 0 ? "#ffebee" : "#e8f5e8",
+                  border: `2px solid ${suspiciousActivities.length > 0 ? "#f44336" : "#4caf50"}`,
+                  borderRadius: "8px",
+                  padding: "15px",
+                  textAlign: "center"
+                }}>
+                  <div style={{ 
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    color: suspiciousActivities.length > 0 ? "#d32f2f" : "#2e7d32",
+                    marginBottom: "8px"
                   }}>
-                    {activity}
+                    {suspiciousActivities.length > 0 ? "🚨 ATTENTION REQUIRED" : "✅ ALL GOOD"}
                   </div>
-                ))}
-              </div>
+                  <div style={{ fontSize: "12px", color: "#666" }}>
+                    {suspiciousActivities.length > 0 ? 
+                      "Proctoring alerts detected" : 
+                      "Normal activity detected"
+                    }
+                  </div>
+                </div>
+
+                {/* Detailed Metrics */}
+                <div style={{
+                  background: "#f8f9fa",
+                  borderRadius: "8px",
+                  padding: "15px"
+                }}>
+                  <h4 style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#5f6368" }}>
+                    Monitoring Metrics
+                  </h4>
+                  
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                      <span>Faces Detected:</span>
+                      <span style={{ 
+                        fontWeight: "bold",
+                        color: faceCount === 1 ? "#4caf50" : "#f44336"
+                      }}>
+                        {faceCount}
+                      </span>
+                    </div>
+                    
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                      <span>Gaze Direction:</span>
+                      <span style={{ 
+                        fontWeight: "bold",
+                        color: !isLookingAway ? "#4caf50" : "#ff9800"
+                      }}>
+                        {isLookingAway ? "Looking Away" : "Focused"}
+                      </span>
+                    </div>
+                    
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                      <span>Face Detection:</span>
+                      <span style={{ 
+                        fontWeight: "bold",
+                        color: faceDetected ? "#4caf50" : "#f44336"
+                      }}>
+                        {faceDetected ? "✅" : "❌"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Suspicious Activities List */}
+                {suspiciousActivities.length > 0 && (
+                  <div style={{
+                    background: "#fff3e0",
+                    border: "1px solid #ffb74d",
+                    borderRadius: "8px",
+                    padding: "15px"
+                  }}>
+                    <h4 style={{ 
+                      margin: "0 0 10px 0", 
+                      fontSize: "14px", 
+                      color: "#e65100",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px"
+                    }}>
+                      ⚠️ Alerts
+                    </h4>
+                    <div style={{ fontSize: "12px", color: "#e65100" }}>
+                      {suspiciousActivities.map((activity, index) => (
+                        <div key={index} style={{ marginBottom: "5px" }}>
+                          • {activity}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
-              <div style={{ color: "lightgreen", display: "flex", alignItems: "center", gap: "5px" }}>
-                <FaEye /> ✅ Normal activity
+              <div style={{
+                background: "#fff3e0",
+                borderRadius: "8px",
+                padding: "20px",
+                textAlign: "center",
+                color: "#e65100"
+              }}>
+                <div style={{ fontSize: "48px", marginBottom: "10px" }}>🔧</div>
+                <div style={{ fontSize: "14px", fontWeight: "bold" }}>
+                  Proctoring System Offline
+                </div>
+                <div style={{ fontSize: "12px", marginTop: "5px" }}>
+                  Continue with your exam
+                </div>
               </div>
             )}
-            
-            <div style={{ fontSize: "20px", marginTop: "5px", opacity: 0.8 }}>
-              Faces: {faceCount} | Looking: {isLookingAway ? "Away" : "Center"}
+          </div>
+        </div>
+
+        {/* Bottom Bar - Camera Feed & Controls */}
+        <div style={{
+          background: "white",
+          borderTop: "1px solid #e0e0e0",
+          padding: "10px 20px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}>
+          {/* Camera Feed */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "15px"
+          }}>
+            <div style={{
+              position: "relative",
+              width: "120px",
+              height: "90px",
+              border: "2px solid #4285f4",
+              borderRadius: "8px",
+              overflow: "hidden",
+              background: "#333"
+            }}>
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                style={{ 
+                  width: "100%", 
+                  height: "100%", 
+                  objectFit: "cover",
+                  transform: "scaleX(-1)",
+                  display: camOn ? "block" : "none"
+                }}
+              />
+              {!camOn && (
+                <div style={{
+                  position: "absolute",
+                  top: 0, left: 0, width: "100%", height: "100%",
+                  display: "flex", justifyContent: "center", alignItems: "center",
+                  fontSize: "24px", color: "#fff", backgroundColor: "#999"
+                }}>
+                  <FaUser />
+                </div>
+              )}
             </div>
-          </>
-        ) : (
-          <div style={{ color: "yellow", fontSize: "12px" }}>
-            ⚠️ Proctoring system offline
+            
+            <div style={{ fontSize: "14px", color: "#5f6368" }}>
+              <div style={{ fontWeight: "bold" }}>Your Camera</div>
+              <div style={{ fontSize: "12px" }}>Live monitoring</div>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button 
+              onClick={toggleCam}
+              style={{ 
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                border: "1px solid #dadce0",
+                borderRadius: "4px",
+                background: "white",
+                color: camOn ? "#4caf50" : "#f44336",
+                cursor: "pointer",
+                fontSize: "14px"
+              }}
+            >
+              {camOn ? <FaVideo /> : <FaVideoSlash />}
+              Camera {camOn ? "On" : "Off"}
+            </button>
+            
+            <button 
+              onClick={toggleMic}
+              style={{ 
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                border: "1px solid #dadce0",
+                borderRadius: "4px",
+                background: "white",
+                color: micOn ? "#4caf50" : "#f44336",
+                cursor: "pointer",
+                fontSize: "14px"
+              }}
+            >
+              {micOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+              Mic {micOn ? "On" : "Off"}
+            </button>
+
+            {/* Chat Toggle */}
+            <button
+              onClick={() => setMessagesOpen(!messagesOpen)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                border: "1px solid #dadce0",
+                borderRadius: "4px",
+                background: "#4285f4",
+                color: "white",
+                cursor: "pointer",
+                fontSize: "14px"
+              }}
+            >
+              <FaComment />
+              Chat
+            </button>
+          </div>
+        </div>
+
+        {/* Chat Panel */}
+        {messagesOpen && (
+          <div style={{
+            position: "fixed",
+            bottom: "80px",
+            right: "20px",
+            width: "300px",
+            height: "400px",
+            background: "white",
+            border: "1px solid #ccc",
+            borderRadius: "8px",
+            display: "flex",
+            flexDirection: "column",
+            zIndex: 1000,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+          }}>
+            <div style={{  
+              background: "#4285f4",
+              color: "white",
+              padding: "12px",
+              borderBottom: "1px solid #ccc",
+              fontWeight: "bold",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              borderRadius: "8px 8px 0 0"
+            }}>
+              Exam Chat
+              <button
+                onClick={() => setMessagesOpen(false)}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ 
+              flex: 1,
+              padding: "10px",
+              overflowY: "auto",
+              fontSize: "14px",
+              background: "#fafafa"
+            }}>
+              {messages.length === 0 ? (
+                <div style={{ 
+                  color: "#888", 
+                  textAlign: "center", 
+                  marginTop: "20px",
+                  fontStyle: "italic"
+                }}>
+                  No messages yet
+                </div>
+              ) : (
+                messages.map(msg => (
+                  <div key={msg.id} style={{ 
+                    marginBottom: "8px",
+                    padding: "8px",
+                    background: msg.isAlert ? "#ffebee" : "white",
+                    borderRadius: "6px",
+                    borderLeft: msg.isAlert ? "3px solid #f44336" : "3px solid #4285f4"
+                  }}>
+                    <strong style={{ 
+                      color: msg.isAlert ? "#f44336" : "#4285f4",
+                      fontSize: "12px"
+                    }}>
+                      {msg.sender}:
+                    </strong> 
+                    <div style={{ marginTop: "4px", fontSize: "13px" }}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ display: "flex", borderTop: "1px solid #ccc" }}>
+              <input
+                type="text"
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                placeholder="Type your message..."
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  border: "none",
+                  outline: "none",
+                  borderRadius: "0 0 0 8px",
+                  fontSize: "14px"
+                }}
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              />
+              <button
+                onClick={sendMessage}
+                style={{
+                  padding: "0 15px",
+                  border: "none",
+                  background: "#4285f4",
+                  color: "white",
+                  cursor: "pointer",
+                  borderRadius: "0 0 8px 0",
+                  fontSize: "14px"
+                }}
+              >
+                Send
+              </button>
+            </div>
           </div>
         )}
       </div>
     );
-  };
+  }
 
-  const VideoFrame = ({ stream, name, isOwner, isTeacher, camOn: peerCamOn, micOn: peerMicOn, peerId }) => (
-    <div style={{
-      position: "relative",
-      flexBasis: "calc(10% - 50px)",
-      height: "200px",
-      border: isOwner ? "2px solid #4caf50" : (isTeacher ? "2px solid #2196f3" : "1px solid #666"),
-      borderRadius: "8px",
-      overflow: "hidden",
-      backgroundColor: "#333",
-      minWidth: "300px"
-    }}>
-      <video
-        autoPlay
-        playsInline
-        ref={el => { 
-          if (el) {
-            if (stream && peerCamOn) {
-              el.srcObject = stream;
-            } else {
-              el.srcObject = null;
-            }
-          }
-        }}
-        style={{ 
-          width: "100%", 
-          height: "100%", 
-          objectFit: "cover",
-          transform: "scaleX(-1)", // Mirror effect
-          display: (stream && peerCamOn) ? "block" : "none"
-        }}
-      />
-      {(!stream || !peerCamOn) && (
-        <div style={{
-          position: "absolute",
-          top: 0, left: 0, width: "100%", height: "100%",
-          display: "flex", justifyContent: "center", alignItems: "center",
-          fontSize: "60px", color: "#fff", backgroundColor: "#555"
-        }}>
-          <FaUser />
-        </div>
-      )}
-      <div style={{
-        position: "absolute",
-        bottom: "10px",
-        left: "10px",
-        color: "#fff",
-        fontWeight: "bold",
-        textShadow: "0 0 5px black",
-        backgroundColor: "rgba(0,0,0,0.5)",
-        padding: "2px 8px",
-        borderRadius: "4px",
-        fontSize: "14px"
-      }}>
-        {name} {isOwner ? "(Owner)" : (isTeacher ? "(Teacher)" : "(Student)")}
-      </div>
-      
-      {/* Peer Media Status Indicators */}
-      <div style={{
-        position: "absolute",
-        bottom: "10px",
-        right: "10px",
-        display: "flex",
-        gap: "10px",
-        backgroundColor: "rgba(0,0,0,0.5)",
-        padding: "5px 10px",
-        borderRadius: "20px"
-      }}>
-        <div style={{ 
-          color: peerCamOn ? "green" : "red", 
-          fontSize: "16px",
-          display: "flex",
-          alignItems: "center"
-        }}>
-          {peerCamOn ? <FaVideo /> : <FaVideoSlash />}
-        </div>
-        <div style={{ 
-          color: peerMicOn ? "green" : "red", 
-          fontSize: "16px",
-          display: "flex",
-          alignItems: "center"
-        }}>
-          {peerMicOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
-        </div>
-      </div>
-    </div>
-  );
-
+  // TEACHER VIEW (Original layout)
   return (
     <div style={{
       height: "100vh",
@@ -763,9 +975,6 @@ export default function ExamRoom({ roomId }) {
         #FF0000 100%
       )`
     }}>
-      {/* Proctoring Alerts for Student */}
-      <ProctoringAlerts />
-
       {/* Top Bar */}
       <div style={{
         padding: "10px",
@@ -776,7 +985,7 @@ export default function ExamRoom({ roomId }) {
         background: "rgba(255, 255, 255, 0.2)"
       }}>
         <h2 style={{ color: "#fff7f7ff", textShadow: "1px 1px 3px rgba(0, 0, 0, 1)" }}>
-          {classSubject} - {isTeacher ? "Teacher View" : "Student View"}
+          {classSubject} - Teacher View
         </h2>
         <div style={{ fontWeight: "bold", color: "#fff" }}>
           Timer: {formatTime(examDuration - timer)}
@@ -798,7 +1007,7 @@ export default function ExamRoom({ roomId }) {
           position: "relative", 
           flexBasis: "calc(50% - 200px)", 
           height: "350px", 
-          border: isTeacher ? "2px solid #4caf50" : "2px solid #2196f3", 
+          border: "2px solid #4caf50", 
           borderRadius: "8px", 
           overflow: "hidden",
           minWidth: "400px"
@@ -812,7 +1021,7 @@ export default function ExamRoom({ roomId }) {
               width: "100%", 
               height: "100%", 
               objectFit: "cover",
-              transform: "scaleX(-1)", // Mirror effect
+              transform: "scaleX(-1)",
               display: camOn ? "block" : "none"
             }}
           />
@@ -837,7 +1046,7 @@ export default function ExamRoom({ roomId }) {
             padding: "2px 8px",
             borderRadius: "4px"
           }}>
-            {currentUserName} {isTeacher ? "(Teacher)" : "(Student)"}
+            {currentUserName} (Teacher)
           </div>
           <div style={{
             position: "absolute",
@@ -880,16 +1089,89 @@ export default function ExamRoom({ roomId }) {
         {Object.entries(peerStreams).map(([id, stream]) => {
           const info = peerInfo[id] || {};
           return (
-            <VideoFrame 
-              key={id} 
-              stream={stream} 
-              name={info.name || "User"} 
-              isOwner={info.isOwner} 
-              isTeacher={info.isTeacher} 
-              camOn={info.camOn !== false} // Default to true if undefined
-              micOn={info.micOn !== false} // Default to true if undefined
-              peerId={id}
-            />
+            <div key={id} style={{
+              position: "relative",
+              flexBasis: "calc(10% - 50px)",
+              height: "200px",
+              border: info.isTeacher ? "2px solid #2196f3" : "1px solid #666",
+              borderRadius: "8px",
+              overflow: "hidden",
+              backgroundColor: "#333",
+              minWidth: "300px"
+            }}>
+              <video
+                autoPlay
+                playsInline
+                ref={el => { 
+                  if (el) {
+                    if (stream && info.camOn !== false) {
+                      el.srcObject = stream;
+                    } else {
+                      el.srcObject = null;
+                    }
+                  }
+                }}
+                style={{ 
+                  width: "100%", 
+                  height: "100%", 
+                  objectFit: "cover",
+                  transform: "scaleX(-1)",
+                  display: (stream && info.camOn !== false) ? "block" : "none"
+                }}
+              />
+              {(!stream || info.camOn === false) && (
+                <div style={{
+                  position: "absolute",
+                  top: 0, left: 0, width: "100%", height: "100%",
+                  display: "flex", justifyContent: "center", alignItems: "center",
+                  fontSize: "60px", color: "#fff", backgroundColor: "#555"
+                }}>
+                  <FaUser />
+                </div>
+              )}
+              <div style={{
+                position: "absolute",
+                bottom: "10px",
+                left: "10px",
+                color: "#fff",
+                fontWeight: "bold",
+                textShadow: "0 0 5px black",
+                backgroundColor: "rgba(0,0,0,0.5)",
+                padding: "2px 8px",
+                borderRadius: "4px",
+                fontSize: "14px"
+              }}>
+                {info.name} {info.isTeacher ? "(Teacher)" : "(Student)"}
+              </div>
+              
+              <div style={{
+                position: "absolute",
+                bottom: "10px",
+                right: "10px",
+                display: "flex",
+                gap: "10px",
+                backgroundColor: "rgba(0,0,0,0.5)",
+                padding: "5px 10px",
+                borderRadius: "20px"
+              }}>
+                <div style={{ 
+                  color: info.camOn !== false ? "green" : "red", 
+                  fontSize: "16px",
+                  display: "flex",
+                  alignItems: "center"
+                }}>
+                  {info.camOn !== false ? <FaVideo /> : <FaVideoSlash />}
+                </div>
+                <div style={{ 
+                  color: info.micOn !== false ? "green" : "red", 
+                  fontSize: "16px",
+                  display: "flex",
+                  alignItems: "center"
+                }}>
+                  {info.micOn !== false ? <FaMicrophone /> : <FaMicrophoneSlash />}
+                </div>
+              </div>
+            </div>
           );
         })}
       </div>

@@ -132,7 +132,7 @@ const callPythonService = async (filePath, fileType) => {
     const formData = new FormData();
     formData.append('file', fs.createReadStream(filePath));
     
-    const response = await axios.post('http://localhost:5000/process-file', formData, {
+    const response = await axios.post('http://localhost:5001/process-file', formData, {
       headers: {
         ...formData.getHeaders(),
       },

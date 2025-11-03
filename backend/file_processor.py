@@ -145,5 +145,5 @@ def health_check():
     return jsonify({'status': 'Python service is running! 🐍'})
 
 if __name__ == '__main__':
-    print("🚀 Python File Processor starting on port 5000...")
-    app.run(port=5000, debug=True)
+    print("🚀 Python File Processor starting on port 5001...")
+    app.run(port=5001, debug=True)
