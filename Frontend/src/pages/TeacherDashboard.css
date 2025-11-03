@@ -509,3 +509,26 @@ html, body {
   font-weight: 600;
   font-size: 1rem;
 }
+
+
+/* Add to TeacherDashboard.css */
+.wide-modal {
+  width: 90%;
+  max-width: 1000px;
+}
+
+.form-preview {
+  text-align: center;
+  padding: 20px;
+}
+
+.file-preview {
+  margin-top: 20px;
+}
+
+.file-preview iframe {
+  width: 100%;
+  height: 500px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}

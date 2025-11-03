@@ -40,6 +40,7 @@ app.use("/api/student", studentRoutes);
 app.use("/api/class", classRoutes);
 app.use("/api/exams", examRoutes);
 
+
 // ===== SOCKET.IO EVENTS =====
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
@@ -79,6 +80,29 @@ io.on("connection", (socket) => {
   // In-room chat
   socket.on("send-message", ({ roomId, message }) => {
     io.to(roomId).emit("receive-message", { id: socket.id, name: userInfo.name, message });
+  });
+
+  // ✅ ADD PROCTORING ALERTS
+  socket.on("proctoring-alert", ({ roomId, studentId, studentName, alert, timestamp }) => {
+    console.log(`🚨 Proctoring Alert from ${studentName}: ${alert}`);
+    // Send alert to teacher only
+    socket.to(roomId).emit("proctoring-alert", { 
+      studentId, 
+      studentName, 
+      alert, 
+      timestamp 
+    });
+  });
+
+  // ✅ ADD MEDIA STATUS UPDATES
+  socket.on("media-status", ({ roomId, camOn, micOn }) => {
+    socket.to(roomId).emit("media-status-update", {
+      userId: socket.id,
+      name: userInfo.name,
+      camOn,
+      micOn,
+      isTeacher: userInfo.isTeacher
+    });
   });
 
   // Disconnect

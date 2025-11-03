@@ -3,10 +3,11 @@ import Register from "./pages/Register";
 import Login from "./pages/Login";
 import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
-import ProtectedRoute from "./components/ProtectedRoute";
+import ProtectedRoute from "./components/protectedroute";
 import LandingPage from "./pages/LandingPage";
 import ClassDetails from "./pages/ClassDetails";
-import ExamRoomWrapper from "./pages/ExamRoomWrapper"; // bagong wrapper component
+import ExamRoomWrapper from "./pages/ExamRoomWrapper";
+import ExamFormView from "./pages/ExamformView";
 
 function App() {
   return (
@@ -53,6 +54,16 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["teacher", "student"]}>
               <ExamRoomWrapper />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ✅ ADD THIS NEW ROUTE - Exam Form View */}
+        <Route
+          path="/exam/form/:examId"
+          element={
+            <ProtectedRoute allowedRoles={["teacher", "student"]}>
+              <ExamFormView />
             </ProtectedRoute>
           }
         />

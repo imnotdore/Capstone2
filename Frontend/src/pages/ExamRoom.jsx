@@ -1,7 +1,94 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { io } from "socket.io-client";
-import { FaVideo, FaVideoSlash, FaMicrophone, FaMicrophoneSlash, FaUser, FaComment } from "react-icons/fa";
+import { FaVideo, FaVideoSlash, FaMicrophone, FaMicrophoneSlash, FaUser, FaComment, FaExclamationTriangle, FaEye } from "react-icons/fa";
+
+// Face detection hook using Python backend
+// Face detection hook using Python backend
+const useFaceDetection = (videoRef, isStudent, isEnabled = true) => {
+  const [faceData, setFaceData] = useState({
+    faceDetected: true,
+    faceCount: 0,
+    isLookingAway: false,
+    suspiciousActivities: []
+  });
+  const [serverStatus, setServerStatus] = useState('checking');
+
+  // Check if Python server is running
+  useEffect(() => {
+    const checkServer = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/health');
+        if (response.ok) {
+          setServerStatus('connected');
+          console.log('✅ Python proctoring server connected');
+        } else {
+          setServerStatus('error');
+        }
+      } catch (error) {
+        setServerStatus('error');
+        console.log('❌ Python proctoring server not available');
+      }
+    };
+
+    checkServer();
+  }, []);
+
+  useEffect(() => {
+    if (!isStudent || !isEnabled || !videoRef.current || serverStatus !== 'connected') return;
+
+    const captureAndDetect = async () => {
+      try {
+        const video = videoRef.current;
+        if (!video || video.readyState !== 4) return;
+
+        // Capture frame from video
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        
+        // Send to Python backend
+        const response = await fetch('http://localhost:5000/detect-faces', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: imageData })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('📊 Face detection result:', result);
+          setFaceData({
+            faceDetected: result.faceDetected,
+            faceCount: result.faceCount,
+            isLookingAway: result.isLookingAway,
+            suspiciousActivities: result.suspiciousActivities || []
+          });
+        } else {
+          console.log('❌ Face detection request failed');
+        }
+      } catch (error) {
+        console.log('Face detection temporarily unavailable:', error);
+      }
+    };
+
+    const interval = setInterval(captureAndDetect, 3000); // Check every 3 seconds
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [isStudent, isEnabled, serverStatus]);
+
+  return { 
+    ...faceData, 
+    serverStatus 
+  };
+};
 
 export default function ExamRoom({ roomId }) {
   const location = useLocation();
@@ -33,6 +120,15 @@ export default function ExamRoom({ roomId }) {
   const peersRef = useRef({});
   const makingOfferRef = useRef(false);
   const isInitializedRef = useRef(false);
+
+  // Face detection for student
+  const {
+    faceDetected,
+    faceCount,
+    isLookingAway,
+    suspiciousActivities,
+    serverStatus
+  } = useFaceDetection(localVideoRef, !isTeacher, camOn);
 
   // Timer
   useEffect(() => {
@@ -112,6 +208,29 @@ export default function ExamRoom({ roomId }) {
       });
     }
   };
+
+  // Function to broadcast proctoring alerts to teacher
+  const broadcastProctoringAlert = (alert) => {
+    if (socketRef.current && !isTeacher) {
+      console.log(`🚨 Broadcasting proctoring alert: ${alert}`);
+      socketRef.current.emit("proctoring-alert", {
+        roomId,
+        studentId: currentUserId,
+        studentName: currentUserName,
+        alert,
+        timestamp: new Date().toISOString()
+      });
+    }
+  };
+
+  // Send proctoring alerts when suspicious activities are detected
+  useEffect(() => {
+    if (!isTeacher && suspiciousActivities.length > 0) {
+      suspiciousActivities.forEach(activity => {
+        broadcastProctoringAlert(activity);
+      });
+    }
+  }, [suspiciousActivities, isTeacher]);
 
   // Socket & WebRTC - IMPROVED VERSION
   useEffect(() => {
@@ -264,6 +383,21 @@ export default function ExamRoom({ roomId }) {
       
       // Update peer info with media status
       updatePeerMediaStatus(userId, remoteCamOn, remoteMicOn);
+    });
+
+    // Handle proctoring alerts (for teachers)
+    socketRef.current.on("proctoring-alert", ({ studentName, alert, timestamp }) => {
+      if (isTeacher) {
+        console.log(`🚨 Proctoring alert from ${studentName}: ${alert}`);
+        // Display in chat
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `🚨 PROCTORING ALERT: ${studentName} - ${alert}`,
+          sender: "System",
+          isTeacher: false,
+          isAlert: true
+        }]);
+      }
     });
 
     // Handle socket disconnect
@@ -471,6 +605,63 @@ export default function ExamRoom({ roomId }) {
     setMessageInput("");
   };
 
+  // Proctoring Alerts Component for Student
+  const ProctoringAlerts = () => {
+    if (isTeacher) return null;
+
+    return (
+      <div style={{
+        position: "absolute",
+        top: "100px",
+        right: "10px",
+        background: suspiciousActivities.length > 0 ? "rgba(255,0,0,0.8)" : "rgba(0,255,0,0.8)",
+        color: "white",
+        padding: "10px",
+        borderRadius: "5px",
+        maxWidth: "300px",
+        zIndex: 1000,
+        border: suspiciousActivities.length > 0 ? "20px solid red" : "2px solid green"
+      }}>
+        <h4 style={{ margin: "0 0 8px 0", display: "flex", alignItems: "center", gap: "5px" }}>
+          <FaExclamationTriangle /> Proctoring Alerts
+          {serverStatus === 'error' && <span style={{fontSize: '100px', color: 'yellow'}}>(Offline)</span>}
+        </h4>
+        
+        {serverStatus === 'connected' ? (
+          <>
+            {suspiciousActivities.length > 0 ? (
+              <div>
+                {suspiciousActivities.map((activity, index) => (
+                  <div key={index} style={{ 
+                    margin: "5px 0", 
+                    fontSize: "20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px"
+                  }}>
+                    {activity}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: "lightgreen", display: "flex", alignItems: "center", gap: "5px" }}>
+                <FaEye /> ✅ Normal activity
+              </div>
+            )}
+            
+            <div style={{ fontSize: "20px", marginTop: "5px", opacity: 0.8 }}>
+              Faces: {faceCount} | Looking: {isLookingAway ? "Away" : "Center"}
+            </div>
+          </>
+        ) : (
+          <div style={{ color: "yellow", fontSize: "12px" }}>
+            ⚠️ Proctoring system offline
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const VideoFrame = ({ stream, name, isOwner, isTeacher, camOn: peerCamOn, micOn: peerMicOn, peerId }) => (
     <div style={{
       position: "relative",
@@ -572,6 +763,9 @@ export default function ExamRoom({ roomId }) {
         #FF0000 100%
       )`
     }}>
+      {/* Proctoring Alerts for Student */}
+      <ProctoringAlerts />
+
       {/* Top Bar */}
       <div style={{
         padding: "10px",
@@ -775,10 +969,13 @@ export default function ExamRoom({ roomId }) {
                 <div key={msg.id} style={{ 
                   marginBottom: "8px",
                   padding: "5px",
-                  backgroundColor: msg.isTeacher ? "#e3f2fd" : "#f5f5f5",
-                  borderRadius: "5px"
+                  backgroundColor: msg.isAlert ? "#ffebee" : (msg.isTeacher ? "#e3f2fd" : "#f5f5f5"),
+                  borderRadius: "5px",
+                  borderLeft: msg.isAlert ? "3px solid red" : "none"
                 }}>
-                  <strong>{msg.sender}:</strong> {msg.text}
+                  <strong style={{ color: msg.isAlert ? "red" : "inherit" }}>
+                    {msg.sender}:
+                  </strong> {msg.text}
                 </div>
               ))
             )}

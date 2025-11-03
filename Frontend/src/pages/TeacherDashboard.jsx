@@ -95,81 +95,89 @@ export default function TeacherDashboard() {
   };
 
   // Select class & fetch exams + students
-  // Select class & fetch exams + students
-const handleSelectClass = async (c) => {
-  setSelectedClass(c);
-  setActiveTab("Classwork");
-  try {
-    const token = localStorage.getItem("token");
+  const handleSelectClass = async (c) => {
+    setSelectedClass(c);
+    setActiveTab("Classwork");
+    try {
+      const token = localStorage.getItem("token");
 
-    const examsRes = await api.get(`/exams/${c._id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    
-    // Simple fix - gamitin ang data kung array, kung hindi gumamit ng empty array
-    const examsData = Array.isArray(examsRes.data) 
-      ? examsRes.data 
-      : (examsRes.data?.data || []);
-    
-    const normalizedExams = examsData.map((exam) => ({
-      ...exam,
-      _id: exam._id.toString(),
-    }));
-    
-    setExams(normalizedExams);
+      const examsRes = await api.get(`/exams/${c._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const examsData = Array.isArray(examsRes.data) 
+        ? examsRes.data 
+        : (examsRes.data?.data || []);
+      
+      const normalizedExams = examsData.map((exam) => ({
+        ...exam,
+        _id: exam._id.toString(),
+      }));
+      
+      setExams(normalizedExams);
 
-    const studentsRes = await api.get(`/class/students/${c._id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    
-    const studentsData = Array.isArray(studentsRes.data) 
-      ? studentsRes.data 
-      : (studentsRes.data?.data || []);
-    
-    setStudents(studentsData);
-    
-  } catch (err) {
-    console.error("Failed to fetch exams or students", err);
-    alert("Failed to fetch class data.");
-  }
-};
+      const studentsRes = await api.get(`/class/students/${c._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const studentsData = Array.isArray(studentsRes.data) 
+        ? studentsRes.data 
+        : (studentsRes.data?.data || []);
+      
+      setStudents(studentsData);
+      
+    } catch (err) {
+      console.error("Failed to fetch exams or students", err);
+      alert("Failed to fetch class data.");
+    }
+  };
+
   const uploadExam = async (e) => {
-  e.preventDefault();
-  if (!examTitle || !examDate || !examFile) return alert("Fill all fields");
-  if (!selectedClass) return alert("Select a class first");
+    e.preventDefault();
+    if (!examTitle || !examDate || !examFile) return alert("Fill all fields");
+    if (!selectedClass) return alert("Select a class first");
 
-  const formData = new FormData();
-  formData.append("title", examTitle);
-  formData.append("scheduledAt", examDate);
-  formData.append("file", examFile);
+    const formData = new FormData();
+    formData.append("title", examTitle);
+    formData.append("scheduledAt", examDate);
+    formData.append("file", examFile);
 
-  try {
-    const token = localStorage.getItem("token");
-    const res = await api.post(
-      `/exams/upload/${selectedClass._id}`,
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
-    
-    // I-adjust base sa response structure
-    const newExam = res.data.data || res.data;
-    
-    setExams([...exams, { ...newExam, _id: newExam._id.toString() }]);
-    setExamTitle("");
-    setExamDate("");
-    setExamFile(null);
-    setShowExamModal(false);
-  } catch {
-    alert("Failed to upload exam.");
-  }
+    try {
+      const token = localStorage.getItem("token");
+      const res = await api.post(
+        `/exams/upload/${selectedClass._id}`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      
+      const newExam = res.data.data || res.data;
+      
+      setExams([...exams, { ...newExam, _id: newExam._id.toString() }]);
+      setExamTitle("");
+      setExamDate("");
+      setExamFile(null);
+      setShowExamModal(false);
+    } catch {
+      alert("Failed to upload exam.");
+    }
+  };
+
+  // FIXED: Simple View function that opens the form
+  const handleViewExam = (exam) => {
+  // Use the frontend route instead of direct backend URL
+  const formUrl = `/exam/form/${exam._id}`;
+  
+  // Open in new tab
+  window.open(formUrl, '_blank', 'width=1000,height=700');
 };
 
-  const handleViewExam = (exam) => {
+  // NEW: Function to view original file
+  const handleViewOriginal = (exam) => {
     setCurrentExamTitle(exam.title);
     setCurrentExamFile(exam.fileUrl);
     setShowExamViewModal(true);
@@ -188,44 +196,41 @@ const handleSelectClass = async (c) => {
     }
   };
 
-const handleDeployExam = async (examId) => {
-  if (!examId || examId.length !== 24) return alert("Invalid exam ID");
+  const handleDeployExam = async (examId) => {
+    if (!examId || examId.length !== 24) return alert("Invalid exam ID");
 
-  console.log("Deploying exam with ID:", examId);
+    console.log("Deploying exam with ID:", examId);
 
-  try {
-    const token = localStorage.getItem("token");
-    const res = await api.patch(
-      `/exams/deploy/${examId}`,
-      {},
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    try {
+      const token = localStorage.getItem("token");
+      const res = await api.patch(
+        `/exams/deploy/${examId}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    console.log("Deploy response:", res.data);
+      console.log("Deploy response:", res.data);
 
-    setExams(
-      exams.map((exam) =>
-        exam._id === examId ? { ...exam, isDeployed: true } : exam
-      )
-    );
+      setExams(
+        exams.map((exam) =>
+          exam._id === examId ? { ...exam, isDeployed: true } : exam
+        )
+      );
 
-    const roomId = `exam-${examId}`;
-    
-    navigate(`/room/${roomId}`, {
-      state: {
-        teacherName: profile.name,
-        teacherId: profile.id || "teacher_unique_id", // Gamitin ang actual user ID
-        classSubject: selectedClass.name
-      }
-    });
-  } catch (err) {
-    console.error("Deploy error:", err.response?.data || err);
-    alert(err.response?.data?.message || "Failed to deploy exam.");
-  }
-};
-
- 
-
+      const roomId = `exam-${examId}`;
+      
+      navigate(`/room/${roomId}`, {
+        state: {
+          teacherName: profile.name,
+          teacherId: profile.id || "teacher_unique_id",
+          classSubject: selectedClass.name
+        }
+      });
+    } catch (err) {
+      console.error("Deploy error:", err.response?.data || err);
+      alert(err.response?.data?.message || "Failed to deploy exam.");
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -350,6 +355,9 @@ const handleDeployExam = async (examId) => {
                                 : "No schedule"}
                             </p>
                             <p>
+                              Questions: {exam.questions?.length || 0}
+                            </p>
+                            <p>
                               Status:{" "}
                               {exam.isDeployed ? (
                                 <span className="deployed">✅ Deployed</span>
@@ -364,7 +372,13 @@ const handleDeployExam = async (examId) => {
                               className="small-btn"
                               onClick={() => handleViewExam(exam)}
                             >
-                              View
+                              View Form
+                            </button>
+                            <button
+                              className="small-btn secondary"
+                              onClick={() => handleViewOriginal(exam)}
+                            >
+                              View File
                             </button>
                             <button
                               onClick={() => handleDeleteExam(exam._id)}
@@ -389,52 +403,50 @@ const handleDeployExam = async (examId) => {
               )}
 
               {activeTab === "People" && (
-  <div>
-    {/* Teacher Info */}
-    <h4>👨‍🏫 Class Owner</h4>
-    <div className="teacher-owner">
-      <img
-        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-          profile.name
-        )}&background=203a43&color=fff`}
-        alt={profile.name}
-        className="teacher-avatar"
-      />
-      <span>{profile.name} (Teacher)</span>
-    </div>
+                <div>
+                  <h4>👨‍🏫 Class Owner</h4>
+                  <div className="teacher-owner">
+                    <img
+                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        profile.name
+                      )}&background=203a43&color=fff`}
+                      alt={profile.name}
+                      className="teacher-avatar"
+                    />
+                    <span>{profile.name} (Teacher)</span>
+                  </div>
 
-    <hr />
+                  <hr />
 
-    {/* Students List */}
-    <h4>👩‍🎓 Enrolled Students</h4>
-    {students.filter(s => s.name !== profile.name).length === 0 ? (
-      <p>No students enrolled yet.</p>
-    ) : (
-      <ul className="student-list">
-        {students
-          .filter(s => s.name !== profile.name)
-          .map((s) => {
-            const initials = s.name
-              .split(" ")
-              .map((n) => n[0])
-              .join("")
-              .toUpperCase();
+                  <h4>👩‍🎓 Enrolled Students</h4>
+                  {students.filter(s => s.name !== profile.name).length === 0 ? (
+                    <p>No students enrolled yet.</p>
+                  ) : (
+                    <ul className="student-list">
+                      {students
+                        .filter(s => s.name !== profile.name)
+                        .map((s) => {
+                          const initials = s.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase();
 
-            return (
-              <li key={s._id} className="student-item" title={s.email}>
-                <img
-                  src={`https://ui-avatars.com/api/?name=${initials}&background=203a43&color=fff`}
-                  alt={s.name}
-                  className="student-avatar"
-                />
-                <span>{s.name}</span>
-              </li>
-            );
-          })}
-      </ul>
-    )}
-  </div>
-)}
+                          return (
+                            <li key={s._id} className="student-item" title={s.email}>
+                              <img
+                                src={`https://ui-avatars.com/api/?name=${initials}&background=203a43&color=fff`}
+                                alt={s.name}
+                                className="student-avatar"
+                              />
+                              <span>{s.name}</span>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               {activeTab === "Grades" && (
                 <div>
@@ -508,29 +520,27 @@ const handleDeployExam = async (examId) => {
         </div>
       )}
 
+      {/* File Preview Modal */}
       {showExamViewModal && (
-        <div
-          className="modal"
-          onClick={() => setShowExamViewModal(false)}
-        >
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {currentExamFile ? (
-              currentExamFile.endsWith(".pdf") ? (
-                <iframe src={currentExamFile} title={currentExamTitle} />
+        <div className="modal" onClick={() => setShowExamViewModal(false)}>
+          <div className="modal-content wide-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{currentExamTitle} - Original File</h3>
+            <div className="file-preview">
+              {currentExamFile ? (
+                currentExamFile.endsWith(".pdf") ? (
+                  <iframe src={currentExamFile} title={currentExamTitle} />
+                ) : (
+                  <iframe
+                    src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+                      currentExamFile
+                    )}`}
+                    title={currentExamTitle}
+                  />
+                )
               ) : (
-                <iframe
-                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
-                    currentExamFile
-                  )}`}
-                  title={currentExamTitle}
-                />
-              )
-            ) : (
-              <p style={{ textAlign: "center" }}>No preview available</p>
-            )}
+                <p>No preview available</p>
+              )}
+            </div>
           </div>
         </div>
       )}
