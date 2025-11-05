@@ -14,22 +14,42 @@ export default function StudentDashboard() {
   const [joinCode, setJoinCode] = useState("");
 
   // Fetch student profile
+  // ✅ FIXED: Fetch student profile with more data
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const token = localStorage.getItem("token");
+        console.log("🔄 Fetching user profile...");
+        
         const res = await api.get("/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const { name } = res.data;
+        
+        console.log("✅ Profile API Response:", res.data); // Debug line
+        
+        const userData = res.data;
+        
+        // Extract user information
+        const userName = userData.name || "User";
+        const userEmail = userData.email || "";
+        
         setProfile({
-          name,
+          name: userName,
+          email: userEmail,
           avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            name
-          )}&background=203a43&color=fff`,
+            userName
+          )}&background=203a43&color=fff&size=128`,
         });
-      } catch {
-        setProfile({ name: "User", avatar: null });
+        
+        console.log("📋 Profile set:", { name: userName, email: userEmail });
+        
+      } catch (error) {
+        console.error("❌ Failed to fetch profile:", error);
+        setProfile({ 
+          name: "User", 
+          email: "",
+          avatar: null 
+        });
       }
     };
     fetchProfile();
@@ -233,12 +253,20 @@ const joinExam = async (roomId) => {
   return (
     <div className="dashboard-wrapper">
       {/* HEADER */}
+
       <header className="dashboard-header">
         <h1 className="logo">Student Dashboard</h1>
         <div className="header-right">
           <div className="profile">
-            {profile.avatar && <img src={profile.avatar} alt="avatar" />}
-            <span>{profile.name}</span>
+            {profile.avatar && (
+              <img src={profile.avatar} alt="avatar" className="profile-avatar" />
+            )}
+            <div className="profile-info">
+              <span className="profile-name">{profile.name}</span>
+              {profile.email && (
+                <span className="profile-email">{profile.email}</span>
+              )}
+            </div>
           </div>
           <button className="logout-btn" onClick={handleLogout}>
             Logout

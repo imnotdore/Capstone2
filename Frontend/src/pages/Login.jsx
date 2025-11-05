@@ -1,15 +1,27 @@
+// src/pages/Login.jsx
 import { useState } from "react";
-import api from "../lib/api"; // make sure ito ang ginagamit
+import api from "../lib/api";
 import { useNavigate, Link } from "react-router-dom";
+import styles from "./Login.module.css";
 
 export default function Login() {
-  const [form, setForm] = useState({ email: "", password: "", role: "student" });
+  const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleGoogleLogin = () => {
+    try {
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      // ✅ Now with /api since all routes are under /api
+      window.location.href = `${backendUrl}/auth/google`;
+    } catch (error) {
+      setError("Google login is currently unavailable. Please use email login.");
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -25,22 +37,14 @@ export default function Login() {
 
       const { token, user } = res.data;
 
-      if (form.role !== user.role) {
-        setError(`❌ You are not allowed to login as ${form.role}.`);
-        setLoading(false);
-        return;
-      }
-
       localStorage.setItem("token", token);
-      localStorage.setItem("role", user.role);
+      localStorage.setItem("userName", user.name);
 
-      if (user.role === "student") {
-        navigate("/student/dashboard");
-      } else if (user.role === "teacher") {
-        navigate("/teacher/dashboard");
-      } else {
-        setError("❌ Invalid role");
-      }
+      console.log("✅ Login successful - User:", user.name);
+
+      // ✅ ALWAYS REDIRECT TO SINGLE DASHBOARD
+      navigate("/dashboard");
+
     } catch (err) {
       setError(err.response?.data?.message || "❌ Login failed");
     } finally {
@@ -49,49 +53,44 @@ export default function Login() {
   };
 
   return (
-    <div style={styles.wrapper}>
+    <div className={styles.wrapper}>
       {/* Left branding text */}
-      <div style={styles.leftText}>
-        <h1 style={styles.brand}>AI-Based Online Exam Proctoring System</h1>
-        <p style={styles.tagline}>
+      <div className={styles.leftText}>
+        <h1 className={styles.brand}>AI-Based Online Exam Proctoring System</h1>
+        <p className={styles.tagline}>
           Secure • Smart • Reliable <br /> Online Exam Proctoring
         </p>
 
-        {/* Home button */}
-        <button
-          style={styles.getStartedBtn}
-          onClick={() => navigate("/")}
-          onMouseEnter={(e) => (e.target.style.background = "#218838")}
-          onMouseLeave={(e) => (e.target.style.background = "#28a745")}
-        >
+        <button className={styles.homeBtn} onClick={() => navigate("/")}>
           Home
         </button>
       </div>
 
       {/* Login Form */}
-      <div style={styles.rightPanel}>
-        <div style={styles.card}>
-          <h2 style={styles.title}>Login</h2>
-          {error && <p style={styles.error}>{error}</p>}
-          <form onSubmit={handleSubmit} style={styles.form}>
-            <select
-              name="role"
-              value={form.role}
-              onChange={handleChange}
-              style={styles.select}
-            >
-              <option value="student">Student</option>
-              <option value="teacher">Teacher</option>
-            </select>
+      <div className={styles.rightPanel}>
+        <div className={styles.card}>
+          <h2 className={styles.title}>Login to Your Account</h2>
+          <p className={styles.subtitle}>Enter your credentials to continue</p>
 
+          {/* Google Login Button */}
+          <button type="button" onClick={handleGoogleLogin} className={styles.googleButton}>
+            <span className={styles.googleIcon}>G</span>
+            Continue with Google
+          </button>
+
+          <div className={styles.divider}>
+            <span className={styles.dividerText}>or login with email</span>
+          </div>
+
+          <form onSubmit={handleSubmit} className={styles.form}>
             <input
               type="email"
               name="email"
-              placeholder="Email"
+              placeholder="Email Address"
               value={form.email}
               onChange={handleChange}
               required
-              style={styles.input}
+              className={styles.input}
             />
             <input
               type="password"
@@ -100,113 +99,26 @@ export default function Login() {
               value={form.password}
               onChange={handleChange}
               required
-              style={styles.input}
+              className={styles.input}
             />
-            <button type="submit" style={styles.button} disabled={loading}>
-              {loading ? "Logging in..." : "Login"}
+            
+            {/* Error message below password input */}
+            {error && (
+              <div className={styles.errorContainer}>
+                <p className={styles.error}>{error}</p>
+              </div>
+            )}
+
+            <button type="submit" className={styles.button} disabled={loading}>
+              {loading ? "Signing In..." : "Sign In"}
             </button>
           </form>
-          <p style={styles.registerText}>
-            Don’t have an account? <Link to="/register">Register</Link>
+
+          <p className={styles.registerText}>
+            Don't have an account? <Link to="/register">Create Account</Link>
           </p>
         </div>
       </div>
     </div>
   );
 }
-
-const styles = {
-  wrapper: {
-    display: "flex",
-    height: "100vh",
-    width: "100vw",
-    overflow: "hidden",
-    background: "linear-gradient(135deg,#0f2027,#203a43,#2c5364)",
-    color: "#fff",
-  },
-  leftText: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "flex-start",
-    paddingLeft: "40px",
-    gap: "20px",
-  },
-  brand: {
-    fontSize: "3rem",
-    marginBottom: "15px",
-  },
-  tagline: {
-    fontSize: "1.3rem",
-    lineHeight: 1.5,
-    maxWidth: "250px",
-  },
-  rightPanel: {
-    flex: 1,
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  card: {
-    background: "#fff",
-    color: "#333",
-    padding: "50px",
-    borderRadius: "12px",
-    width: "100%",
-    maxWidth: "400px",
-    boxShadow: "0 8px 16px rgba(0,0,0,0.3)",
-    textAlign: "center",
-  },
-  getStartedBtn: {
-    marginTop: "20px",
-    padding: "14px 30px",
-    background: "#28a745",
-    color: "#fff",
-    fontSize: "1rem",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    transition: "all 0.3s ease",
-  },
-  title: {
-    marginBottom: "20px",
-    fontSize: "2rem",
-  },
-  error: {
-    color: "red",
-    marginBottom: "10px",
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "15px",
-  },
-  input: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #ccc",
-    fontSize: "1rem",
-    outline: "none",
-  },
-  select: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #ccc",
-    fontSize: "1rem",
-    outline: "none",
-  },
-  button: {
-    background: "#3498dbff",
-    color: "#fff",
-    padding: "14px 30px",
-    fontSize: "1rem",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-  registerText: {
-    marginTop: "15px",
-    fontSize: "0.9rem",
-  },
-};

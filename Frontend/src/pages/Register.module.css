@@ -1,0 +1,200 @@
+/* src/pages/Register.module.css */
+.wrapper {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+  color: #fff;
+}
+
+.leftText {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding-left: 40px;
+  gap: 20px;
+}
+
+.brand {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.tagline {
+  font-size: 1.3rem;
+  line-height: 1.5;
+  max-width: 300px;
+}
+
+.rightPanel {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card {
+  background: #fff;
+  color: #333;
+  padding: 50px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.title {
+  margin-bottom: 20px;
+  font-size: 2rem;
+}
+
+.error {
+  color: red;
+  margin-bottom: 10px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.input {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.button {
+  background: #28a745;
+  color: #fff;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.3s;
+  margin-top: 10px;
+}
+
+.button:hover {
+  background: #218838;
+}
+
+.registerText {
+  margin-top: 15px;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.registerText a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+.registerText a:hover {
+  text-decoration: underline;
+}
+
+.homeBtn {
+  margin-top: 20px;
+  padding: 14px 30px;
+  background: #28a745;
+  color: #fff;
+  font-size: 1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.homeBtn:hover {
+  background: #218838;
+  transform: translateY(-2px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .wrapper {
+    flex-direction: column;
+  }
+  
+  .leftText {
+    padding: 20px;
+    text-align: center;
+    align-items: center;
+  }
+  
+  .brand {
+    font-size: 2rem;
+  }
+  
+  .card {
+    padding: 30px 20px;
+    margin: 20px;
+  }
+}
+
+/* src/pages/Register.module.css */
+/* Add these new styles to your existing Register.module.css */
+
+.passwordContainer {
+  position: relative;
+}
+
+.passwordRequirements {
+  margin-top: 10px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #e74c3c;
+  text-align: left;
+}
+
+.passwordRequirements p {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.passwordRequirements ul {
+  margin: 0;
+  padding-left: 20px;
+  list-style: none;
+}
+
+.passwordRequirements li {
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  transition: color 0.3s;
+}
+
+.passwordRequirements li.valid {
+  color: #27ae60;
+}
+
+.passwordRequirements li.invalid {
+  color: #e74c3c;
+}
+
+.passwordRequirements li::before {
+  content: '• ';
+  font-weight: bold;
+}
+
+/* Add the other styles from previous Register.module.css here */
+/* ... your existing styles ... */

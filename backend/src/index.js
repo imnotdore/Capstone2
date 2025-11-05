@@ -1,4 +1,4 @@
-// server.js
+// server.js - CLEAN VERSION
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -8,16 +8,23 @@ const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
 const path = require("path");
 
+// ✅ LOAD ENV FIRST
+dotenv.config();
+
+// ✅ THEN IMPORT PASSPORT CONFIG
+require("./config/passport");
+
 // Routes
 const classRoutes = require("./routes/classes");
 const examRoutes = require("./routes/examRoutes");
 const authRoutes = require("./routes/auth");
-const studentRoutes = require("./routes/student");
-
-dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+// ===== PASSPORT INITIALIZATION =====
+const passport = require("passport");
+app.use(passport.initialize());
 
 // ===== SOCKET.IO SETUP =====
 const io = new Server(server, {
@@ -28,47 +35,66 @@ const io = new Server(server, {
 });
 
 // ===== MIDDLEWARES =====
-app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173", credentials: true }));
+app.use(cors({ 
+  origin: process.env.FRONTEND_URL || "http://localhost:5173", 
+  credentials: true 
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/public", express.static(path.join(__dirname, "public")));
 
-// ===== ROUTES =====
+// ===== FIX CSP ERROR =====
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self' 'unsafe-inline' http://localhost:3000 http://localhost:5173 https://accounts.google.com; " +
+    "connect-src 'self' http://localhost:3000 ws://localhost:3000 http://localhost:5173 https://accounts.google.com; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com; " +
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com; " +
+    "img-src 'self' data: https:;"
+  );
+  next();
+});
+
+// ===== CLEAN ROUTES - USE ONLY ONE APPROACH =====
 app.use("/api/auth", authRoutes);
-app.use("/api/student", studentRoutes);
 app.use("/api/class", classRoutes);
 app.use("/api/exams", examRoutes);
 
+// ===== HEALTH CHECK =====
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "OK", 
+    message: "Server is running with flexible role system",
+    googleAuth: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    timestamp: new Date().toISOString()
+  });
+});
 
 // ===== SOCKET.IO EVENTS =====
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
   let currentRoom = null;
-  let userInfo = {}; // { id, name, isTeacher }
+  let userInfo = {};
 
-  // User joins a room
-  socket.on("join-room", ({ roomId, userName = "Student", isTeacher = false }) => {
+  socket.on("join-room", ({ roomId, userName = "User", userId }) => {
     currentRoom = roomId;
-    userInfo = { id: socket.id, name: userName, isTeacher };
+    userInfo = { id: socket.id, name: userName, userId };
     socket.join(roomId);
     socket.userInfo = userInfo;
 
-    // Send existing participants to the new user
     const others = Array.from(io.sockets.adapter.rooms.get(roomId) || [])
       .filter(sid => sid !== socket.id)
-      .map(sid => io.sockets.sockets.get(sid)?.userInfo || { id: sid, name: "Student", isTeacher: false });
+      .map(sid => io.sockets.sockets.get(sid)?.userInfo || { id: sid, name: "User" });
 
     socket.emit("room-participants", others);
-
-    // Notify others that a new peer joined
     socket.to(roomId).emit("peer-joined", userInfo);
 
     console.log(`${userName} (${socket.id}) joined room ${roomId}`);
   });
 
-  // WebRTC signaling
   ["offer", "answer", "ice-candidate"].forEach(event => {
     socket.on(event, (data) => {
       if (data.target) {
@@ -77,15 +103,12 @@ io.on("connection", (socket) => {
     });
   });
 
-  // In-room chat
   socket.on("send-message", ({ roomId, message }) => {
     io.to(roomId).emit("receive-message", { id: socket.id, name: userInfo.name, message });
   });
 
-  // ✅ ADD PROCTORING ALERTS
   socket.on("proctoring-alert", ({ roomId, studentId, studentName, alert, timestamp }) => {
     console.log(`🚨 Proctoring Alert from ${studentName}: ${alert}`);
-    // Send alert to teacher only
     socket.to(roomId).emit("proctoring-alert", { 
       studentId, 
       studentName, 
@@ -94,18 +117,15 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ✅ ADD MEDIA STATUS UPDATES
   socket.on("media-status", ({ roomId, camOn, micOn }) => {
     socket.to(roomId).emit("media-status-update", {
       userId: socket.id,
       name: userInfo.name,
       camOn,
-      micOn,
-      isTeacher: userInfo.isTeacher
+      micOn
     });
   });
 
-  // Disconnect
   socket.on("disconnect", () => {
     if (currentRoom) {
       socket.to(currentRoom).emit("peer-left", socket.id);
@@ -120,6 +140,13 @@ mongoose
   .then(() => {
     console.log("✅ MongoDB connected");
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));
+    server.listen(PORT, () => {
+      console.log(`✅ Server running at http://localhost:${PORT}`);
+      console.log(`✅ Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? 'ENABLED' : 'DISABLED'}`);
+      console.log(`✅ All routes under: /api`);
+      console.log(`✅ Auth Routes: /api/auth`);
+      console.log(`✅ Class Routes: /api/class`);
+      console.log(`✅ Exam Routes: /api/exams`);
+    });
   })
   .catch((err) => console.error("❌ DB connection error:", err));

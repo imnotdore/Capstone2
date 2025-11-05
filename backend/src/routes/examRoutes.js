@@ -10,14 +10,14 @@ const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 const axios = require("axios");
 const FormData = require("form-data");
+const { checkClassAccess, checkTeacherAccess } = require("../middleware/classAuth");
 
 const router = express.Router();
 console.log("🔧 Exam routes loaded - form route available at: /api/exams/form/:examId");
 
-// ===== IMPROVED FILE PARSING WITH PYTHON FALLBACK =====
+// ===== FILE PARSING FUNCTIONS (SAME) =====
 const parsePDF = async (filePath) => {
   try {
-    // Try Python service first
     try {
       const pythonResult = await callPythonService(filePath, 'pdf');
       if (pythonResult.questions && pythonResult.questions.length > 0) {
@@ -27,26 +27,24 @@ const parsePDF = async (filePath) => {
       console.log("Python service failed, using fallback:", pyError.message);
     }
 
-    // Fallback to Node.js parsing
     const dataBuffer = fs.readFileSync(filePath);
     const pdfData = await pdfParse(dataBuffer);
     
     const questions = [];
     const text = pdfData.text;
     
-    // Improved question detection
     const questionPatterns = [
-      /\b\d+\.\s*(.+?\?)/g,                    // 1. Question?
-      /\bQ\s*\d*\.?\s*(.+?\?)/g,               // Q1. Question?
-      /\bQuestion\s*\d*:?\s*(.+?\?)/g,         // Question 1: Question?
-      /([A-Z][^.!?]*\?)/g                      // Any sentence with ?
+      /\b\d+\.\s*(.+?\?)/g,
+      /\bQ\s*\d*\.?\s*(.+?\?)/g,
+      /\bQuestion\s*\d*:?\s*(.+?\?)/g,
+      /([A-Z][^.!?]*\?)/g
     ];
     
     for (const pattern of questionPatterns) {
       let match;
       while ((match = pattern.exec(text)) !== null) {
         const questionText = match[1].trim();
-        if (questionText.length > 10) { // Minimum length
+        if (questionText.length > 10) {
           questions.push({
             type: "essay",
             question: questionText,
@@ -66,7 +64,6 @@ const parsePDF = async (filePath) => {
 
 const parseDOCX = async (filePath) => {
   try {
-    // Try Python service first
     try {
       const pythonResult = await callPythonService(filePath, 'docx');
       if (pythonResult.questions && pythonResult.questions.length > 0) {
@@ -76,7 +73,6 @@ const parseDOCX = async (filePath) => {
       console.log("Python service failed, using fallback:", pyError.message);
     }
 
-    // Fallback to Node.js parsing
     const result = await mammoth.extractRawText({ path: filePath });
     const questions = [];
     const lines = result.value.split('\n');
@@ -85,7 +81,6 @@ const parseDOCX = async (filePath) => {
       line = line.trim();
       if (!line) return;
       
-      // Enhanced question detection
       if (line.endsWith('?') || 
           /^\d+\./.test(line) ||
           /^[A-Z]\./.test(line) ||
@@ -110,7 +105,6 @@ const parseDOCX = async (filePath) => {
 
 const parseExcel = async (filePath) => {
   try {
-    // Try Python service first for Excel
     try {
       const pythonResult = await callPythonService(filePath, 'excel');
       if (pythonResult.questions && pythonResult.questions.length > 0) {
@@ -126,7 +120,6 @@ const parseExcel = async (filePath) => {
   }
 };
 
-// ===== PYTHON SERVICE INTEGRATION =====
 const callPythonService = async (filePath, fileType) => {
   try {
     const formData = new FormData();
@@ -136,7 +129,7 @@ const callPythonService = async (filePath, fileType) => {
       headers: {
         ...formData.getHeaders(),
       },
-      timeout: 30000 // 30 seconds timeout
+      timeout: 30000
     });
     
     return response.data;
@@ -146,7 +139,7 @@ const callPythonService = async (filePath, fileType) => {
   }
 };
 
-// ===== MULTER SETUP =====
+// ===== MULTER SETUP (SAME) =====
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -171,16 +164,13 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 10 * 1024 * 1024,
   }
 });
 
-// ===== ROUTES =====
+// ===== UPDATED ROUTES =====
 
-
-
-
-
+// ✅ Get exam form (Public route - no auth needed for taking exam)
 router.get("/form/:examId", async (req, res) => {
   try {
     console.log("🎯 FORM ROUTE HIT for exam:", req.params.examId);
@@ -192,9 +182,7 @@ router.get("/form/:examId", async (req, res) => {
 
     console.log("✅ Exam found:", exam.title, "Questions:", exam.questions.length);
     
-    // Generate Google Forms-like HTML
     const formHTML = generateFormHTML(exam);
-    
     res.send(formHTML);
 
   } catch (err) {
@@ -203,12 +191,12 @@ router.get("/form/:examId", async (req, res) => {
   }
 });
 
-
-// 1️⃣ Get deployed exam for a class
-router.get("/deployed/:classId", auth, async (req, res) => {
+// ✅ Get deployed exam for a class (Any class member can access)
+router.get("/deployed/:classId", auth, checkClassAccess, async (req, res) => {
   try {
     const classId = new mongoose.Types.ObjectId(req.params.classId);
     const exam = await Exam.findOne({ classId, isDeployed: true });
+    
     return res.status(200).json({
       success: true,
       message: exam ? "Deployed exam found" : "No deployed exam",
@@ -220,8 +208,8 @@ router.get("/deployed/:classId", auth, async (req, res) => {
   }
 });
 
-// 2️⃣ Upload exam (ENHANCED WITH PYTHON)
-router.post("/upload/:classId", auth, upload.single("file"), async (req, res) => {
+// ✅ Upload exam (TEACHER ONLY)
+router.post("/upload/:classId", auth, checkClassAccess, checkTeacherAccess, upload.single("file"), async (req, res) => {
   try {
     const { classId } = req.params;
     const { title, scheduledAt } = req.body;
@@ -230,18 +218,7 @@ router.post("/upload/:classId", auth, upload.single("file"), async (req, res) =>
       return res.status(400).json({ success: false, message: "No file uploaded" });
     }
 
-    const cls = await Class.findById(classId);
-    if (!cls) {
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
-      return res.status(404).json({ success: false, message: "Class not found" });
-    }
-
-    if (cls.teacherId.toString() !== req.user.id) {
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
-      return res.status(403).json({ success: false, message: "Not authorized" });
-    }
+    // ✅ No need to check teacher permissions - middleware already did
 
     let questions = [];
     const ext = path.extname(req.file.originalname).toLowerCase();
@@ -262,7 +239,6 @@ router.post("/upload/:classId", auth, upload.single("file"), async (req, res) =>
           throw new Error("Unsupported file type");
       }
     } catch (parseError) {
-      // Clean up uploaded file on parsing error
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ 
         success: false, 
@@ -284,7 +260,7 @@ router.post("/upload/:classId", auth, upload.single("file"), async (req, res) =>
       title,
       fileUrl: `/uploads/${req.file.filename}`,
       classId,
-      teacherId: req.user.id,
+      createdBy: req.user.id, // ✅ CHANGED: teacherId → createdBy
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       questions,
       isDeployed: false,
@@ -307,7 +283,6 @@ router.post("/upload/:classId", auth, upload.single("file"), async (req, res) =>
     });
 
   } catch (err) {
-    // Clean up uploaded file on error
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -316,8 +291,8 @@ router.post("/upload/:classId", auth, upload.single("file"), async (req, res) =>
   }
 });
 
-// 3️⃣ Get all exams for a class
-router.get("/:classId", auth, async (req, res) => {
+// ✅ Get all exams for a class (Any class member can access)
+router.get("/:classId", auth, checkClassAccess, async (req, res) => {
   try {
     const classId = new mongoose.Types.ObjectId(req.params.classId);
     const exams = await Exam.find({ classId }).sort({ createdAt: -1 });
@@ -343,13 +318,15 @@ router.get("/:classId", auth, async (req, res) => {
   }
 });
 
-// 4️⃣ Delete exam
+// ✅ Delete exam (TEACHER ONLY)
 router.delete("/:examId", auth, async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
     if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
     
-    if (exam.teacherId.toString() !== req.user.id) {
+    // ✅ Check if user is class teacher for this exam
+    const classData = await Class.findById(exam.classId);
+    if (!classData || classData.ownerId.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: "Not authorized" });
     }
 
@@ -372,11 +349,22 @@ router.delete("/:examId", auth, async (req, res) => {
   }
 });
 
-// 5️⃣ Get parsed questions
+// ✅ Get parsed questions (Any class member can access)
 router.get("/:examId/questions", auth, async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
     if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
+
+    // ✅ Check if user has access to this exam's class
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
 
     res.json({ 
       success: true, 
@@ -389,13 +377,15 @@ router.get("/:examId/questions", auth, async (req, res) => {
   }
 });
 
-// 6️⃣ Deploy exam
+// ✅ Deploy exam (TEACHER ONLY)
 router.patch("/deploy/:examId", auth, async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
     if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
 
-    if (exam.teacherId.toString() !== req.user.id) {
+    // ✅ Check if user is class teacher for this exam
+    const classData = await Class.findById(exam.classId);
+    if (!classData || classData.ownerId.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: "Not authorized to deploy this exam" });
     }
 
@@ -413,16 +403,17 @@ router.patch("/deploy/:examId", auth, async (req, res) => {
   }
 });
 
-
-
-// 8️⃣ UPDATE QUESTIONS (NEW - Manual editing)
+// ✅ Update questions (TEACHER ONLY)
 router.put("/:examId/questions", auth, async (req, res) => {
   try {
     const { questions } = req.body;
     const exam = await Exam.findById(req.params.examId);
     
     if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
-    if (exam.teacherId.toString() !== req.user.id) {
+
+    // ✅ Check if user is class teacher for this exam
+    const classData = await Class.findById(exam.classId);
+    if (!classData || classData.ownerId.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: "Not authorized" });
     }
 
@@ -440,7 +431,7 @@ router.put("/:examId/questions", auth, async (req, res) => {
   }
 });
 
-// ===== HELPER FUNCTIONS =====
+// ===== HELPER FUNCTIONS (SAME) =====
 function generateFormHTML(exam) {
   return `
 <!DOCTYPE html>
@@ -450,142 +441,29 @@ function generateFormHTML(exam) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${exam.title} - Online Exam</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f8f9fa;
-            color: #202124;
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            background: white;
-            border-radius: 8px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            border-top: 4px solid #4285f4;
-        }
-        
-        .exam-title {
-            font-size: 24px;
-            font-weight: 400;
-            color: #202124;
-            margin-bottom: 8px;
-        }
-        
-        .exam-description {
-            color: #5f6368;
-            font-size: 14px;
-        }
-        
-        .question-card {
-            background: white;
-            border-radius: 8px;
-            padding: 25px;
-            margin-bottom: 16px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            border: 1px solid #dadce0;
-        }
-        
-        .question-number {
-            font-size: 16px;
-            color: #4285f4;
-            font-weight: 500;
-            margin-bottom: 8px;
-        }
-        
-        .question-text {
-            font-size: 16px;
-            color: #202124;
-            margin-bottom: 16px;
-            font-weight: 400;
-        }
-        
-        .answer-field {
-            width: 100%;
-            min-height: 120px;
-            padding: 12px;
-            border: 1px solid #dadce0;
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 14px;
-            resize: vertical;
-            transition: border 0.2s;
-        }
-        
-        .answer-field:focus {
-            outline: none;
-            border-color: #4285f4;
-            box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
-        }
-        
-        .submit-section {
-            background: white;
-            border-radius: 8px;
-            padding: 25px;
-            margin-top: 20px;
-            text-align: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .submit-btn {
-            background: #4285f4;
-            color: white;
-            border: none;
-            padding: 12px 32px;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        .submit-btn:hover {
-            background: #3367d6;
-        }
-        
-        .required {
-            color: #d93025;
-        }
-        
-        .char-count {
-            font-size: 12px;
-            color: #5f6368;
-            text-align: right;
-            margin-top: 4px;
-        }
-        
-        .timer {
-            background: #f8f9fa;
-            border: 1px solid #dadce0;
-            border-radius: 4px;
-            padding: 10px 16px;
-            font-size: 14px;
-            color: #5f6368;
-            display: inline-block;
-            margin-bottom: 20px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; color: #202124; line-height: 1.6; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { background: white; border-radius: 8px; padding: 30px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-top: 4px solid #4285f4; }
+        .exam-title { font-size: 24px; font-weight: 400; color: #202124; margin-bottom: 8px; }
+        .exam-description { color: #5f6368; font-size: 14px; }
+        .question-card { background: white; border-radius: 8px; padding: 25px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); border: 1px solid #dadce0; }
+        .question-number { font-size: 16px; color: #4285f4; font-weight: 500; margin-bottom: 8px; }
+        .question-text { font-size: 16px; color: #202124; margin-bottom: 16px; font-weight: 400; }
+        .answer-field { width: 100%; min-height: 120px; padding: 12px; border: 1px solid #dadce0; border-radius: 4px; font-family: inherit; font-size: 14px; resize: vertical; transition: border 0.2s; }
+        .answer-field:focus { outline: none; border-color: #4285f4; box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2); }
+        .submit-section { background: white; border-radius: 8px; padding: 25px; margin-top: 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .submit-btn { background: #4285f4; color: white; border: none; padding: 12px 32px; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+        .submit-btn:hover { background: #3367d6; }
+        .char-count { font-size: 12px; color: #5f6368; text-align: right; margin-top: 4px; }
+        .timer { background: #f8f9fa; border: 1px solid #dadce0; border-radius: 4px; padding: 10px 16px; font-size: 14px; color: #5f6368; display: inline-block; margin-bottom: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1 class="exam-title">${exam.title}</h1>
-            <div class="exam-description">
-                Please answer all questions below. Your responses will be saved automatically.
-            </div>
+            <div class="exam-description">Please answer all questions below. Your responses will be saved automatically.</div>
         </div>
         
         <form id="examForm">
@@ -593,12 +471,7 @@ function generateFormHTML(exam) {
                 <div class="question-card">
                     <div class="question-number">Question ${index + 1}</div>
                     <div class="question-text">${question.question}</div>
-                    <textarea 
-                        class="answer-field" 
-                        name="q${index}" 
-                        placeholder="Type your answer here..." 
-                        oninput="updateCharCount(this)"
-                    ></textarea>
+                    <textarea class="answer-field" name="q${index}" placeholder="Type your answer here..." oninput="updateCharCount(this)"></textarea>
                     <div class="char-count"><span id="charCount${index}">0</span> characters</div>
                 </div>
             `).join('')}
@@ -618,7 +491,6 @@ function generateFormHTML(exam) {
         
         document.getElementById('examForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
             const formData = new FormData(this);
             const answers = {};
             
@@ -651,7 +523,6 @@ function generateFormHTML(exam) {
             }
         });
         
-        // Auto-save every 30 seconds
         setInterval(() => {
             const formData = new FormData(document.getElementById('examForm'));
             const answers = {};
@@ -660,14 +531,12 @@ function generateFormHTML(exam) {
                 answers[key] = value;
             }
             
-            // Save to localStorage as backup
             localStorage.setItem('exam_${exam._id}_autosave', JSON.stringify({
                 answers,
                 timestamp: new Date().toISOString()
             }));
         }, 30000);
         
-        // Load auto-saved answers
         window.addEventListener('load', () => {
             const saved = localStorage.getItem('exam_${exam._id}_autosave');
             if (saved) {
@@ -687,4 +556,4 @@ function generateFormHTML(exam) {
 </html>`;
 }
 
-module.exports = router;
+module.exports = router;  
