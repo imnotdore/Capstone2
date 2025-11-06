@@ -56,7 +56,7 @@ export default function Login() {
     <div className={styles.wrapper}>
       {/* Left branding text */}
       <div className={styles.leftText}>
-        <h1 className={styles.brand}>AI-Based Online Exam Proctoring System</h1>
+        <h1 className={styles.brand}>Bawal daw magcheat</h1>
         <p className={styles.tagline}>
           Secure • Smart • Reliable <br /> Online Exam Proctoring
         </p>

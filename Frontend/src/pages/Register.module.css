@@ -1,200 +1,477 @@
 /* src/pages/Register.module.css */
 .wrapper {
   display: flex;
-  height: 100vh;
-  width: 100vw;
+  min-height: 100vh;
+  width: 100%;
   overflow: hidden;
   background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
   color: #fff;
 }
 
-.leftText {
-  flex: 1;
+/* Left Section - Mas maliit na space */
+.leftSection {
+  flex: 0 0 40%; /* Fixed width na 40% */
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  align-items: flex-start;
-  padding-left: 40px;
-  gap: 20px;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  position: relative;
+}
+
+.leftContent {
+  max-width: 100%;
+  text-align: center;
+  width: 100%;
 }
 
 .brand {
-  font-size: 3rem;
-  margin-bottom: 15px;
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin-bottom: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .tagline {
-  font-size: 1.3rem;
-  line-height: 1.5;
-  max-width: 300px;
+  font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+  line-height: 1.6;
+  margin-bottom: 2rem;
+  opacity: 0.9;
 }
 
-.rightPanel {
-  flex: 1;
+.homeBtn {
+  padding: 0.875rem 2rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.homeBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Right Section - Mas malaki na space */
+.rightSection {
+  flex: 1; /* Take remaining space */
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  min-width: 0; /* Important for flexbox shrinking */
 }
 
 .card {
   background: #fff;
   color: #333;
-  padding: 50px;
-  border-radius: 12px;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  border-radius: 16px;
   width: 100%;
-  max-width: 420px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  max-width: 500px; /* Slightly larger */
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   text-align: center;
 }
 
 .title {
-  margin-bottom: 20px;
-  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 600;
+  color: #2c3e50;
 }
 
 .error {
-  color: red;
-  margin-bottom: 10px;
+  color: #e74c3c;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #fdf2f2;
+  border-radius: 8px;
+  border: 1px solid #fbb;
+  font-size: 0.9rem;
 }
 
+/* Google Button */
+.googleButton {
+  width: 100%;
+  padding: 0.875rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.googleButton:hover {
+  border-color: #4285f4;
+  box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
+}
+
+.googleIcon {
+  display: flex;
+  align-items: center;
+}
+
+/* Divider */
+.divider {
+  position: relative;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #eee;
+}
+
+.dividerText {
+  background: #fff;
+  padding: 0 1rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Form */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 1rem;
 }
 
 .input {
-  padding: 12px;
+  padding: 0.875rem;
   border-radius: 8px;
-  border: 1px solid #ccc;
+  border: 1px solid #ddd;
   font-size: 1rem;
   outline: none;
   width: 100%;
   box-sizing: border-box;
+  transition: all 0.3s ease;
 }
 
 .input:focus {
   border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
-.button {
-  background: #28a745;
-  color: #fff;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: background 0.3s;
-  margin-top: 10px;
-}
-
-.button:hover {
-  background: #218838;
-}
-
-.registerText {
-  margin-top: 15px;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.registerText a {
-  color: #3498db;
-  text-decoration: none;
-}
-
-.registerText a:hover {
-  text-decoration: underline;
-}
-
-.homeBtn {
-  margin-top: 20px;
-  padding: 14px 30px;
-  background: #28a745;
-  color: #fff;
-  font-size: 1rem;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.homeBtn:hover {
-  background: #218838;
-  transform: translateY(-2px);
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .wrapper {
-    flex-direction: column;
-  }
-  
-  .leftText {
-    padding: 20px;
-    text-align: center;
-    align-items: center;
-  }
-  
-  .brand {
-    font-size: 2rem;
-  }
-  
-  .card {
-    padding: 30px 20px;
-    margin: 20px;
-  }
-}
-
-/* src/pages/Register.module.css */
-/* Add these new styles to your existing Register.module.css */
-
+/* Password Requirements */
 .passwordContainer {
   position: relative;
 }
 
 .passwordRequirements {
-  margin-top: 10px;
-  padding: 15px;
+  margin-top: 0.75rem;
+  padding: 1rem;
   background: #f8f9fa;
   border-radius: 8px;
   border-left: 4px solid #e74c3c;
   text-align: left;
 }
 
-.passwordRequirements p {
-  margin: 0 0 8px 0;
-  font-size: 0.9rem;
-  font-weight: bold;
+.requirementsTitle {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: #2c3e50;
 }
 
-.passwordRequirements ul {
+.requirementsList {
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
   list-style: none;
 }
 
-.passwordRequirements li {
-  margin-bottom: 4px;
+.requirementsList li {
+  margin-bottom: 0.25rem;
   font-size: 0.8rem;
   transition: color 0.3s;
+  display: flex;
+  align-items: center;
 }
 
-.passwordRequirements li.valid {
-  color: #27ae60;
-}
-
-.passwordRequirements li.invalid {
-  color: #e74c3c;
-}
-
-.passwordRequirements li::before {
-  content: '• ';
+.requirementsList li::before {
+  content: '•';
+  margin-right: 0.5rem;
   font-weight: bold;
 }
 
-/* Add the other styles from previous Register.module.css here */
-/* ... your existing styles ... */
+.requirementsList li.valid {
+  color: #27ae60;
+}
+
+.requirementsList li.invalid {
+  color: #e74c3c;
+}
+
+/* Buttons */
+.button {
+  background: #28a745;
+  color: #fff;
+  padding: 0.875rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  margin-top: 0.5rem;
+  position: relative;
+}
+
+.button:hover:not(:disabled) {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+.button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button.loading {
+  pointer-events: none;
+}
+
+.buttonContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* OTP Styles */
+.otpMessage {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #666;
+}
+
+.emailText {
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0.5rem 0;
+}
+
+.otpButtons {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.backButton {
+  flex: 1;
+  padding: 0.875rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.backButton:hover:not(:disabled) {
+  border-color: #666;
+  background: #f8f9fa;
+}
+
+.verifyButton {
+  flex: 2;
+  padding: 0.875rem;
+  border: none;
+  border-radius: 8px;
+  background: #3498db;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.verifyButton:hover:not(:disabled) {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+.verifyButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Login Link */
+.loginText {
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.loginLink {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.loginLink:hover {
+  text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .leftSection {
+    flex: 0 0 35%; /* Mas maliit pa sa tablets */
+  }
+}
+
+@media (max-width: 768px) {
+  .wrapper {
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .leftSection {
+    flex: 0 0 auto; /* Remove fixed flex on mobile */
+    padding: 2rem 1rem;
+    min-height: 30vh;
+    width: 100%;
+  }
+
+  .leftContent {
+    max-width: 100%;
+  }
+
+  .brand {
+    font-size: 2rem;
+  }
+
+  .tagline {
+    font-size: 1.1rem;
+  }
+
+  .rightSection {
+    padding: 1.5rem;
+    min-height: 70vh;
+    width: 100%;
+  }
+
+  .card {
+    padding: 2rem 1.5rem;
+    margin: 0;
+    max-width: 100%;
+  }
+
+  .otpButtons {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .leftSection {
+    min-height: 25vh;
+    padding: 1.5rem 1rem;
+  }
+
+  .rightSection {
+    min-height: 75vh;
+    padding: 1rem;
+  }
+
+  .card {
+    padding: 1.5rem 1.25rem;
+    border-radius: 12px;
+  }
+
+  .form {
+    gap: 0.875rem;
+  }
+
+  .input {
+    padding: 0.75rem;
+  }
+
+  .button, .googleButton {
+    padding: 0.75rem;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 360px) {
+  .leftSection {
+    padding: 1rem;
+  }
+
+  .rightSection {
+    padding: 0.75rem;
+  }
+
+  .card {
+    padding: 1.25rem 1rem;
+  }
+
+  .brand {
+    font-size: 1.75rem;
+  }
+
+  .tagline {
+    font-size: 1rem;
+  }
+}
+
+/* Landscape orientation for mobile */
+@media (max-height: 600px) and (orientation: landscape) {
+  .wrapper {
+    flex-direction: row;
+  }
+
+  .leftSection {
+    flex: 0 0 30%;
+    min-height: 100vh;
+  }
+
+  .rightSection {
+    min-height: 100vh;
+  }
+}
+
+/* Large screens optimization */
+@media (min-width: 1440px) {
+  .leftSection {
+    flex: 0 0 35%;
+  }
+  
+  .rightSection {
+    flex: 1;
+  }
+  
+  .card {
+    max-width: 450px;
+  }
+}
