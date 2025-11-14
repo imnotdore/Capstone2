@@ -1,4 +1,4 @@
-// middleware/authMiddleware.js - UPDATED
+// middleware/authMiddleware.js - NO CHANGES NEEDED
 const jwt = require("jsonwebtoken");
 
 function authMiddleware(req, res, next) {
@@ -12,7 +12,7 @@ function authMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = { id: decoded.id, name: decoded.name }; // ✅ REMOVED: role
+    req.user = { id: decoded.id, name: decoded.name };
     next();
   } catch (err) {
     return res.status(401).json({ message: "Invalid token" });

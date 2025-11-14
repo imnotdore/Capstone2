@@ -1,5 +1,4 @@
-/* src/pages/Dashboard.css - COMPLETE REDESIGN */
-/* Material Icons CSS - MUST BE AT THE TOP */
+/* src/pages/Dashboard.css - FIXED FOR UNENROLL MENU */
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
 .dashboard-wrapper {
@@ -53,7 +52,6 @@
   gap: 8px;
 }
 
-
 .user-profile {
   position: relative;
 }
@@ -79,7 +77,6 @@
   height: 40px;
   border-radius: 100%;
   border: 2px solid transparent;
-  
 }
 
 .user-profile-btn:hover .user-avatar {
@@ -547,97 +544,6 @@
         margin: 0;
     }
 }
-/* Class List Section */
-.class-list-section {
-  flex: 1;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-}
-
-.class-list-tabs {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px;
-}
-
-.class-list-tabs button {
-  background: none;
-  border: none;
-  padding: 12px 16px;
-  text-align: left;
-  cursor: pointer;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: background 0.2s;
-}
-
-.class-list-tabs button:hover {
-  background: #f8f9fa;
-}
-
-.class-list-tabs button.active {
-  background: #e8f0fe;
-  color: #4285f4;
-  font-weight: 600;
-}
-
-.class-list {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.class-list-item {
-  padding: 12px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-bottom: 4px;
-  transition: background 0.2s;
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-}
-
-.class-list-item:hover {
-  background: #f8f9fa;
-}
-
-.class-list-item.selected {
-  background: #4285f4;
-  color: white;
-}
-
-.class-item-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.class-name {
-  font-size: 14px;
-  flex: 1;
-}
-
-.role-badge {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  background: #e8f0fe;
-  color: #4285f4;
-  font-weight: 500;
-}
-
-.role-badge.teacher {
-  background: #e6f4ea;
-  color: #34a853;
-}
-
-.class-list-item.selected .role-badge {
-  background: rgba(255,255,255,0.2);
-  color: white;
-}
 
 /* Main Content */
 .main-content {
@@ -673,7 +579,7 @@
   font-size: 1.1rem;
 }
 
-/* Class Grid */
+/* Class Grid - FIXED FOR MENU BUTTONS */
 .class-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -685,7 +591,7 @@
   background: white;
   border: 1px solid #dadce0;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible; /* CHANGED: hidden -> visible to show menu */
   cursor: pointer;
   transition: box-shadow 0.2s, transform 0.2s;
   position: relative;
@@ -1176,13 +1082,14 @@ body, html {
 /* Plus Button Icon */
 .plus-icon {
   font-size: 12px;
-  color: white; /* PALITAN: rgba(240, 9, 9, 0) -> white */
+  color: white;
 }
+
 /* Button Icons */
 .btn-icon {
   margin-right: 8px;
   font-size: 14px;
-  color: white; /* Dagdagan para sa consistency */
+  color: white;
 }
 
 /* Sidebar Icons */
@@ -1208,8 +1115,6 @@ body, html {
   text-align: center;
   color: #5f6368;
 }
-
-
 
 .primary-btn {
   background: #4285f4;
@@ -1565,7 +1470,6 @@ body, html {
 }
 
 /* Stream Tab */
-/* Stream Tab - Google Classroom Style */
 .stream-tab {
   --boq-chrometransition-background: #eee;
   --boq-chrometransition-active-background-opacity: 0.8;
@@ -2539,4 +2443,1648 @@ a:focus {
 /* Stream Content */
 .stream-content {
   padding: 20px 0;
+}
+
+/* ===== FIXES FOR UNENROLL MENU BUTTONS ===== */
+
+/* Ensure menu buttons are visible and positioned correctly */
+.class-card .absolute {
+  position: absolute !important;
+  z-index: 50 !important;
+}
+
+/* Make sure the menu dropdown appears above other elements */
+.class-card .z-50 {
+  z-index: 50 !important;
+}
+
+/* Ensure menu buttons are not hidden by overflow */
+.class-card {
+  overflow: visible !important;
+}
+
+/* Menu button styling */
+.class-card .p-2 {
+  padding: 8px !important;
+}
+
+.class-card .rounded-full {
+  border-radius: 50% !important;
+}
+
+.class-card .hover\\:bg-gray-100:hover {
+  background-color: #f3f4f6 !important;
+}
+
+.class-card .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Menu dropdown styling */
+.class-card .bg-white {
+  background-color: white !important;
+}
+
+.class-card .rounded-md {
+  border-radius: 6px !important;
+}
+
+.class-card .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.class-card .border {
+  border-width: 1px !important;
+}
+
+.class-card .border-gray-200 {
+  border-color: #e5e7eb !important;
+}
+
+/* Unenroll button styling */
+.class-card .text-red-600 {
+  color: #dc2626 !important;
+}
+
+.class-card .hover\\:bg-red-50:hover {
+  background-color: #fef2f2 !important;
+}
+
+/* Make sure the three dots icon is visible */
+.class-card .text-gray-700 {
+  color: #374151 !important;
+}
+
+.class-card .w-5 {
+  width: 20px !important;
+}
+
+.class-card .h-5 {
+  height: 20px !important;
+}
+
+/* Ensure proper spacing for menu button */
+.class-card .top-3 {
+  top: 12px !important;
+}
+
+.class-card .right-3 {
+  right: 12px !important;
+}
+
+/* Make sure the class card content doesn't overlap with menu */
+.class-card .pr-12 {
+  padding-right: 48px !important;
+}
+
+/* Fix for role badge positioning */
+.role-badge {
+  position: relative !important;
+  z-index: 10 !important;
+}
+/* Add these styles to your existing Dashboard.css */
+
+/* Archived Classes Styles */
+.archived-classes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.archived-class-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  border-left: 4px solid #f59e0b;
+}
+
+.archived-class-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.archived-class-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.archived-class-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.archived-class-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  flex: 1;
+}
+
+.archived-badge {
+  background-color: #fef3c7;
+  color: #92400e;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #fbbf24;
+}
+
+.archived-class-info {
+  flex: 1;
+  margin-bottom: 1rem;
+}
+
+.archived-class-info p {
+  margin: 0.5rem 0;
+}
+
+.archived-class-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.restore-btn {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.restore-btn:hover {
+  background-color: #059669;
+}
+
+/* Archive button in class menu */
+.archived-empty {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #6b7280;
+}
+
+.archived-empty .empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.archived-empty h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.archived-empty p {
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Modal styles for archive/restore */
+.fixed.inset-0 {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.bg-black.bg-opacity-50 {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.flex.items-center.justify-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.z-50 {
+  z-index: 50;
+}
+
+.bg-white {
+  background-color: white;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.max-w-md {
+  max-width: 28rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.p-6 {
+  padding: 1.5rem;
+}
+
+/* Teacher menu specific styles */
+.teacher-menu-options {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+/* ============================================
+   GOOGLE CLASSROOM CALENDAR STYLES
+   ============================================ */
+
+.google-classroom-calendar {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+/* Calendar Header Section */
+.calendar-header-section {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.calendar-nav-btn {
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.calendar-nav-btn:hover {
+  background: #f8f9fa;
+}
+
+.nav-icon {
+  font-size: 16px;
+  color: #5f6368;
+}
+
+.calendar-month-title {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: #3c4043;
+  margin: 0;
+  min-width: 200px;
+  text-align: center;
+}
+
+/* Class Filter */
+.class-filter-section {
+  display: flex;
+  align-items: center;
+}
+
+.class-filter-select {
+  padding: 8px 12px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  background: white;
+  font-size: 14px;
+  color: #3c4043;
+  cursor: pointer;
+}
+
+.class-filter-select:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+/* Calendar Grid Container */
+.calendar-grid-container {
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+}
+
+/* Weekday Headers */
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: #f8f9fa;
+  border-bottom: 1px solid #dadce0;
+}
+
+.weekday-header {
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Calendar Days Grid */
+.calendar-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: #dadce0;
+}
+
+.calendar-day {
+  background: white;
+  min-height: 100px;
+  padding: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.calendar-day:hover {
+  background: #f8f9fa;
+}
+
+.calendar-day.today {
+  background: #e8f0fe;
+}
+
+.calendar-day.empty-day {
+  background: #f8f9fa;
+  cursor: default;
+}
+
+.calendar-day.has-events {
+  border-bottom: 2px solid #1a73e8;
+}
+
+.day-number {
+  font-size: 14px;
+  font-weight: 500;
+  color: #3c4043;
+  margin-bottom: 4px;
+}
+
+.calendar-day.today .day-number {
+  color: #1a73e8;
+  font-weight: 600;
+}
+
+.calendar-day.empty-day .day-number {
+  color: transparent;
+}
+
+/* Day Events */
+.day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.event-dot {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  margin-bottom: 1px;
+}
+
+.more-events {
+  font-size: 10px;
+  color: #5f6368;
+  text-align: center;
+  padding: 1px 4px;
+  background: #f1f3f4;
+  border-radius: 8px;
+  margin-top: 2px;
+}
+
+/* Calendar Sidebar */
+.calendar-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.sidebar-section {
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+}
+
+.sidebar-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #3c4043;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e8eaed;
+}
+
+/* Upcoming Events */
+.upcoming-events-list,
+.todays-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.upcoming-event-item,
+.today-event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.upcoming-event-item:hover,
+.today-event-item:hover {
+  background: #f8f9fa;
+}
+
+.event-color-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.event-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #3c4043;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-class {
+  font-size: 12px;
+  color: #5f6368;
+  margin-bottom: 2px;
+}
+
+.event-date {
+  font-size: 11px;
+  color: #80868b;
+}
+
+/* Empty States */
+.no-upcoming-events,
+.no-today-events {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #5f6368;
+}
+
+.no-upcoming-events .no-events-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+
+.no-upcoming-events p {
+  margin: 0 0 0.5rem 0;
+  font-weight: 500;
+}
+
+.no-upcoming-events span,
+.no-today-events span {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.no-today-events {
+  padding: 1rem;
+  font-size: 14px;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .google-classroom-calendar {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .calendar-sidebar {
+    order: -1;
+  }
+}
+
+@media (max-width: 768px) {
+  .calendar-header-section {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .calendar-nav {
+    justify-content: center;
+  }
+  
+  .class-filter-section {
+    justify-content: center;
+  }
+  
+  .calendar-day {
+    min-height: 80px;
+    padding: 4px;
+  }
+  
+  .day-number {
+    font-size: 12px;
+  }
+  
+  .event-dot {
+    height: 3px;
+  }
+}
+
+/* Ensure calendar view takes full width */
+.calendar-view {
+  width: 100%;
+  max-width: none;
+}
+/* Add these styles to your existing Dashboard.css */
+
+/* Empty Sidebar Section Styles */
+.empty-sidebar-section {
+  padding: 1rem;
+  text-align: center;
+  border: 1px dashed #ddd;
+  border-radius: 8px;
+  margin: 0.5rem;
+  background: #f8f9fa;
+}
+
+.empty-sidebar-text {
+  color: #666;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.create-class-sidebar-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.create-class-sidebar-btn:hover {
+  background: #0d62d9;
+}
+
+/* Role-based section styling */
+.section-header {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #5f6368;
+  padding: 0.5rem 1rem 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.class-list {
+  margin-bottom: 0.5rem;
+}
+
+.class-list-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0.125rem 0.5rem;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.class-list-item:hover {
+  background-color: #f1f3f4;
+}
+
+.class-list-item.selected {
+  background-color: #e8f0fe;
+}
+
+.class-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 500;
+  font-size: 0.875rem;
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+}
+
+.class-avatar.blue { background: #4285f4; }
+.class-avatar.green { background: #34a853; }
+.class-avatar.yellow { background: #fbbc04; }
+.class-avatar.red { background: #ea4335; }
+.class-avatar.purple { background: #a142f4; }
+.class-avatar.teal { background: #00bcd4; }
+
+.class-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.class-name {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #3c4043;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.class-details {
+  display: block;
+  font-size: 0.75rem;
+  color: #5f6368;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-badge {
+  font-size: 0.625rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 12px;
+  font-weight: 500;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.role-badge.teacher {
+  background: #e8f0fe;
+  color: #1a73e8;
+  border: 1px solid #d2e3fc;
+}
+
+.role-badge.student {
+  background: #e6f4ea;
+  color: #137333;
+  border: 1px solid #ceead6;
+}
+
+.sidebar-separator {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 0.5rem 0;
+}
+/* Dropdown ENROLLED Section Styles */
+.dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #5f6368;
+  transition: background-color 0.2s;
+}
+
+.dropdown-header:hover {
+  background-color: #f1f3f4;
+  border-radius: 4px;
+}
+
+.dropdown-arrow {
+  transition: transform 0.2s;
+  transform: rotate(-90deg);
+}
+
+.dropdown-arrow.open {
+  transform: rotate(0deg);
+}
+
+.enrolled-dropdown {
+  border-left: 3px solid #34a853;
+  margin: 0.25rem 0 0.5rem 0.5rem;
+  background: #f8f9fa;
+  border-radius: 0 8px 8px 0;
+}
+
+.todo-button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.875rem;
+  color: #3c4043;
+}
+
+.todo-button:hover {
+  background-color: #e6f4ea;
+}
+
+.todo-icon {
+  margin-right: 0.75rem;
+  font-size: 1rem;
+}
+
+.todo-text {
+  font-weight: 500;
+}
+
+.enrolled-classes-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* To Do Page Styles */
+.todo-view {
+  padding: 2rem;
+}
+
+.todo-header {
+  margin-bottom: 2rem;
+}
+
+.todo-header h1 {
+  font-size: 2rem;
+  font-weight: 400;
+  color: #202124;
+  margin-bottom: 0.5rem;
+}
+
+.todo-header p {
+  color: #5f6368;
+  font-size: 1rem;
+}
+
+.todo-content {
+  max-width: 800px;
+}
+
+.todo-section {
+  margin-bottom: 2rem;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+  overflow: hidden;
+}
+
+.todo-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dadce0;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.todo-section .section-header:hover {
+  background: #f1f3f4;
+}
+
+.todo-section .section-header h3 {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #3c4043;
+  margin: 0;
+}
+
+.toggle-arrow {
+  transition: transform 0.2s;
+  transform: rotate(-90deg);
+  color: #5f6368;
+}
+
+.toggle-arrow.open {
+  transform: rotate(0deg);
+}
+
+.exam-list {
+  padding: 0.5rem;
+}
+
+.exam-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #f1f3f4;
+  transition: background-color 0.2s;
+}
+
+.exam-item:hover {
+  background-color: #f8f9fa;
+}
+
+.exam-item:last-child {
+  border-bottom: none;
+}
+
+.exam-content {
+  flex: 1;
+}
+
+.exam-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #202124;
+  margin-bottom: 0.25rem;
+}
+
+.exam-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #5f6368;
+}
+
+.class-name {
+  font-weight: 500;
+}
+
+.due-date {
+  color: #ea4335;
+}
+
+.start-exam-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.start-exam-btn:hover {
+  background: #0d62d9;
+}
+
+.empty-todo {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+}
+
+.empty-state-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.empty-todo h3 {
+  font-size: 1.5rem;
+  color: #202124;
+  margin-bottom: 0.5rem;
+}
+
+.empty-todo p {
+  color: #5f6368;
+  font-size: 1rem;
+}
+
+/* Back button styles */
+.back-btn {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: #5f6368;
+  cursor: pointer;
+  padding: 0.5rem;
+  margin-right: 1rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.back-btn:hover {
+  background-color: #f1f3f4;
+}
+
+.back-icon {
+  margin-right: 0.5rem;
+  transition: transform 0.2s;
+}
+
+.back-btn:hover .back-icon {
+  transform: translateX(-2px);
+}
+/* TEACHING DROPDOWN STYLES */
+.dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 16px;
+  margin: 4px 0;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  font-weight: 500;
+  color: #3c4043;
+}
+
+.dropdown-header:hover {
+  background-color: #f1f3f4;
+}
+
+.dropdown-arrow {
+  transition: transform 0.2s;
+  transform: rotate(-90deg);
+  font-size: 12px;
+  color: #5f6368;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(0deg);
+}
+
+.teaching-dropdown {
+  margin-left: 8px;
+  border-left: 2px solid #e0e0e0;
+  padding-left: 8px;
+}
+
+/* To Review Button */
+.review-button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: #3c4043;
+  font-size: 14px;
+}
+
+.review-button:hover {
+  background-color: #f1f3f4;
+}
+
+.review-icon {
+  margin-right: 12px;
+  font-size: 18px;
+}
+
+.review-text {
+  flex: 1;
+  text-align: left;
+}
+
+.review-badge {
+  background-color: #d93025;
+  color: white;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 12px;
+  min-width: 20px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Teaching Classes List */
+.teaching-classes-list {
+  margin-top: 4px;
+}
+
+.teaching-classes-list .class-list-item {
+  margin-left: 0;
+  padding-left: 12px;
+}
+
+/* Empty state for teaching */
+.empty-teaching-section {
+  padding: 16px;
+  text-align: center;
+  color: #5f6368;
+}
+
+.empty-teaching-text {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.create-class-sidebar-btn {
+  background-color: #1a73e8;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.create-class-sidebar-btn:hover {
+  background-color: #1669d9;
+}
+
+/* Student enrolled dropdown */
+.enrolled-dropdown {
+  margin-left: 8px;
+  border-left: 2px solid #e0e0e0;
+  padding-left: 8px;
+}
+
+.todo-button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: #3c4043;
+  font-size: 14px;
+}
+
+.todo-button:hover {
+  background-color: #f1f3f4;
+}
+
+.todo-icon {
+  margin-right: 12px;
+  font-size: 18px;
+}
+
+.todo-text {
+  flex: 1;
+  text-align: left;
+}
+
+.enrolled-classes-list {
+  margin-top: 4px;
+}
+
+.enrolled-classes-list .class-list-item {
+  margin-left: 0;
+  padding-left: 12px;
+}
+/* Google Classroom To Do Styles */
+.todo-view {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.todo-header {
+  margin-bottom: 32px;
+}
+
+.todo-title {
+  font-size: 32px;
+  font-weight: 400;
+  color: #202124;
+  margin-bottom: 8px;
+}
+
+.todo-subtitle {
+  font-size: 14px;
+  color: #5f6368;
+  margin: 0;
+}
+
+.todo-section {
+  margin-bottom: 32px;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.section-header {
+  background: #f8f9fa;
+  padding: 16px 20px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #dadce0;
+  transition: background-color 0.2s;
+}
+
+.section-header:hover {
+  background: #f1f3f4;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #3c4043;
+  margin: 0;
+}
+
+.toggle-arrow {
+  transition: transform 0.2s;
+  color: #5f6368;
+}
+
+.toggle-arrow.open {
+  transform: rotate(-90deg);
+}
+
+.exam-list {
+  background: white;
+}
+
+.exam-item {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f4;
+  transition: background-color 0.2s;
+}
+
+.exam-item:hover {
+  background: #f8f9fa;
+}
+
+.exam-item:last-child {
+  border-bottom: none;
+}
+
+.exam-color-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.exam-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.exam-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #202124;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+}
+
+.exam-details {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: #5f6368;
+}
+
+.class-name {
+  font-weight: 500;
+}
+
+.due-date {
+  color: #d93025;
+  font-weight: 500;
+}
+
+.exam-actions {
+  margin-left: 16px;
+}
+
+.start-exam-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.start-exam-btn:hover {
+  background: #1669d6;
+}
+
+/* Empty State */
+.empty-todo {
+  text-align: center;
+  padding: 60px 20px;
+  color: #5f6368;
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.empty-todo h3 {
+  font-size: 20px;
+  font-weight: 400;
+  color: #3c4043;
+  margin-bottom: 8px;
+}
+
+.empty-todo p {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Access Denied & Loading */
+.access-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  text-align: center;
+  padding: 40px;
+}
+
+.access-denied h2 {
+  color: #d93025;
+  margin-bottom: 16px;
+  font-size: 24px;
+}
+
+.access-denied p {
+  color: #5f6368;
+  margin-bottom: 24px;
+  font-size: 16px;
+}
+
+.access-denied button {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 60vh;
+  font-size: 18px;
+  color: #5f6368;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .todo-view {
+    padding: 16px;
+  }
+  
+  .todo-title {
+    font-size: 24px;
+  }
+  
+  .exam-item {
+    padding: 12px 16px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .exam-color-indicator {
+    margin-bottom: 8px;
+  }
+  
+  .exam-details {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .exam-actions {
+    margin-left: 0;
+    margin-top: 12px;
+    align-self: flex-end;
+  }
+}
+/* ============================================
+   GOOGLE CLASSROOM TO DO STYLES - UPDATED
+   ============================================ */
+
+/* Google Classroom Tabs */
+.google-classroom-tabs {
+  display: flex;
+  border-bottom: 1px solid #dadce0;
+  margin-bottom: 2rem;
+  background: white;
+}
+
+.google-classroom-tabs .tab {
+  padding: 1rem 2rem;
+  border: none;
+  background: none;
+  border-bottom: 3px solid transparent;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #5f6368;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.google-classroom-tabs .tab:hover {
+  color: #1967d2;
+  background: #f8f9fa;
+}
+
+.google-classroom-tabs .tab.active {
+  color: #1967d2;
+  border-bottom-color: #1967d2;
+  background: #f8f9fa;
+}
+
+/* All Classes Section */
+.all-classes-section {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+  overflow: hidden;
+}
+
+.all-classes-title {
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: #202124;
+  margin: 0;
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid #e8eaed;
+}
+
+/* Assignment Section */
+.assignment-section {
+  border-bottom: 1px solid #e8eaed;
+}
+
+.assignment-section:last-child {
+  border-bottom: none;
+}
+
+.assignment-section .section-header {
+  background: #f8f9fa;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e8eaed;
+  transition: background-color 0.2s;
+}
+
+.assignment-section .section-header:hover {
+  background: #f1f3f4;
+}
+
+.assignment-section .section-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #3c4043;
+  margin: 0;
+}
+
+.assignment-list {
+  padding: 0;
+}
+
+/* Assignment Card - Google Classroom Style */
+.assignment-card {
+  display: flex;
+  align-items: flex-start;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #f1f3f4;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.assignment-card:hover {
+  background: #f8f9fa;
+}
+
+.assignment-card:last-child {
+  border-bottom: none;
+}
+
+.assignment-number {
+  width: 24px;
+  height: 24px;
+  background: #4285f4;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-right: 1rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.assignment-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.assignment-header {
+  margin-bottom: 0.5rem;
+}
+
+.assignment-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #202124;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.4;
+}
+
+.assignment-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #5f6368;
+}
+
+.teacher-name {
+  font-weight: 500;
+  color: #3c4043;
+}
+
+.posted-date {
+  color: #5f6368;
+}
+
+.assignment-class {
+  font-size: 0.875rem;
+  color: #5f6368;
+  background: #f8f9fa;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  display: inline-block;
+  border: 1px solid #e8eaed;
+}
+
+.assignment-actions {
+  margin-left: 1rem;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  min-width: 80px;
+}
+
+.action-btn.start {
+  background: #1a73e8;
+  color: white;
+}
+
+.action-btn.start:hover {
+  background: #1669d6;
+}
+
+.action-btn.done {
+  background: #34a853;
+  color: white;
+}
+
+.action-btn.done:hover {
+  background: #2e8b47;
+}
+
+/* Empty State */
+.empty-todo {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #5f6368;
+}
+
+.empty-state-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  opacity: 0.5;
+}
+
+.empty-todo h3 {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: #3c4043;
+  margin-bottom: 0.5rem;
+}
+
+.empty-todo p {
+  font-size: 1rem;
+  margin: 0;
+  max-width: 300px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.5;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .google-classroom-tabs .tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+  
+  .assignment-card {
+    padding: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .assignment-number {
+    margin-bottom: 0.75rem;
+  }
+  
+  .assignment-content {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+  
+  .assignment-actions {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+  
+  .assignment-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  
+  .all-classes-title {
+    padding: 1rem 1rem 0.75rem;
+    font-size: 1.125rem;
+  }
 }

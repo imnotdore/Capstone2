@@ -95,7 +95,7 @@ const uploadExam = async (e) => {
           Professor: <strong>Prof {classInfo.teacherId?.name}</strong>
         </p>
         <button className="back-btn" onClick={() => navigate("/teacher/dashboard")}>
-          ⬅ Back to Dashboard
+          ⬅ Back
         </button>
       </header>
 

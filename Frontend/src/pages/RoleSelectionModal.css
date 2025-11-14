@@ -1,0 +1,139 @@
+/* src/pages/RoleSelectionModal.css */
+.role-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.role-modal {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 800px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.role-modal-header h2 {
+  color: #2c3e50;
+  margin-bottom: 8px;
+  font-size: 28px;
+}
+
+.role-modal-header p {
+  color: #7f8c8d;
+  margin-bottom: 30px;
+  font-size: 16px;
+}
+
+.role-selection {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.role-card {
+  background: #f8f9fa;
+  border: 3px solid #e9ecef;
+  border-radius: 12px;
+  padding: 30px 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.role-card:hover {
+  border-color: #3498db;
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(52, 152, 219, 0.2);
+}
+
+.role-card.selected {
+  border-color: #2ecc71;
+  background: #f0fff4;
+  box-shadow: 0 10px 30px rgba(46, 204, 113, 0.2);
+}
+
+.role-card:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.role-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+}
+
+.role-card h3 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+  font-size: 20px;
+}
+
+.role-card p {
+  color: #7f8c8d;
+  margin-bottom: 15px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.role-features {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: auto;
+}
+
+.role-features span {
+  color: #5f6368;
+  font-size: 12px;
+  text-align: left;
+}
+
+.loading-spinner {
+  margin-top: 10px;
+  font-size: 20px;
+}
+
+.role-modal-note {
+  border-top: 1px solid #e9ecef;
+  padding-top: 20px;
+}
+
+.role-modal-note p {
+  color: #95a5a6;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .role-selection {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .role-modal {
+    padding: 30px 20px;
+    margin: 20px;
+  }
+  
+  .role-card {
+    min-height: 250px;
+    padding: 25px 15px;
+  }
+}

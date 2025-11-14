@@ -1,13 +1,15 @@
-// src/App.jsx - UPDATED
+// src/App.jsx - UPDATED WITH ROLE PROTECTION
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard"; // ✅ SINGLE DASHBOARD
+import Dashboard from "./pages/Dashboard";
+import ToDoPage from "./pages/ToDoPage";
+import ReviewPage from "./pages/ReviewPage";
 import ClassDetails from "./pages/ClassDetails";
 import ExamRoomWrapper from "./pages/ExamRoomWrapper";
 import ExamFormView from "./pages/ExamformView";
 import AuthSuccess from "./pages/AuthSuccess";
-import ProtectedRoute from "./components/protectedroute";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -25,6 +27,20 @@ function App() {
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } />
+
+        {/* ✅ TO DO PAGE - STUDENTS ONLY */}
+        <Route path="/todo" element={
+          <ProtectedRoute requiredRole="student">
+            <ToDoPage />
+          </ProtectedRoute>
+        } />
+
+        {/* ✅ REVIEW PAGE - TEACHERS ONLY */}
+        <Route path="/review" element={
+          <ProtectedRoute requiredRole="teacher">
+            <ReviewPage />
           </ProtectedRoute>
         } />
 

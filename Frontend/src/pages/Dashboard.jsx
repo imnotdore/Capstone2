@@ -1,7 +1,7 @@
-// src/pages/Dashboard.jsx - UPDATED WITH ERROR HANDLING
+// src/pages/Dashboard.jsx - UPDATED WITH ROLE-SPECIFIC PLUS BUTTON
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars } from "react-icons/fa";
+import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight } from "react-icons/fa";
 import api from "../lib/api";
 import "./Dashboard.css";
 
@@ -32,16 +32,59 @@ export default function Dashboard() {
   const [scheduleTime, setScheduleTime] = useState("");
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
 
+  // UNENROLL STATES
+  const [showMenuForClass, setShowMenuForClass] = useState(null);
+  const [showUnenrollModal, setShowUnenrollModal] = useState(false);
+  const [classToUnenroll, setClassToUnenroll] = useState(null);
+
+  // ARCHIVE STATES
+  const [archivedClasses, setArchivedClasses] = useState([]);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [classToArchive, setClassToArchive] = useState(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [classToRestore, setClassToRestore] = useState(null);
+
+  // CALENDAR STATES
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [selectedClassFilter, setSelectedClassFilter] = useState("all");
+
+  // USER ROLE STATE
+  const [userRole, setUserRole] = useState("");
+
+  // DROPDOWN STATES
+  const [enrolledDropdownOpen, setEnrolledDropdownOpen] = useState(false);
+  const [teachingDropdownOpen, setTeachingDropdownOpen] = useState(false);
+
+  // REVIEW COUNT STATE
+  const [itemsToReview, setItemsToReview] = useState(5);
+
   // Refs for click outside detection
   const userDropdownRef = useRef(null);
   const createJoinDropdownRef = useRef(null);
   const sidebarRef = useRef(null);
   const postOptionsRef = useRef(null);
+  const menuRef = useRef(null);
 
   // Separate classes into teaching and enrolled
   const teachingClasses = classes.filter(classData => classData.userRole === "teacher" || classData.isTeacher);
   const enrolledClasses = classes.filter(classData => classData.userRole === "student" || !classData.isTeacher);
   const allClasses = [...classes];
+
+  // DEBUG: Check class data structure
+  useEffect(() => {
+    console.log("ALL CLASSES DATA:", classes);
+    classes.forEach((classData, index) => {
+      console.log(`Class ${index + 1}:`, {
+        name: classData.name,
+        _id: classData._id,
+        userRole: classData.userRole,
+        isTeacher: classData.userRole === "teacher",
+        ownerId: classData.ownerId
+      });
+    });
+  }, [classes]);
 
   // Click outside handlers
   useEffect(() => {
@@ -57,6 +100,10 @@ export default function Dashboard() {
       if (postOptionsRef.current && !postOptionsRef.current.contains(event.target)) {
         setShowPostOptions(false);
       }
+
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenuForClass(null);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -65,21 +112,66 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Fetch user and classes
+  // Fetch user, classes, and archived classes - UPDATED WITH ROLE CHECK
   useEffect(() => {
     const fetchData = async () => {
       try {
         const userRes = await api.get("/auth/me");
         setUser(userRes.data);
 
+        // Check if user has role set
+        const userRole = userRes.data.role || localStorage.getItem('userRole');
+        
+        if (!userRole) {
+          // If no role is set, redirect to role selection
+          navigate('/auth/success?token=' + localStorage.getItem('token'));
+          return;
+        }
+        
+        setUserRole(userRole);
+
         const classesRes = await api.get("/class/my-classes");
-        setClasses(classesRes.data.data || classesRes.data);
+        const classesData = classesRes.data.data || classesRes.data;
+        setClasses(classesData);
+
+        // DETERMINE USER ROLE - Check if user has any teaching classes
+        const hasTeachingClasses = classesData.some(
+          classData => classData.userRole === "teacher" || classData.isTeacher
+        );
+        
+        // Set user role - if they have teaching classes, they're a teacher
+        setUserRole(hasTeachingClasses ? "teacher" : "student");
+
+        // Fetch archived classes
+        await fetchArchivedClasses();
       } catch (error) {
         console.error("Failed to fetch data:", error);
       }
     };
     fetchData();
-  }, []);
+  }, [navigate]);
+
+  // Fetch review count for teachers
+  useEffect(() => {
+    const fetchReviewCount = async () => {
+      if (userRole === 'teacher') {
+        try {
+          const res = await api.get('/class/items-to-review');
+          setItemsToReview(res.data.count || 0);
+        } catch (error) {
+          console.error('Failed to fetch review count:', error);
+          setItemsToReview(5);
+        }
+      }
+    };
+    
+    fetchReviewCount();
+  }, [userRole]);
+
+  // Generate calendar events when classes change
+  useEffect(() => {
+    generateCalendarEvents();
+  }, [classes]);
 
   // Fetch announcements when class is selected
   useEffect(() => {
@@ -88,13 +180,219 @@ export default function Dashboard() {
     }
   }, [selectedClass, activeTab]);
 
+  // Fetch archived classes
+  const fetchArchivedClasses = async () => {
+    try {
+      const res = await api.get('/class/archived');
+      setArchivedClasses(res.data.data || []);
+    } catch (error) {
+      console.error("Failed to fetch archived classes:", error);
+    }
+  };
+
+  // CALENDAR FUNCTIONS
+  const getClassColor = (classId) => {
+    const colors = [
+      '#4285f4', '#34a853', '#fbbc04', '#ea4335', '#a142f4', 
+      '#00bcd4', '#ff6d00', '#2962ff', '#00c853', '#aa00ff'
+    ];
+    const index = classId ? classId.charCodeAt(0) % colors.length : 0;
+    return colors[index];
+  };
+
+  const generateCalendarEvents = () => {
+    const events = [];
+    
+    classes.forEach(classData => {
+      if (classData.exams && classData.exams.length > 0) {
+        classData.exams.forEach(exam => {
+          events.push({
+            id: exam._id,
+            title: exam.title || 'Exam',
+            class: classData.name,
+            classId: classData._id,
+            date: exam.scheduledAt ? new Date(exam.scheduledAt) : new Date(),
+            type: 'exam',
+            color: getClassColor(classData._id)
+          });
+        });
+      }
+    });
+
+    if (events.length === 0) {
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      
+      classes.slice(0, 3).forEach((classData, index) => {
+        const demoDate1 = new Date(currentYear, currentMonth, 10 + index * 3);
+        const demoDate2 = new Date(currentYear, currentMonth, 15 + index * 2);
+        
+        events.push(
+          {
+            id: `demo-${classData._id}-1`,
+            title: `${classData.name} Assignment`,
+            class: classData.name,
+            classId: classData._id,
+            date: demoDate1,
+            type: 'assignment',
+            color: getClassColor(classData._id)
+          },
+          {
+            id: `demo-${classData._id}-2`,
+            title: `${classData.name} Quiz`,
+            class: classData.name,
+            classId: classData._id,
+            date: demoDate2,
+            type: 'exam',
+            color: getClassColor(classData._id)
+          }
+        );
+      });
+    }
+
+    setCalendarEvents(events);
+  };
+
+  const getDaysInMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const navigateMonth = (direction) => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      if (direction === 'prev') {
+        newDate.setMonth(prev.getMonth() - 1);
+      } else {
+        newDate.setMonth(prev.getMonth() + 1);
+      }
+      return newDate;
+    });
+  };
+
+  const getEventsForDate = (date) => {
+    return calendarEvents.filter(event => {
+      const eventDate = new Date(event.date);
+      return eventDate.getDate() === date.getDate() &&
+             eventDate.getMonth() === date.getMonth() &&
+             eventDate.getFullYear() === date.getFullYear() &&
+             (selectedClassFilter === "all" || event.classId === selectedClassFilter);
+    });
+  };
+
+  const getFilteredEvents = () => {
+    if (selectedClassFilter === "all") {
+      return calendarEvents;
+    }
+    return calendarEvents.filter(event => event.classId === selectedClassFilter);
+  };
+
+  const formatMonthYear = (date) => {
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  // UNENROLL FUNCTIONS
+  const toggleMenu = (classId, event) => {
+    event.stopPropagation();
+    setShowMenuForClass(showMenuForClass === classId ? null : classId);
+  };
+
+  const confirmUnenroll = (classData, event) => {
+    event.stopPropagation();
+    setClassToUnenroll(classData);
+    setShowUnenrollModal(true);
+    setShowMenuForClass(null);
+  };
+
+  const unenrollFromClass = async () => {
+    if (!classToUnenroll) return;
+    
+    try {
+      console.log("Unenrolling from class:", classToUnenroll._id);
+      await api.delete(`/class/${classToUnenroll._id}/unenroll`);
+      
+      setClasses(prevClasses => prevClasses.filter(classData => classData._id !== classToUnenroll._id));
+      
+      if (selectedClass && selectedClass._id === classToUnenroll._id) {
+        setSelectedClass(null);
+      }
+      
+      setShowUnenrollModal(false);
+      setClassToUnenroll(null);
+      
+      alert("Successfully unenrolled from class!");
+    } catch (error) {
+      console.error("Failed to unenroll:", error);
+      alert(error.response?.data?.message || "Failed to unenroll from class");
+    }
+  };
+
+  // ARCHIVE FUNCTIONS
+  const confirmArchive = (classData, event) => {
+    event.stopPropagation();
+    setClassToArchive(classData);
+    setShowArchiveModal(true);
+    setShowMenuForClass(null);
+  };
+
+  const archiveClass = async () => {
+    if (!classToArchive) return;
+    
+    try {
+      await api.put(`/class/${classToArchive._id}/archive`);
+      
+      setClasses(prevClasses => prevClasses.filter(classData => classData._id !== classToArchive._id));
+      setArchivedClasses(prev => [...prev, { ...classToArchive, isArchived: true }]);
+      
+      if (selectedClass && selectedClass._id === classToArchive._id) {
+        setSelectedClass(null);
+      }
+      
+      setShowArchiveModal(false);
+      setClassToArchive(null);
+      
+      alert("Class archived successfully!");
+    } catch (error) {
+      console.error("Failed to archive class:", error);
+      alert(error.response?.data?.message || "Failed to archive class");
+    }
+  };
+
+  const confirmRestore = (classData, event) => {
+    event.stopPropagation();
+    setClassToRestore(classData);
+    setShowRestoreModal(true);
+  };
+
+  const restoreClass = async () => {
+    if (!classToRestore) return;
+    
+    try {
+      await api.put(`/class/${classToRestore._id}/restore`);
+      
+      setArchivedClasses(prev => prev.filter(classData => classData._id !== classToRestore._id));
+      setClasses(prevClasses => [...prevClasses, { ...classToRestore, isArchived: false }]);
+      
+      setShowRestoreModal(false);
+      setClassToRestore(null);
+      
+      alert("Class restored successfully!");
+    } catch (error) {
+      console.error("Failed to restore class:", error);
+      alert(error.response?.data?.message || "Failed to restore class");
+    }
+  };
+
   // Updated fetchAnnouncements with multiple endpoint attempts
   const fetchAnnouncements = async () => {
     if (!selectedClass) return;
     
     setLoadingAnnouncements(true);
     try {
-      // Try different possible endpoints
       const endpoints = [
         `/announcements/class/${selectedClass._id}`,
         `/announcements/${selectedClass._id}`,
@@ -107,14 +405,13 @@ export default function Dashboard() {
         try {
           const res = await api.get(endpoint);
           announcementsData = res.data.data || res.data || [];
-          if (announcementsData.length > 0) break; // Stop if we found data
+          if (announcementsData.length > 0) break;
         } catch (error) {
           console.log(`Endpoint ${endpoint} failed, trying next...`);
           continue;
         }
       }
 
-      // If no announcements found from APIs, use mock data for demo
       if (announcementsData.length === 0) {
         console.log('No announcements API found, using mock data');
         announcementsData = [
@@ -129,7 +426,7 @@ export default function Dashboard() {
             _id: '2', 
             content: 'Remember to submit your assignments on time.',
             createdBy: { name: user.name },
-            createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+            createdAt: new Date(Date.now() - 86400000).toISOString(),
             status: 'published'
           }
         ];
@@ -138,7 +435,6 @@ export default function Dashboard() {
       setAnnouncements(announcementsData);
     } catch (error) {
       console.error("Failed to fetch announcements:", error);
-      // Use mock data as fallback
       setAnnouncements([
         {
           _id: '1',
@@ -186,7 +482,7 @@ export default function Dashboard() {
   // Select class and fetch details - AUTO NAVIGATE TO STREAM
   const handleSelectClass = async (classData) => {
     setSelectedClass(classData);
-    setActiveTab("stream"); // Automatically set to stream tab
+    setActiveTab("stream");
     try {
       const examsRes = await api.get(`/exams/${classData._id}`);
       setExams(examsRes.data.data || examsRes.data);
@@ -201,6 +497,7 @@ export default function Dashboard() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userName");
+    localStorage.removeItem("userRole"); // Clear role on logout
     window.location.href = "/login";
   };
 
@@ -218,7 +515,6 @@ export default function Dashboard() {
         announcementData.scheduledFor = scheduledDateTime;
       }
 
-      // Try different endpoints for creating announcements
       const endpoints = {
         published: ['/announcements', '/class/announcements', '/announcements/create'],
         draft: ['/announcements/draft', '/announcements/drafts', '/class/announcements/draft']
@@ -239,7 +535,6 @@ export default function Dashboard() {
       }
 
       if (!success) {
-        // If no API works, create mock announcement
         const mockAnnouncement = {
           _id: Date.now().toString(),
           ...announcementData,
@@ -263,7 +558,7 @@ export default function Dashboard() {
       setAnnouncements(prev => [newAnnouncement, ...prev]);
       setAnnouncementContent("");
       setShowAnnouncementModal(false);
-      setIsScheduling(false);
+        setIsScheduling(false);
       setScheduleDate("");
       setScheduleTime("");
       
@@ -313,7 +608,465 @@ export default function Dashboard() {
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
-  // Render different content based on active sidebar
+  // CLASS CARD COMPONENT WITH MENU
+  const ClassCard = ({ classData }) => {
+    const isTeacher = classData.userRole === "teacher";
+    
+    console.log("ClassCard rendered:", {
+      name: classData.name,
+      userRole: classData.userRole,
+      isTeacher: isTeacher,
+      showMenu: !isTeacher
+    });
+
+    return (
+      <div 
+        key={classData._id} 
+        className="class-card bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 border border-gray-200 cursor-pointer relative overflow-visible"
+        onClick={() => handleSelectClass(classData)}
+      >
+        {/* Menu Button - Show different options for teachers vs students */}
+        <div className="absolute top-3 right-3 z-50">
+          <button 
+            className="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-md border border-gray-200"
+            onClick={(e) => toggleMenu(classData._id, e)}
+          >
+            <svg className="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+            </svg>
+          </button>
+          
+          {/* Dropdown Menu */}
+          {showMenuForClass === classData._id && (
+            <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+              {isTeacher ? (
+                // TEACHER MENU OPTIONS
+                <>
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMenuForClass(null);
+                    }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <span>Edit class</span>
+                  </button>
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 flex items-center space-x-2 transition-colors"
+                    onClick={(e) => confirmArchive(classData, e)}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                    <span>Archive class</span>
+                  </button>
+                  <hr className="my-1" />
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMenuForClass(null);
+                    }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>Delete class</span>
+                  </button>
+                </>
+              ) : (
+                // STUDENT MENU OPTIONS
+                <button
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition-colors"
+                  onClick={(e) => confirmUnenroll(classData, e)}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  <span>Unenroll from class</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Class Card Content */}
+        <div className="p-4">
+          <div className="flex justify-between items-start mb-3">
+            <h3 className="font-semibold text-lg text-gray-800 truncate flex-1 pr-12">{classData.name}</h3>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              isTeacher 
+                ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                : 'bg-green-100 text-green-800 border border-green-200'
+            }`}>
+              {isTeacher ? "Teacher" : "Student"}
+            </span>
+          </div>
+          
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600">
+              Class Code: <strong className="font-mono bg-gray-100 px-2 py-1 rounded border">{classData.code}</strong>
+            </p>
+            <p className="text-sm text-gray-600">
+              Owner: <span className="font-medium">{classData.ownerId?.name || "You"}</span>
+            </p>
+            <div className="flex justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+              <span className="flex items-center bg-gray-50 px-2 py-1 rounded">
+                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
+                </svg>
+                {classData.members?.length || 1} members
+              </span>
+              <span className="flex items-center bg-gray-50 px-2 py-1 rounded">
+                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd"/>
+                </svg>
+                {classData.exams?.length || 0} exams
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // UNENROLL CONFIRMATION MODAL
+  const UnenrollModal = () => {
+    if (!showUnenrollModal || !classToUnenroll) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Unenroll from Class</h3>
+              <p className="text-sm text-gray-600">This action cannot be undone.</p>
+            </div>
+          </div>
+          
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+            <p className="text-sm text-yellow-800">
+              Are you sure you want to unenroll from <strong>"{classToUnenroll.name}"</strong>?
+            </p>
+            <p className="text-xs text-yellow-700 mt-1">
+              You will lose access to all class materials, announcements, and exams.
+            </p>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => {
+                setShowUnenrollModal(false);
+                setClassToUnenroll(null);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={unenrollFromClass}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+            >
+              Yes, Unenroll
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ARCHIVE CONFIRMATION MODAL
+  const ArchiveModal = () => {
+    if (!showArchiveModal || !classToArchive) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Archive Class</h3>
+              <p className="text-sm text-gray-600">This class will be moved to archived.</p>
+            </div>
+          </div>
+          
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+            <p className="text-sm text-yellow-800">
+              Are you sure you want to archive <strong>"{classToArchive.name}"</strong>?
+            </p>
+            <p className="text-xs text-yellow-700 mt-1">
+              Archived classes are hidden from your main view but can be restored later.
+            </p>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => {
+                setShowArchiveModal(false);
+                setClassToArchive(null);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={archiveClass}
+              className="px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+            >
+              Archive Class
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // RESTORE CONFIRMATION MODAL
+  const RestoreModal = () => {
+    if (!showRestoreModal || !classToRestore) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Restore Class</h3>
+              <p className="text-sm text-gray-600">This class will be moved back to active classes.</p>
+            </div>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+            <p className="text-sm text-blue-800">
+              Restore <strong>"{classToRestore.name}"</strong> to your active classes?
+            </p>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => {
+                setShowRestoreModal(false);
+                setClassToRestore(null);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={restoreClass}
+              className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
+            >
+              Restore Class
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // GOOGLE CLASSROOM STYLE CALENDAR COMPONENT
+  const GoogleClassroomCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentDate);
+    const firstDayOfMonth = getFirstDayOfMonth(currentDate);
+    const today = new Date();
+    
+    // Generate calendar days
+    const calendarDays = [];
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      calendarDays.push(null);
+    }
+    
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      const dayEvents = getEventsForDate(date);
+      calendarDays.push({
+        date,
+        day,
+        events: dayEvents,
+        isToday: date.toDateString() === today.toDateString(),
+        isCurrentMonth: true
+      });
+    }
+
+    return (
+      <div className="google-classroom-calendar">
+        {/* Calendar Header */}
+        <div className="calendar-header-section">
+          <div className="calendar-nav">
+            <button 
+              className="calendar-nav-btn"
+              onClick={() => navigateMonth('prev')}
+            >
+              <FaChevronLeft className="nav-icon" />
+            </button>
+            <h2 className="calendar-month-title">
+              {formatMonthYear(currentDate)}
+            </h2>
+            <button 
+              className="calendar-nav-btn"
+              onClick={() => navigateMonth('next')}
+            >
+              <FaChevronRight className="nav-icon" />
+            </button>
+          </div>
+          
+          {/* Class Filter */}
+          <div className="class-filter-section">
+            <select 
+              value={selectedClassFilter}
+              onChange={(e) => setSelectedClassFilter(e.target.value)}
+              className="class-filter-select"
+            >
+              <option value="all">All classes</option>
+              {classes.map(classData => (
+                <option key={classData._id} value={classData._id}>
+                  {classData.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="calendar-grid-container">
+          {/* Weekday Headers */}
+          <div className="calendar-weekdays">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="weekday-header">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar Days Grid */}
+          <div className="calendar-days-grid">
+            {calendarDays.map((dayData, index) => (
+              <div
+                key={index}
+                className={`calendar-day ${!dayData ? 'empty-day' : ''} ${
+                  dayData?.isToday ? 'today' : ''
+                } ${dayData?.events.length > 0 ? 'has-events' : ''}`}
+                onClick={() => dayData && setSelectedDate(dayData.date)}
+              >
+                {dayData && (
+                  <>
+                    <div className="day-number">{dayData.day}</div>
+                    {dayData.events.length > 0 && (
+                      <div className="day-events">
+                        {dayData.events.slice(0, 2).map((event, eventIndex) => (
+                          <div
+                            key={eventIndex}
+                            className="event-dot"
+                            style={{ backgroundColor: event.color }}
+                            title={`${event.title} - ${event.class}`}
+                          />
+                        ))}
+                        {dayData.events.length > 2 && (
+                          <div className="more-events">+{dayData.events.length - 2}</div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Upcoming Events Sidebar */}
+        <div className="calendar-sidebar">
+          <div className="sidebar-section">
+            <h3 className="sidebar-title">Upcoming</h3>
+            <div className="upcoming-events-list">
+              {getFilteredEvents()
+                .filter(event => new Date(event.date) >= new Date())
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .slice(0, 5)
+                .map(event => (
+                  <div key={event.id} className="upcoming-event-item">
+                    <div 
+                      className="event-color-indicator"
+                      style={{ backgroundColor: event.color }}
+                    />
+                    <div className="event-details">
+                      <div className="event-title">{event.title}</div>
+                      <div className="event-class">{event.class}</div>
+                      <div className="event-date">
+                        {new Date(event.date).toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              
+              {getFilteredEvents().filter(event => new Date(event.date) >= new Date()).length === 0 && (
+                <div className="no-upcoming-events">
+                  <div className="no-events-icon">📅</div>
+                  <p>No upcoming events</p>
+                  <span>When you have scheduled exams or assignments, they'll appear here.</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Today's Events */}
+          <div className="sidebar-section">
+            <h3 className="sidebar-title">Today</h3>
+            <div className="todays-events-list">
+              {getEventsForDate(today).map(event => (
+                <div key={event.id} className="today-event-item">
+                  <div 
+                    className="event-color-indicator"
+                    style={{ backgroundColor: event.color }}
+                  />
+                  <div className="event-details">
+                    <div className="event-title">{event.title}</div>
+                    <div className="event-class">{event.class}</div>
+                  </div>
+                </div>
+              ))}
+              
+              {getEventsForDate(today).length === 0 && (
+                <div className="no-today-events">
+                  <span>No events today</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Rest of your existing render functions remain the same...
   const renderMainContent = () => {
     switch (activeSidebar) {
       case "home":
@@ -434,7 +1187,7 @@ export default function Dashboard() {
     );
   };
 
-  // Rest of your render functions remain the same...
+  // Rest of your existing render functions (renderHomeContent, renderCalendarContent, etc.)
   const renderHomeContent = () => {
     if (selectedClass) {
       // Class details view - shows when a class is selected
@@ -605,56 +1358,34 @@ export default function Dashboard() {
     // HOME VIEW - Shows all classes
     return (
       <div className="home-view">
-        <div className="home-header">
-          <h2>Classes</h2>
-          <p>All your classes in one place</p>
-        </div>
         
         {allClasses.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">📚</div>
-            <h3>No classes yet</h3>
-            <p>Create your first class or join an existing one to get started!</p>
             <div className="empty-state-actions">
-              <button 
-                className="primary-btn"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <FaPlus className="btn-icon" />
-                Create Your First Class
-              </button>
-              <button 
-                className="primary-btn secondary"
-                onClick={() => setShowJoinModal(true)}
-              >
-                <FaUserPlus className="btn-icon" />
-                Join a Class
-              </button>
+              {/* Show different buttons based on user role */}
+              {userRole === "teacher" ? (
+                <button 
+                  className="primary-btn"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  <FaPlus className="btn-icon" />
+                  Create Your First Class
+                </button>
+              ) : (
+                <button 
+                  className="primary-btn"
+                  onClick={() => setShowJoinModal(true)}
+                >
+                  <FaUserPlus className="btn-icon" />
+                  Join a Class
+                </button>
+              )}
             </div>
           </div>
         ) : (
           <div className="class-grid">
             {allClasses.map((classData) => (
-              <div 
-                key={classData._id} 
-                className="class-card"
-                onClick={() => handleSelectClass(classData)}
-              >
-                <div className="class-card-header">
-                  <h3>{classData.name}</h3>
-                  <span className={`role-badge ${classData.userRole}`}>
-                    {classData.userRole === "teacher" ? "Teacher" : "Student"}
-                  </span>
-                </div>
-                <div className="class-card-content">
-                  <p className="class-code">Class Code: <strong>{classData.code}</strong></p>
-                  <p className="class-owner">Owner: {classData.ownerId?.name || "You"}</p>
-                  <div className="class-stats">
-                    <span>👥 {classData.members?.length || 1} members</span>
-                    <span>📝 {classData.exams?.length || 0} exams</span>
-                  </div>
-                </div>
-              </div>
+              <ClassCard key={classData._id} classData={classData} />
             ))}
           </div>
         )}
@@ -662,18 +1393,14 @@ export default function Dashboard() {
     );
   };
 
-  // Add the missing render functions
+  // UPDATED CALENDAR CONTENT - Google Classroom Style
   const renderCalendarContent = () => (
     <div className="calendar-view">
       <div className="calendar-header">
         <h2>Calendar</h2>
         <p>View your scheduled exams and assignments</p>
       </div>
-      <div className="calendar-empty">
-        <div className="empty-state-icon">📅</div>
-        <h3>No upcoming events</h3>
-        <p>When you have scheduled exams or assignments, they'll appear here.</p>
-      </div>
+      <GoogleClassroomCalendar />
     </div>
   );
 
@@ -681,13 +1408,52 @@ export default function Dashboard() {
     <div className="archived-view">
       <div className="archived-header">
         <h2>Archived Classes</h2>
-        <p>View and restore your archived classes</p>
       </div>
-      <div className="archived-empty">
-        <div className="empty-state-icon">📦</div>
-        <h3>No archived classes</h3>
-        <p>When you archive classes, they'll appear here.</p>
-      </div>
+
+      {archivedClasses.length === 0 ? (
+        <div className="archived-empty">
+          <h3>No archived classes</h3>
+          <p>When you archive classes, they'll appear here.</p>
+        </div>
+      ) : (
+        <div className="archived-classes-grid">
+          {archivedClasses.map((classData) => (
+            <div key={classData._id} className="archived-class-card">
+              <div className="archived-class-content">
+                <div className="archived-class-header">
+                  <h3 className="archived-class-name">{classData.name}</h3>
+                  <span className="archived-badge">Archived</span>
+                </div>
+                
+                <div className="archived-class-info">
+                  <p className="text-sm text-gray-600">
+                    Class Code: <strong className="font-mono">{classData.code}</strong>
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Archived: {new Date(classData.archivedAt).toLocaleDateString()}
+                  </p>
+                  <div className="flex justify-between text-xs text-gray-500 pt-2">
+                    <span>{classData.members?.length || 1} members</span>
+                    <span>{classData.exams?.length || 0} exams</span>
+                  </div>
+                </div>
+
+                <div className="archived-class-actions">
+                  <button
+                    className="restore-btn"
+                    onClick={(e) => confirmRestore(classData, e)}
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Restore
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -713,171 +1479,6 @@ export default function Dashboard() {
     </div>
   );
 
-  // Update the announcement modal with working dropdown
-  const renderAnnouncementModal = () => (
-    <div className="announcement-modal">
-      <div className="announcement-modal-content">
-        {/* Header */}
-        <div className="announcement-header">
-          <h2 className="announcement-title">Announcement</h2>
-          <button 
-            className="close-announcement-btn"
-            onClick={() => {
-              setShowAnnouncementModal(false);
-              setIsScheduling(false);
-              setScheduleDate("");
-              setScheduleTime("");
-            }}
-          >
-            <i className="material-icons">close</i>
-          </button>
-        </div>
-
-        {/* Class Selection */}
-        <div className="announcement-for-section">
-          <p className="announcement-for-label">For</p>
-          <div className="class-selection">
-            <div className="selected-class">
-              <span className="class-name">{selectedClass?.name || 'No class selected'}</span>
-              <i className="material-icons">arrow_drop_down</i>
-            </div>
-            <div className="student-selection">
-              <button className="student-select-btn">
-                <i className="material-icons">manage_accounts</i>
-                <span>All students</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Scheduling Section */}
-        {isScheduling && (
-          <div className="scheduling-section">
-            <div className="schedule-inputs">
-              <input
-                type="date"
-                value={scheduleDate}
-                onChange={(e) => setScheduleDate(e.target.value)}
-                className="schedule-date"
-                min={new Date().toISOString().split('T')[0]}
-              />
-              <input
-                type="time"
-                value={scheduleTime}
-                onChange={(e) => setScheduleTime(e.target.value)}
-                className="schedule-time"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Announcement Content */}
-        <div className="announcement-editor">
-          <div className="editor-container">
-            <div 
-              className="announcement-textarea"
-              contentEditable="true"
-              placeholder="Announce something to your class"
-              onInput={(e) => setAnnouncementContent(e.currentTarget.textContent || "")}
-            ></div>
-          </div>
-        </div>
-
-        {/* Attachment Buttons */}
-        <div className="attachment-buttons">
-          <button className="attachment-btn" title="Add Google Drive file">
-            <i className="material-icons">drive</i>
-          </button>
-          <button className="attachment-btn" title="Add YouTube video">
-            <i className="material-icons">video_youtube</i>
-          </button>
-          <button className="attachment-btn" title="Upload file">
-            <i className="material-icons">upload</i>
-          </button>
-          <button className="attachment-btn" title="Add link">
-            <i className="material-icons">link</i>
-          </button>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="announcement-actions">
-          <button 
-            className="cancel-btn"
-            onClick={() => {
-              setShowAnnouncementModal(false);
-              setIsScheduling(false);
-              setScheduleDate("");
-              setScheduleTime("");
-            }}
-          >
-            Cancel
-          </button>
-          <div className="post-actions" ref={postOptionsRef}>
-            {isScheduling ? (
-              <button 
-                className="post-btn schedule-confirm-btn"
-                onClick={handleScheduleAnnouncement}
-                disabled={!announcementContent.trim() || !scheduleDate || !scheduleTime}
-              >
-                Schedule
-              </button>
-            ) : (
-              <button 
-                className="post-btn"
-                onClick={handlePostAnnouncement}
-                disabled={!announcementContent.trim()}
-              >
-                Post
-              </button>
-            )}
-            
-            <button 
-              className="post-options-btn"
-              onClick={() => setShowPostOptions(!showPostOptions)}
-            >
-              <i className="material-icons">arrow_drop_down</i>
-            </button>
-            
-            {showPostOptions && (
-              <div className="post-options-dropdown">
-                <button 
-                  className="post-option-item"
-                  onClick={() => {
-                    handlePostAnnouncement();
-                    setShowPostOptions(false);
-                  }}
-                >
-                  <i className="material-icons">send</i>
-                  Post
-                </button>
-                <button 
-                  className="post-option-item"
-                  onClick={() => {
-                    setIsScheduling(true);
-                    setShowPostOptions(false);
-                  }}
-                >
-                  <i className="material-icons">schedule</i>
-                  Schedule
-                </button>
-                <button 
-                  className="post-option-item"
-                  onClick={() => {
-                    handleSaveDraft();
-                    setShowPostOptions(false);
-                  }}
-                >
-                  <i className="material-icons">save</i>
-                  Save draft
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="dashboard-wrapper">
       {/* HEADER */}
@@ -890,8 +1491,7 @@ export default function Dashboard() {
             <FaBars className="hamburger-icon" />
           </button>
           <a href="/" className="logo">
-            <span className="logo-icon">📚</span>
-            <span>CAPSTONE NGANIII</span>
+            <span>CAPSTONE</span>
           </a>
         </div>
 
@@ -905,26 +1505,33 @@ export default function Dashboard() {
             </button>
             {showCreateJoinDropdown && (
               <div className="create-join-dropdown">
-                <button 
-                  className="create-join-item"
-                  onClick={() => {
-                    setShowCreateModal(true);
-                    setShowCreateJoinDropdown(false);
-                  }}
-                >
-                  <FaBook className="create-join-icon" />
-                  Create Class
-                </button>
-                <button 
-                  className="create-join-item"
-                  onClick={() => {
-                    setShowJoinModal(true);
-                    setShowCreateJoinDropdown(false);
-                  }}
-                >
-                  <FaUserPlus className="create-join-icon" />
-                  Join Class
-                </button>
+                {/* UPDATED: Show only Create Class for Teachers */}
+                {userRole === "teacher" && (
+                  <button 
+                    className="create-join-item"
+                    onClick={() => {
+                      setShowCreateModal(true);
+                      setShowCreateJoinDropdown(false);
+                    }}
+                  >
+                    <FaBook className="create-join-icon" />
+                    Create Class
+                  </button>
+                )}
+                
+                {/* UPDATED: Show only Join Class for Students */}
+                {userRole === "student" && (
+                  <button 
+                    className="create-join-item"
+                    onClick={() => {
+                      setShowJoinModal(true);
+                      setShowCreateJoinDropdown(false);
+                    }}
+                  >
+                    <FaUserPlus className="create-join-icon" />
+                    Join Class
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -946,6 +1553,7 @@ export default function Dashboard() {
                   <div className="user-info">
                     <div className="user-name">{user.name}</div>
                     <div className="user-email">{user.email}</div>
+                    <div className="user-role">Role: {userRole}</div>
                   </div>
                 </div>
                 <ul className="user-dropdown-menu">
@@ -1007,59 +1615,141 @@ export default function Dashboard() {
             
             <hr className="sidebar-separator" />
             
-            {/* Teaching Section */}
-            {teachingClasses.length > 0 && (
+            {/* UPDATED: TEACHER-ONLY TEACHING DROPDOWN SECTION */}
+            {userRole === "teacher" && (
               <>
-                <div className="section-header">Teaching ({teachingClasses.length})</div>
-                <div className="class-list">
-                  {teachingClasses.slice(0, 5).map((classData) => (
-                    <div
-                      key={classData._id}
-                      className={`class-list-item ${selectedClass?._id === classData._id ? 'selected' : ''}`}
-                      onClick={() => handleSelectClass(classData)}
+                {teachingClasses.length > 0 ? (
+                  <>
+                    <div 
+                      className="section-header dropdown-header"
+                      onClick={() => setTeachingDropdownOpen(!teachingDropdownOpen)}
                     >
-                      <div className={`class-avatar ${getRandomColor()}`}>
-                        {classData.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="class-info">
-                        <span className="class-name">{classData.name}</span>
-                        <span className="class-details">{classData.code}</span>
-                      </div>
-                      <span className="role-badge teacher">Teacher</span>
+                      <span>Teaching ({teachingClasses.length})</span>
+                      <span className={`dropdown-arrow ${teachingDropdownOpen ? 'open' : ''}`}>
+                        <FaChevronLeft />
+                      </span>
                     </div>
-                  ))}
-                </div>
+                    
+                    {teachingDropdownOpen && (
+                      <div className="teaching-dropdown">
+                        {/* To Review Button */}
+                        <button 
+                          className="review-button"
+                          onClick={() => navigate('/review')}
+                        >
+                          <span className="review-icon">📝</span>
+                          <span className="review-text">To review</span>
+                          <span className="review-badge">{itemsToReview}</span>
+                        </button>
+                        
+                        {/* Teaching Classes List */}
+                        <div className="teaching-classes-list">
+                          {teachingClasses.map((classData) => (
+                            <div
+                              key={classData._id}
+                              className={`class-list-item ${selectedClass?._id === classData._id ? 'selected' : ''}`}
+                              onClick={() => handleSelectClass(classData)}
+                            >
+                              <div className={`class-avatar ${getRandomColor()}`}>
+                                {classData.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="class-info">
+                                <span className="class-name">{classData.name}</span>
+                                <span className="class-details">{classData.section || classData.code}</span>
+                              </div>
+                              <span className="role-badge teacher">Teacher</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="empty-teaching-section">
+                    <p className="empty-teaching-text">You're not teaching any classes yet</p>
+                    <button 
+                      className="create-class-sidebar-btn"
+                      onClick={() => setShowCreateModal(true)}
+                    >
+                      Create Class
+                    </button>
+                  </div>
+                )}
               </>
+            )}
+            
+            {/* UPDATED: STUDENT-ONLY ENROLLED SECTION WITH TO DO BUTTON */}
+            {userRole === "student" && enrolledClasses.length > 0 && (
+              <>
+                <div 
+                  className="section-header dropdown-header"
+                  onClick={() => setEnrolledDropdownOpen(!enrolledDropdownOpen)}
+                >
+                  <span>Enrolled ({enrolledClasses.length})</span>
+                  <span className={`dropdown-arrow ${enrolledDropdownOpen ? 'open' : ''}`}>
+                    <FaChevronLeft />
+                  </span>
+                </div>
+                
+                {enrolledDropdownOpen && (
+                  <div className="enrolled-dropdown">
+                    {/* To Do Button - ONLY FOR STUDENTS */}
+                    <button 
+                      className="todo-button"
+                      onClick={() => navigate('/todo')}
+                    >
+                      <span className="todo-icon">📝</span>
+                      <span className="todo-text">To do</span>
+                    </button>
+                    
+                    {/* Enrolled Classes List */}
+                    <div className="enrolled-classes-list">
+                      {enrolledClasses.slice(0, 8).map((classData) => (
+                        <div
+                          key={classData._id}
+                          className={`class-list-item ${selectedClass?._id === classData._id ? 'selected' : ''}`}
+                          onClick={() => handleSelectClass(classData)}
+                        >
+                          <div className={`class-avatar ${getRandomColor()}`}>
+                            {classData.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="class-info">
+                            <span className="class-name">{classData.name}</span>
+                            <span className="class-details">{classData.ownerId?.name || 'Teacher'}</span>
+                          </div>
+                          <span className="role-badge student">Student</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            
+            {/* EMPTY STATE FOR STUDENTS */}
+            {userRole === "student" && enrolledClasses.length === 0 && (
+              <div className="empty-sidebar-section">
+                <p className="empty-sidebar-text">You haven't enrolled in any classes yet</p>
+                <button 
+                  className="create-class-sidebar-btn"
+                  onClick={() => setShowJoinModal(true)}
+                >
+                  Join Class
+                </button>
+              </div>
             )}
             
             <hr className="sidebar-separator" />
             
-            {/* Enrolled Section */}
-            {enrolledClasses.length > 0 && (
-              <>
-                <div className="section-header">Enrolled ({enrolledClasses.length})</div>
-                <div className="class-list">
-                  {enrolledClasses.slice(0, 8).map((classData) => (
-                    <div
-                      key={classData._id}
-                      className={`class-list-item ${selectedClass?._id === classData._id ? 'selected' : ''}`}
-                      onClick={() => handleSelectClass(classData)}
-                    >
-                      <div className={`class-avatar ${getRandomColor()}`}>
-                        {classData.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="class-info">
-                        <span className="class-name">{classData.name}</span>
-                        <span className="class-details">{classData.ownerId?.name || 'Teacher'}</span>
-                      </div>
-                      <span className="role-badge student">Student</span>
-                    </div>
-                  ))}
-                </div>
-              </>
+            {/* UPDATED: To Do Button in Main Sidebar - ONLY SHOW FOR STUDENTS */}
+            {userRole === "student" && (
+              <button 
+                className="sidebar-item"
+                onClick={() => navigate('/todo')}
+              >
+                <span className="sidebar-text">To do</span>
+              </button>
             )}
-            
-            <hr className="sidebar-separator" />
             
             <button 
               className={`sidebar-item ${activeSidebar === 'archived' ? 'active' : ''}`}
@@ -1134,7 +1824,14 @@ export default function Dashboard() {
         </div>
       )}
 
-    
+      {/* UNENROLL MODAL */}
+      <UnenrollModal />
+
+      {/* ARCHIVE MODAL */}
+      <ArchiveModal />
+
+      {/* RESTORE MODAL */}
+      <RestoreModal />
 
       {/* Announcement Modal */}
       {showAnnouncementModal && (

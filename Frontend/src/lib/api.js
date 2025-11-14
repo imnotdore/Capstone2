@@ -1,4 +1,4 @@
-// src/lib/api.js
+// src/lib/api.js - NO CHANGES NEEDED
 import axios from "axios";
 
 const api = axios.create({
@@ -13,3 +13,19 @@ api.interceptors.request.use((config) => {
 });
 
 export default api;
+
+// Archive class functions
+export const archiveClass = async (classId) => {
+  const response = await api.put(`/class/${classId}/archive`);
+  return response.data;
+};
+
+export const restoreClass = async (classId) => {
+  const response = await api.put(`/class/${classId}/restore`);
+  return response.data;
+};
+
+export const getArchivedClasses = async () => {
+  const response = await api.get('/class/archived');
+  return response.data;
+};

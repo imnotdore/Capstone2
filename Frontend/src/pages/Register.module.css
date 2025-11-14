@@ -1,133 +1,128 @@
-/* src/pages/Register.module.css */
+/* src/pages/Register.module.css - UPDATED MODERN UI */
 .wrapper {
   display: flex;
-  min-height: 100vh;
-  width: 100%;
+  height: 100vh;
+  width: 100vw;
   overflow: hidden;
-  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-  color: #fff;
+  font-family: 'Arial', sans-serif;
 }
 
-/* Left Section - Mas maliit na space */
-.leftSection {
-  flex: 0 0 40%; /* Fixed width na 40% */
+/* Left Panel - Welcome Section */
+.leftPanel {
+  flex: 1;
   display: flex;
-  align-items: center;
   justify-content: center;
-  padding: 2rem;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  position: relative;
+  align-items: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 40px;
 }
 
-.leftContent {
-  max-width: 100%;
+.welcomeContainer {
   text-align: center;
-  width: 100%;
+  max-width: 400px;
 }
 
-.brand {
-  font-size: clamp(2rem, 4vw, 3rem);
-  margin-bottom: 1rem;
-  font-weight: 700;
-  line-height: 1.2;
+.welcomeTitle {
+  font-size: 2.5rem;
+  font-weight: 300;
+  margin-bottom: 20px;
 }
 
-.tagline {
-  font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+.welcomeText {
+  font-size: 1.1rem;
   line-height: 1.6;
-  margin-bottom: 2rem;
-  opacity: 0.9;
+  margin-bottom: 40px;
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.homeBtn {
-  padding: 0.875rem 2rem;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  font-size: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.signInButton {
+  background: transparent;
+  color: white;
+  border: 2px solid white;
+  padding: 15px 40px;
   border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-}
-
-.homeBtn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-}
-
-/* Right Section - Mas malaki na space */
-.rightSection {
-  flex: 1; /* Take remaining space */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  min-width: 0; /* Important for flexbox shrinking */
-}
-
-.card {
-  background: #fff;
-  color: #333;
-  padding: clamp(1.5rem, 4vw, 3rem);
-  border-radius: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+  display: block;
   width: 100%;
-  max-width: 500px; /* Slightly larger */
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+.signInButton:hover {
+  background: white;
+  color: #667eea;
+}
+
+/* Right Panel - Registration Form */
+.rightPanel {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #ffffff;
+  padding: 40px;
+}
+
+.registerContainer {
+  width: 100%;
+  max-width: 400px;
+}
+
+.registerTitle {
+  font-size: 2.5rem;
+  font-weight: 300;
+  color: #333;
+  margin-bottom: 40px;
   text-align: center;
 }
 
-.title {
-  margin-bottom: 1.5rem;
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  font-weight: 600;
-  color: #2c3e50;
+/* Social Buttons - Only Google */
+.socialButtons {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 30px;
 }
 
-.error {
-  color: #e74c3c;
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: #fdf2f2;
-  border-radius: 8px;
-  border: 1px solid #fbb;
-  font-size: 0.9rem;
-}
-
-/* Google Button */
-.googleButton {
-  width: 100%;
-  padding: 0.875rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-  color: #333;
-  font-size: 1rem;
+.socialButton {
+  width: 50px;
+  height: 50px;
+  border: 2px solid #e0e0e0;
+  border-radius: 50%;
+  background: white;
   cursor: pointer;
-  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+  transition: all 0.3s ease;
 }
 
-.googleButton:hover {
-  border-color: #4285f4;
-  box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
+.socialButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.googleIcon {
-  display: flex;
-  align-items: center;
+.google {
+  color: #db4437;
+  border-color: #db4437;
+}
+
+.socialIcon {
+  font-weight: bold;
 }
 
 /* Divider */
 .divider {
   position: relative;
-  margin: 1.5rem 0;
   text-align: center;
+  margin: 30px 0;
+  color: #666;
 }
 
 .divider::before {
@@ -137,55 +132,53 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: #eee;
+  background: #e0e0e0;
 }
 
 .dividerText {
   background: #fff;
-  padding: 0 1rem;
-  color: #666;
+  padding: 0 15px;
   font-size: 0.9rem;
+  color: #666;
 }
 
 /* Form */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 20px;
+}
+
+.inputGroup {
+  width: 100%;
 }
 
 .input {
-  padding: 0.875rem;
+  width: 100%;
+  padding: 15px 20px;
+  border: 2px solid #e0e0e0;
   border-radius: 8px;
-  border: 1px solid #ddd;
   font-size: 1rem;
   outline: none;
-  width: 100%;
+  transition: border-color 0.3s ease;
   box-sizing: border-box;
-  transition: all 0.3s ease;
 }
 
 .input:focus {
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  border-color: #4285f4;
 }
 
 /* Password Requirements */
-.passwordContainer {
-  position: relative;
-}
-
 .passwordRequirements {
-  margin-top: 0.75rem;
-  padding: 1rem;
+  margin-top: -10px;
+  padding: 15px;
   background: #f8f9fa;
   border-radius: 8px;
   border-left: 4px solid #e74c3c;
-  text-align: left;
 }
 
 .requirementsTitle {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 10px 0;
   font-size: 0.85rem;
   font-weight: 600;
   color: #2c3e50;
@@ -198,17 +191,9 @@
 }
 
 .requirementsList li {
-  margin-bottom: 0.25rem;
+  margin-bottom: 5px;
   font-size: 0.8rem;
   transition: color 0.3s;
-  display: flex;
-  align-items: center;
-}
-
-.requirementsList li::before {
-  content: '•';
-  margin-right: 0.5rem;
-  font-weight: bold;
 }
 
 .requirementsList li.valid {
@@ -219,85 +204,80 @@
   color: #e74c3c;
 }
 
-/* Buttons */
-.button {
-  background: #28a745;
-  color: #fff;
-  padding: 0.875rem;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-  margin-top: 0.5rem;
-  position: relative;
+/* Error Messages */
+.errorContainer {
+  margin: -10px 0 10px 0;
 }
 
-.button:hover:not(:disabled) {
-  background: #218838;
+.error {
+  color: #d93025;
+  font-size: 14px;
+  text-align: center;
+  background: #fce8e6;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #f4c7c3;
+  margin: 0;
+}
+
+/* Submit Button */
+.submitButton {
+  background: #4285f4;
+  color: white;
+  border: none;
+  padding: 15px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 10px;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: #3367d6;
   transform: translateY(-1px);
 }
 
-.button:disabled {
-  opacity: 0.7;
+.submitButton:disabled {
+  background: #ccc;
   cursor: not-allowed;
   transform: none;
-}
-
-.button.loading {
-  pointer-events: none;
-}
-
-.buttonContent {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* OTP Styles */
 .otpMessage {
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 20px;
   color: #666;
+  line-height: 1.5;
 }
 
 .emailText {
   font-weight: 600;
   color: #2c3e50;
-  margin: 0.5rem 0;
+  margin: 10px 0;
+  font-size: 1.1rem;
 }
 
 .otpButtons {
   display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 15px;
+  margin-top: 20px;
 }
 
 .backButton {
   flex: 1;
-  padding: 0.875rem;
-  border: 1px solid #ddd;
+  padding: 12px;
+  border: 2px solid #e0e0e0;
   border-radius: 8px;
   background: #fff;
   color: #666;
   cursor: pointer;
   transition: all 0.3s ease;
+  font-size: 0.9rem;
 }
 
 .backButton:hover:not(:disabled) {
@@ -307,17 +287,21 @@
 
 .verifyButton {
   flex: 2;
-  padding: 0.875rem;
+  padding: 12px;
   border: none;
   border-radius: 8px;
-  background: #3498db;
+  background: #4285f4;
   color: #fff;
   cursor: pointer;
   transition: all 0.3s ease;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .verifyButton:hover:not(:disabled) {
-  background: #2980b9;
+  background: #3367d6;
   transform: translateY(-1px);
 }
 
@@ -327,151 +311,72 @@
   transform: none;
 }
 
-/* Login Link */
-.loginText {
-  margin-top: 1.5rem;
-  font-size: 0.9rem;
+/* Visit Site Button */
+.visitSiteButton {
+  background: transparent;
   color: #666;
-}
-
-.loginLink {
-  color: #3498db;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.loginLink:hover {
+  border: none;
+  padding: 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
   text-decoration: underline;
+  transition: color 0.3s ease;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.visitSiteButton:hover {
+  color: #333;
 }
 
 /* Responsive Design */
-@media (max-width: 1024px) {
-  .leftSection {
-    flex: 0 0 35%; /* Mas maliit pa sa tablets */
-  }
-}
-
 @media (max-width: 768px) {
   .wrapper {
     flex-direction: column;
-    min-height: 100vh;
   }
-
-  .leftSection {
-    flex: 0 0 auto; /* Remove fixed flex on mobile */
-    padding: 2rem 1rem;
-    min-height: 30vh;
+  
+  .leftPanel, .rightPanel {
+    flex: none;
     width: 100%;
+    min-height: 50vh;
   }
-
-  .leftContent {
-    max-width: 100%;
+  
+  .registerContainer, .welcomeContainer {
+    max-width: 300px;
   }
-
-  .brand {
+  
+  .registerTitle, .welcomeTitle {
     font-size: 2rem;
   }
-
-  .tagline {
-    font-size: 1.1rem;
+  
+  .socialButtons {
+    gap: 15px;
   }
-
-  .rightSection {
-    padding: 1.5rem;
-    min-height: 70vh;
-    width: 100%;
-  }
-
-  .card {
-    padding: 2rem 1.5rem;
-    margin: 0;
-    max-width: 100%;
-  }
-
-  .otpButtons {
-    flex-direction: column;
+  
+  .socialButton {
+    width: 45px;
+    height: 45px;
   }
 }
 
 @media (max-width: 480px) {
-  .leftSection {
-    min-height: 25vh;
-    padding: 1.5rem 1rem;
+  .leftPanel, .rightPanel {
+    padding: 20px;
   }
-
-  .rightSection {
-    min-height: 75vh;
-    padding: 1rem;
+  
+  .registerTitle, .welcomeTitle {
+    font-size: 1.8rem;
   }
-
-  .card {
-    padding: 1.5rem 1.25rem;
-    border-radius: 12px;
-  }
-
-  .form {
-    gap: 0.875rem;
-  }
-
+  
   .input {
-    padding: 0.75rem;
-  }
-
-  .button, .googleButton {
-    padding: 0.75rem;
-  }
-}
-
-/* Extra small devices */
-@media (max-width: 360px) {
-  .leftSection {
-    padding: 1rem;
-  }
-
-  .rightSection {
-    padding: 0.75rem;
-  }
-
-  .card {
-    padding: 1.25rem 1rem;
-  }
-
-  .brand {
-    font-size: 1.75rem;
-  }
-
-  .tagline {
-    font-size: 1rem;
-  }
-}
-
-/* Landscape orientation for mobile */
-@media (max-height: 600px) and (orientation: landscape) {
-  .wrapper {
-    flex-direction: row;
-  }
-
-  .leftSection {
-    flex: 0 0 30%;
-    min-height: 100vh;
-  }
-
-  .rightSection {
-    min-height: 100vh;
-  }
-}
-
-/* Large screens optimization */
-@media (min-width: 1440px) {
-  .leftSection {
-    flex: 0 0 35%;
+    padding: 12px 15px;
   }
   
-  .rightSection {
-    flex: 1;
+  .submitButton, .signInButton {
+    padding: 12px;
   }
   
-  .card {
-    max-width: 450px;
+  .otpButtons {
+    flex-direction: column;
   }
 }

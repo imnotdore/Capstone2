@@ -1,4 +1,4 @@
-// routes/classes.js - COMPLETELY UPDATED
+// routes/classes.js - COMPLETELY UPDATED WITH UNENROLL AND ARCHIVE
 const express = require("express");
 const router = express.Router();
 const Class = require("../models/class");
@@ -79,7 +79,7 @@ router.post("/join", authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ Get user's classes (both owned and joined)
+// ✅ Get user's classes (both owned and joined) - EXCLUDE ARCHIVED
 router.get("/my-classes", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -88,7 +88,8 @@ router.get("/my-classes", authMiddleware, async (req, res) => {
       $or: [
         { ownerId: userId }, // Classes they own
         { "members.userId": userId } // Classes they joined
-      ]
+      ],
+      isArchived: false // ✅ Only show non-archived classes
     })
     .populate("ownerId", "name email")
     .populate("members.userId", "name email");
@@ -164,6 +165,131 @@ router.get("/:classId/members", authMiddleware, checkClassAccess, async (req, re
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// ✅ UNENROLL FROM CLASS - NEW ENDPOINT
+router.delete("/:classId/unenroll", authMiddleware, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const userId = req.user.id;
+
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    // Check if user is the owner (teacher can't unenroll from their own class)
+    if (classData.ownerId.toString() === userId) {
+      return res.status(400).json({ message: "Teachers cannot unenroll from their own class" });
+    }
+
+    // Check if user is actually enrolled
+    const isEnrolled = classData.members.some(member => member.userId.toString() === userId);
+    if (!isEnrolled) {
+      return res.status(400).json({ message: "You are not enrolled in this class" });
+    }
+
+    // Remove user from members array
+    classData.members = classData.members.filter(
+      member => member.userId.toString() !== userId
+    );
+
+    await classData.save();
+
+    res.json({
+      success: true,
+      message: "Successfully unenrolled from class"
+    });
+  } catch (err) {
+    console.error("Unenroll error:", err);
+    res.status(500).json({ message: "Failed to unenroll from class" });
+  }
+});
+
+// ✅ ARCHIVE CLASS (Teacher only)
+router.put("/:classId/archive", authMiddleware, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const userId = req.user.id;
+
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    // Check if user is the teacher/owner of this class
+    if (classData.ownerId.toString() !== userId) {
+      return res.status(403).json({ message: "Only the teacher can archive this class" });
+    }
+
+    // Archive the class
+    classData.isArchived = true;
+    classData.archivedAt = new Date();
+    await classData.save();
+
+    res.json({
+      success: true,
+      message: "Class archived successfully",
+      data: classData
+    });
+  } catch (err) {
+    console.error("Archive error:", err);
+    res.status(500).json({ message: "Failed to archive class" });
+  }
+});
+
+// ✅ RESTORE CLASS (Teacher only)
+router.put("/:classId/restore", authMiddleware, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const userId = req.user.id;
+
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    // Check if user is the teacher/owner of this class
+    if (classData.ownerId.toString() !== userId) {
+      return res.status(403).json({ message: "Only the teacher can restore this class" });
+    }
+
+    // Restore the class
+    classData.isArchived = false;
+    classData.archivedAt = null;
+    await classData.save();
+
+    res.json({
+      success: true,
+      message: "Class restored successfully",
+      data: classData
+    });
+  } catch (err) {
+    console.error("Restore error:", err);
+    res.status(500).json({ message: "Failed to restore class" });
+  }
+});
+
+// ✅ GET ARCHIVED CLASSES (Teacher only)
+router.get("/archived", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const archivedClasses = await Class.find({
+      ownerId: userId,
+      isArchived: true
+    })
+    .populate("ownerId", "name email")
+    .populate("members.userId", "name email");
+
+    res.json({
+      success: true,
+      data: archivedClasses
+    });
+  } catch (err) {
+    console.error("Fetch archived error:", err);
+    res.status(500).json({ message: "Failed to fetch archived classes" });
   }
 });
 
