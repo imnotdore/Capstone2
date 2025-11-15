@@ -1,7 +1,8 @@
-// routes/classes.js - COMPLETELY UPDATED WITH UNENROLL AND ARCHIVE
+// routes/classes.js - COMPLETELY FIXED WITH ALL MISSING ROUTES
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
-const Class = require("../models/class");
+const Class = require("../models/Class");
 const authMiddleware = require("../middleware/authMiddleware");
 const { checkClassAccess, checkTeacherAccess } = require("../middleware/classAuth");
 
@@ -10,6 +11,13 @@ router.post("/", authMiddleware, async (req, res) => {
   try {
     const { name } = req.body;
     const ownerId = req.user.id;
+
+    if (!name) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Class name is required" 
+      });
+    }
 
     // Generate unique class code
     const generateCode = () => {
@@ -34,16 +42,21 @@ router.post("/", authMiddleware, async (req, res) => {
       name, 
       code, 
       ownerId,
-      members: [{ userId: ownerId, role: "teacher" }] // Owner automatically becomes teacher
+      members: [{ userId: ownerId, role: "teacher" }]
     });
 
-    res.json({
+    res.status(201).json({
       success: true,
       message: "Class created successfully",
       data: newClass
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("❌ Create class error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to create class",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -53,15 +66,28 @@ router.post("/join", authMiddleware, async (req, res) => {
     const { code } = req.body;
     const userId = req.user.id;
 
-    if (!code) return res.status(400).json({ message: "Class code is required" });
+    if (!code) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Class code is required" 
+      });
+    }
 
     const classData = await Class.findOne({ code });
-    if (!classData) return res.status(404).json({ message: "Class not found" });
+    if (!classData) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Class not found" 
+      });
+    }
 
     // Check if already member
     const isMember = classData.members.some(m => m.userId.toString() === userId);
     if (isMember) {
-      return res.status(400).json({ message: "You have already joined this class" });
+      return res.status(400).json({ 
+        success: false,
+        message: "You have already joined this class" 
+      });
     }
 
     // Add as student member
@@ -74,8 +100,12 @@ router.post("/join", authMiddleware, async (req, res) => {
       data: classData 
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to join class" });
+    console.error("❌ Join class error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to join class",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -86,13 +116,14 @@ router.get("/my-classes", authMiddleware, async (req, res) => {
 
     const classes = await Class.find({
       $or: [
-        { ownerId: userId }, // Classes they own
-        { "members.userId": userId } // Classes they joined
+        { ownerId: userId },
+        { "members.userId": userId }
       ],
-      isArchived: false // ✅ Only show non-archived classes
+      isArchived: false
     })
     .populate("ownerId", "name email")
-    .populate("members.userId", "name email");
+    .populate("members.userId", "name email")
+    .sort({ createdAt: -1 });
 
     // Add role context for each class
     const classesWithRole = classes.map(classData => {
@@ -110,7 +141,12 @@ router.get("/my-classes", authMiddleware, async (req, res) => {
       data: classesWithRole
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("❌ Get my classes error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch classes",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -130,7 +166,12 @@ router.get("/:classId", authMiddleware, checkClassAccess, async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("❌ Get class details error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch class details",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -164,30 +205,52 @@ router.get("/:classId/members", authMiddleware, checkClassAccess, async (req, re
       data: allMembers
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("❌ Get class members error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch class members",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// ✅ UNENROLL FROM CLASS - NEW ENDPOINT
+// ✅ UNENROLL FROM CLASS
 router.delete("/:classId/unenroll", authMiddleware, async (req, res) => {
   try {
     const { classId } = req.params;
     const userId = req.user.id;
 
-    const classData = await Class.findById(classId);
-    if (!classData) {
-      return res.status(404).json({ message: "Class not found" });
+    // Validate classId
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid class ID" 
+      });
     }
 
-    // Check if user is the owner (teacher can't unenroll from their own class)
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Class not found" 
+      });
+    }
+
+    // Check if user is the owner
     if (classData.ownerId.toString() === userId) {
-      return res.status(400).json({ message: "Teachers cannot unenroll from their own class" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Teachers cannot unenroll from their own class" 
+      });
     }
 
     // Check if user is actually enrolled
     const isEnrolled = classData.members.some(member => member.userId.toString() === userId);
     if (!isEnrolled) {
-      return res.status(400).json({ message: "You are not enrolled in this class" });
+      return res.status(400).json({ 
+        success: false,
+        message: "You are not enrolled in this class" 
+      });
     }
 
     // Remove user from members array
@@ -202,8 +265,12 @@ router.delete("/:classId/unenroll", authMiddleware, async (req, res) => {
       message: "Successfully unenrolled from class"
     });
   } catch (err) {
-    console.error("Unenroll error:", err);
-    res.status(500).json({ message: "Failed to unenroll from class" });
+    console.error("❌ Unenroll error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to unenroll from class",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -213,14 +280,28 @@ router.put("/:classId/archive", authMiddleware, async (req, res) => {
     const { classId } = req.params;
     const userId = req.user.id;
 
-    const classData = await Class.findById(classId);
-    if (!classData) {
-      return res.status(404).json({ message: "Class not found" });
+    // Validate classId
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid class ID" 
+      });
     }
 
-    // Check if user is the teacher/owner of this class
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Class not found" 
+      });
+    }
+
+    // Check if user is the teacher/owner
     if (classData.ownerId.toString() !== userId) {
-      return res.status(403).json({ message: "Only the teacher can archive this class" });
+      return res.status(403).json({ 
+        success: false,
+        message: "Only the teacher can archive this class" 
+      });
     }
 
     // Archive the class
@@ -234,8 +315,12 @@ router.put("/:classId/archive", authMiddleware, async (req, res) => {
       data: classData
     });
   } catch (err) {
-    console.error("Archive error:", err);
-    res.status(500).json({ message: "Failed to archive class" });
+    console.error("❌ Archive error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to archive class",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -245,14 +330,28 @@ router.put("/:classId/restore", authMiddleware, async (req, res) => {
     const { classId } = req.params;
     const userId = req.user.id;
 
-    const classData = await Class.findById(classId);
-    if (!classData) {
-      return res.status(404).json({ message: "Class not found" });
+    // Validate classId
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid class ID" 
+      });
     }
 
-    // Check if user is the teacher/owner of this class
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Class not found" 
+      });
+    }
+
+    // Check if user is the teacher/owner
     if (classData.ownerId.toString() !== userId) {
-      return res.status(403).json({ message: "Only the teacher can restore this class" });
+      return res.status(403).json({ 
+        success: false,
+        message: "Only the teacher can restore this class" 
+      });
     }
 
     // Restore the class
@@ -266,30 +365,64 @@ router.put("/:classId/restore", authMiddleware, async (req, res) => {
       data: classData
     });
   } catch (err) {
-    console.error("Restore error:", err);
-    res.status(500).json({ message: "Failed to restore class" });
+    console.error("❌ Restore error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to restore class",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// ✅ GET ARCHIVED CLASSES (Teacher only)
+// ✅ GET ARCHIVED CLASSES (FIXED VERSION)
 router.get("/archived", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // Find archived classes where user is either owner or member
     const archivedClasses = await Class.find({
-      ownerId: userId,
-      isArchived: true
+      $or: [
+        { ownerId: userId, isArchived: true },
+        { "members.userId": userId, isArchived: true }
+      ]
     })
     .populate("ownerId", "name email")
-    .populate("members.userId", "name email");
+    .populate("members.userId", "name email")
+    .sort({ archivedAt: -1 });
 
     res.json({
       success: true,
       data: archivedClasses
     });
   } catch (err) {
-    console.error("Fetch archived error:", err);
-    res.status(500).json({ message: "Failed to fetch archived classes" });
+    console.error("❌ Fetch archived error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch archived classes",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ GET ITEMS TO REVIEW COUNT (Teacher only) - NEW ROUTE
+router.get("/items-to-review", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Mock data for now - replace with actual logic later
+    const reviewCount = 0; // Default to 0
+
+    res.json({
+      success: true,
+      count: reviewCount
+    });
+  } catch (err) {
+    console.error("❌ Fetch review count error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch review count",
+      count: 0
+    });
   }
 });
 

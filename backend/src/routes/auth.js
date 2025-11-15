@@ -1,4 +1,4 @@
-// routes/auth.js - COMPLETE UPDATED VERSION WITH ROLE SELECTION
+// routes/auth.js - UPDATED WITH IMPROVED RECAPTCHA VERIFICATION
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -10,6 +10,7 @@ const Class = require("../models/Class");
 const auth = require("../middleware/authMiddleware");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
+const axios = require("axios");
 
 const router = express.Router();
 
@@ -21,14 +22,88 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Use Gmail App Password here
+    pass: process.env.EMAIL_PASS,
   },
-  // Add reliability options
   pool: true,
   maxConnections: 1,
   rateDelta: 20000,
   rateLimit: 5
 });
+
+// ========================
+// ✅ IMPROVED RECAPTCHA VERIFICATION MIDDLEWARE
+// ========================
+
+const verifyRecaptcha = async (recaptchaToken) => {
+  try {
+    if (!recaptchaToken) {
+      throw new Error("reCAPTCHA token is required");
+    }
+
+    console.log('🔄 Verifying reCAPTCHA token...');
+
+    const verificationUrl = `https://www.google.com/recaptcha/api/siteverify`;
+    const response = await axios.post(verificationUrl, null, {
+      params: {
+        secret: process.env.RECAPTCHA_SECRET_KEY,
+        response: recaptchaToken
+      },
+      timeout: 10000 // 10 second timeout
+    });
+
+    const data = response.data;
+    
+    console.log('📊 reCAPTCHA verification response:', {
+      success: data.success,
+      score: data.score,
+      action: data.action,
+      hostname: data.hostname,
+      errors: data['error-codes']
+    });
+    
+    if (!data.success) {
+      const errorCodes = data['error-codes'] || [];
+      console.error('❌ reCAPTCHA verification failed:', errorCodes);
+      
+      let errorMessage = "Security verification failed";
+      
+      if (errorCodes.includes('missing-input-secret')) {
+        errorMessage = "reCAPTCHA configuration error: missing secret key";
+      } else if (errorCodes.includes('invalid-input-secret')) {
+        errorMessage = "reCAPTCHA configuration error: invalid secret key";
+      } else if (errorCodes.includes('missing-input-response')) {
+        errorMessage = "Please complete the security verification";
+      } else if (errorCodes.includes('invalid-input-response')) {
+        errorMessage = "Invalid security verification response";
+      } else if (errorCodes.includes('timeout-or-duplicate')) {
+        errorMessage = "Security verification expired. Please try again.";
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    // For reCAPTCHA v3, check score (v2 doesn't have score)
+    if (data.score && data.score < 0.5) {
+      console.warn('⚠️ reCAPTCHA score too low:', data.score);
+      throw new Error("Security verification failed. Please try again.");
+    }
+
+    console.log('✅ reCAPTCHA verification passed');
+    return true;
+  } catch (error) {
+    console.error('❌ reCAPTCHA verification error:', error.message);
+    
+    if (error.code === 'ECONNABORTED') {
+      throw new Error("Security verification timeout. Please try again.");
+    }
+    
+    if (error.response) {
+      throw new Error("Security verification service unavailable");
+    }
+    
+    throw error;
+  }
+};
 
 // ========================
 // ✅ MIDDLEWARE: CHECK REGISTERED GMAIL
@@ -40,6 +115,7 @@ const checkRegisteredEmail = async (req, res, next) => {
     
     if (!email || !email.endsWith('@gmail.com')) {
       return res.status(400).json({ 
+        success: false,
         message: "Only Gmail accounts are allowed for login" 
       });
     }
@@ -48,23 +124,25 @@ const checkRegisteredEmail = async (req, res, next) => {
     
     if (!user) {
       return res.status(403).json({
+        success: false,
         message: 'This Gmail account is not registered. Please register first.'
       });
     }
     
     next();
   } catch (error) {
+    console.error('❌ Email verification error:', error);
     res.status(500).json({
+      success: false,
       message: 'Server error during email verification'
     });
   }
 };
 
 // ========================
-// ✅ ROLE SELECTION ENDPOINTS - NEW & IMPROVED
+// ✅ ROLE SELECTION ENDPOINTS
 // ========================
 
-// Role selection endpoint
 router.post("/select-role", async (req, res) => {
   try {
     const { role, userId } = req.body;
@@ -116,31 +194,40 @@ router.post("/select-role", async (req, res) => {
   }
 });
 
-// Check role status
 router.get("/role-status/:userId", async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return res.status(404).json({ 
+        success: false,
+        error: "User not found" 
+      });
     }
 
     res.json({ 
+      success: true,
       hasSelectedRole: user.hasSelectedRole,
       role: user.role,
       hasTeachingClasses: user.createdClasses && user.createdClasses.length > 0
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('❌ Role status error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 });
 
-// Update user role (existing route - keep for compatibility)
 router.put("/update-role", auth, async (req, res) => {
   try {
     const { role } = req.body;
     
     if (!['teacher', 'student'].includes(role)) {
-      return res.status(400).json({ message: "Invalid role" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid role" 
+      });
     }
     
     const user = await User.findByIdAndUpdate(
@@ -150,11 +237,16 @@ router.put("/update-role", auth, async (req, res) => {
     ).select("-password");
     
     res.json({ 
+      success: true,
       message: "Role updated successfully",
       user 
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('❌ Update role error:', err);
+    res.status(500).json({ 
+      success: false,
+      message: err.message 
+    });
   }
 });
 
@@ -165,6 +257,7 @@ router.put("/update-role", auth, async (req, res) => {
 router.get('/google', (req, res, next) => {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     return res.status(503).json({ 
+      success: false,
       message: "Google login is currently unavailable. Please use email login." 
     });
   }
@@ -179,6 +272,7 @@ router.get('/google', (req, res, next) => {
 router.get('/api/auth/google', (req, res, next) => {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     return res.status(503).json({ 
+      success: false,
       message: "Google login is currently unavailable. Please use email login." 
     });
   }
@@ -208,7 +302,6 @@ const handleGoogleCallback = (req, res, next) => {
       return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=Authentication failed. Please register first.`);
     }
     
-    // Initialize role fields for Google OAuth users if not set
     if (!user.hasSelectedRole) {
       console.log('🆕 Initializing role fields for Google OAuth user');
       user.role = null;
@@ -248,21 +341,34 @@ const handleGoogleSuccess = (req, res) => {
   }
 };
 
-// Apply to both callback routes
 router.get('/google/callback', handleGoogleCallback, handleGoogleSuccess);
 router.get('/api/auth/google/callback', handleGoogleCallback, handleGoogleSuccess);
 
 // ========================
-// ✅ IMPROVED REGISTRATION WITH BETTER EMAIL SUPPORT
+// ✅ IMPROVED REGISTRATION WITH RECAPTCHA & BETTER EMAIL SUPPORT
 // ========================
 
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, username } = req.body;
+    const { name, email, password, username, recaptchaToken } = req.body;
+
+    console.log('🔄 Registration attempt for:', email);
+
+    // Verify reCAPTCHA first
+    try {
+      await verifyRecaptcha(recaptchaToken);
+    } catch (recaptchaError) {
+      console.error('❌ reCAPTCHA verification failed:', recaptchaError.message);
+      return res.status(400).json({ 
+        success: false,
+        message: recaptchaError.message 
+      });
+    }
 
     // Enhanced email validation
     if (!email || !email.endsWith('@gmail.com')) {
       return res.status(400).json({ 
+        success: false,
         message: "Only Gmail accounts are allowed for registration" 
       });
     }
@@ -271,6 +377,7 @@ router.post("/register", async (req, res) => {
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(400).json({ 
+        success: false,
         message: "Email already exists. Please use a different Gmail address or login." 
       });
     }
@@ -279,6 +386,7 @@ router.post("/register", async (req, res) => {
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(password)) {
       return res.status(400).json({
+        success: false,
         message: "Password must contain: at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character"
       });
     }
@@ -297,12 +405,12 @@ router.post("/register", async (req, res) => {
       isVerified: false,
       verificationToken: otp,
       verificationExpires: otpExpires,
-      role: null, // Explicitly set to null
-      hasSelectedRole: false // Explicitly set to false
+      role: null,
+      hasSelectedRole: false
     });
 
     await user.save();
-    console.log('✅ New user registered:', user.email);
+    console.log('✅ New user registered with reCAPTCHA:', user.email);
 
     // Enhanced email template
     const mailOptions = {
@@ -346,7 +454,6 @@ router.post("/register", async (req, res) => {
       `
     };
 
-    // Enhanced email sending with error handling
     try {
       await transporter.sendMail(mailOptions);
       console.log(`✅ Verification email sent to: ${email}`);
@@ -359,7 +466,6 @@ router.post("/register", async (req, res) => {
     } catch (emailError) {
       console.error('❌ Email sending failed:', emailError);
       
-      // Delete the user if email fails
       await User.findByIdAndDelete(user._id);
       
       return res.status(500).json({ 
@@ -385,10 +491,15 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// OTP Verification
+// ========================
+// ✅ OTP VERIFICATION
+// ========================
+
 router.post("/verify-email", async (req, res) => {
   try {
     const { email, otp } = req.body;
+
+    console.log('🔄 OTP verification attempt for:', email);
 
     const user = await User.findOne({
       email,
@@ -432,6 +543,8 @@ router.post("/login", checkRegisteredEmail, async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('🔄 Login attempt for:', email);
+
     const user = await User.findOne({ email });
 
     if (!user.password) {
@@ -458,7 +571,6 @@ router.post("/login", checkRegisteredEmail, async (req, res) => {
     const teachingClasses = await Class.find({ ownerId: user._id });
     const isTeacher = teachingClasses.length > 0;
 
-    // Use explicit role if set, otherwise fallback to class-based role
     const userRole = user.role || (isTeacher ? "teacher" : "student");
 
     const token = jwt.sign(
@@ -508,7 +620,6 @@ router.get("/me", auth, async (req, res) => {
     const teachingClasses = await Class.find({ ownerId: req.user.id });
     const isTeacher = teachingClasses.length > 0;
     
-    // Use explicit role if set, otherwise fallback to class-based role
     const userRole = user.role || (isTeacher ? "teacher" : "student");
     
     res.json({
@@ -534,7 +645,7 @@ router.get("/me", auth, async (req, res) => {
 });
 
 // ========================
-// ✅ TEST EMAIL ENDPOINT (FOR DEBUGGING)
+// ✅ TEST ENDPOINTS (FOR DEBUGGING)
 // ========================
 
 router.post("/test-email", async (req, res) => {
@@ -572,13 +683,45 @@ router.post("/test-email", async (req, res) => {
   }
 });
 
-// Health check
+router.post("/test-recaptcha", async (req, res) => {
+  try {
+    const { recaptchaToken } = req.body;
+    
+    if (!recaptchaToken) {
+      return res.status(400).json({
+        success: false,
+        message: "reCAPTCHA token is required"
+      });
+    }
+
+    await verifyRecaptcha(recaptchaToken);
+    
+    res.json({
+      success: true,
+      message: "reCAPTCHA verification successful!"
+    });
+  } catch (error) {
+    console.error('❌ reCAPTCHA test failed:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ========================
+// ✅ HEALTH CHECK
+// ========================
+
 router.get("/health", (req, res) => {
   res.json({ 
+    success: true,
     status: "OK", 
     message: "Auth routes are working",
     googleEnabled: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-    emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS)
+    emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS),
+    recaptchaConfigured: !!(process.env.RECAPTCHA_SECRET_KEY),
+    timestamp: new Date().toISOString()
   });
 });
 

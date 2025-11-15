@@ -1,4 +1,4 @@
-/* src/pages/Register.module.css - UPDATED MODERN UI */
+/* src/pages/Register.module.css - UPDATED WITH PROPER reCAPTCHA STYLING */
 .wrapper {
   display: flex;
   height: 100vh;
@@ -168,6 +168,12 @@
   border-color: #4285f4;
 }
 
+.input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 /* Password Requirements */
 .passwordRequirements {
   margin-top: -10px;
@@ -204,6 +210,36 @@
   color: #e74c3c;
 }
 
+/* reCAPTCHA Container */
+.recaptchaContainer {
+  display: flex;
+  justify-content: center;
+  margin: 15px 0;
+  min-height: 78px;
+  position: relative;
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+}
+
+.recaptchaLoading {
+  color: #666;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 25px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px dashed #dee2e6;
+  width: 100%;
+}
+
+/* Ensure proper reCAPTCHA sizing */
+.g-recaptcha {
+  display: flex;
+  justify-content: center;
+}
+
 /* Error Messages */
 .errorContainer {
   margin: -10px 0 10px 0;
@@ -230,7 +266,7 @@
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s ease;
+  transition: all 0.3s ease;
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-top: 10px;
@@ -311,22 +347,29 @@
   transform: none;
 }
 
-/* Visit Site Button */
-.visitSiteButton {
-  background: transparent;
-  color: #666;
-  border: none;
-  padding: 10px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  text-decoration: underline;
-  transition: color 0.3s ease;
-  margin-top: 20px;
-  width: 100%;
+.verifyButton.loading {
+  position: relative;
+  color: transparent;
 }
 
-.visitSiteButton:hover {
-  color: #333;
+.verifyButton.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  margin: -8px 0 0 -8px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  border-right-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Responsive Design */
@@ -357,6 +400,11 @@
     width: 45px;
     height: 45px;
   }
+
+  .recaptchaContainer {
+    transform: scale(0.9);
+    transform-origin: 0 0;
+  }
 }
 
 @media (max-width: 480px) {
@@ -378,5 +426,11 @@
   
   .otpButtons {
     flex-direction: column;
+  }
+
+  .recaptchaContainer {
+    transform: scale(0.85);
+    transform-origin: 0 0;
+    padding: 10px;
   }
 }

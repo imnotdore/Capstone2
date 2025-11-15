@@ -1,7 +1,7 @@
-// src/pages/Register.jsx - UPDATED MODERN UI
-import { useState } from "react";
+// src/pages/Register.jsx - COMPLETELY FIXED WITH reCAPTCHA v2
+import { useState, useRef, useEffect } from "react";
 import api from "../lib/api";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import styles from "./Register.module.css";
 
 export default function Register() {
@@ -17,10 +17,113 @@ export default function Register() {
   const [showOTP, setShowOTP] = useState(false);
   const [otp, setOtp] = useState("");
   const [tempUser, setTempUser] = useState(null);
+  const [recaptchaLoaded, setRecaptchaLoaded] = useState(false);
+  const recaptchaRef = useRef(null);
   const navigate = useNavigate();
+
+  // Load reCAPTCHA script
+  useEffect(() => {
+    const loadReCaptcha = () => {
+      // Check if already loaded
+      if (window.grecaptcha) {
+        setRecaptchaLoaded(true);
+        return;
+      }
+
+      // Check if script already exists
+      if (document.querySelector('script[src*="recaptcha"]')) {
+        // Wait for script to load
+        const checkRecaptcha = setInterval(() => {
+          if (window.grecaptcha) {
+            setRecaptchaLoaded(true);
+            clearInterval(checkRecaptcha);
+          }
+        }, 100);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = `https://www.google.com/recaptcha/api.js?render=explicit`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        console.log('✅ reCAPTCHA script loaded successfully');
+        setRecaptchaLoaded(true);
+      };
+      script.onerror = () => {
+        console.error('❌ Failed to load reCAPTCHA script');
+        setError("Failed to load security verification. Please refresh the page.");
+      };
+      document.head.appendChild(script);
+    };
+
+    loadReCaptcha();
+  }, []);
+
+  // Initialize reCAPTCHA widget when script loads
+  useEffect(() => {
+    if (recaptchaLoaded && window.grecaptcha) {
+      console.log('🔄 Initializing reCAPTCHA widget...');
+      
+      // Small delay to ensure DOM is ready
+      const initTimeout = setTimeout(() => {
+        if (recaptchaRef.current && !recaptchaRef.current.hasChildNodes()) {
+          try {
+            const widgetId = window.grecaptcha.render(recaptchaRef.current, {
+              sitekey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
+              theme: 'light',
+              size: 'normal',
+              callback: (token) => {
+                console.log('✅ reCAPTCHA completed with token');
+              },
+              'expired-callback': () => {
+                console.log('⚠️ reCAPTCHA expired');
+                setError("Security verification expired. Please verify again.");
+              },
+              'error-callback': () => {
+                console.log('❌ reCAPTCHA error');
+                setError("Security verification failed. Please try again.");
+              }
+            });
+            
+            console.log('✅ reCAPTCHA widget created with ID:', widgetId);
+          } catch (error) {
+            console.error('❌ Error creating reCAPTCHA widget:', error);
+            setError("Failed to initialize security verification.");
+          }
+        }
+      }, 500);
+
+      return () => clearTimeout(initTimeout);
+    }
+  }, [recaptchaLoaded]);
+
+  // Get reCAPTCHA token
+  const getRecaptchaToken = () => {
+    if (!window.grecaptcha) {
+      throw new Error("Security verification not loaded. Please refresh the page.");
+    }
+
+    const recaptchaResponse = window.grecaptcha.getResponse();
+    
+    if (!recaptchaResponse) {
+      throw new Error("Please complete the security verification");
+    }
+
+    return recaptchaResponse;
+  };
+
+  // Reset reCAPTCHA
+  const resetRecaptcha = () => {
+    if (window.grecaptcha) {
+      window.grecaptcha.reset();
+    }
+  };
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+    // Clear error when user starts typing
+    if (error) setError("");
   };
 
   // ✅ Password validation
@@ -52,13 +155,7 @@ export default function Register() {
     }
   };
 
-  // ✅ CAPTCHA Verification
-  const verifyCaptcha = () => {
-    const userResponse = prompt("Please type 'I AM HUMAN' to prove you're not a robot:");
-    return userResponse?.toUpperCase() === "I AM HUMAN";
-  };
-
-  // ✅ Registration Handler
+  // ✅ Registration Handler with reCAPTCHA v2
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -69,6 +166,12 @@ export default function Register() {
       return;
     }
 
+    // Validate required fields
+    if (!form.name || !form.email || !form.password) {
+      setError("❌ Please fill in all required fields");
+      return;
+    }
+
     // Validate password
     const passwordValidation = validatePassword(form.password);
     if (!passwordValidation.isValid) {
@@ -76,28 +179,36 @@ export default function Register() {
       return;
     }
 
-    // CAPTCHA verification
-    if (!verifyCaptcha()) {
-      setError("❌ CAPTCHA verification failed");
-      return;
-    }
-
     setLoading(true);
 
     try {
+      // Get reCAPTCHA token (v2 style)
+      const recaptchaToken = getRecaptchaToken();
+      
+      console.log('🔄 Sending registration request with reCAPTCHA token...');
+      
       const res = await api.post("/auth/register", {
         name: form.name,
         email: form.email,
-        username: form.username,
-        password: form.password
+        username: form.username || form.name.toLowerCase().replace(/\s+/g, ''),
+        password: form.password,
+        recaptchaToken: recaptchaToken
       });
       
-      // Show OTP verification
-      setTempUser({ email: form.email });
-      setShowOTP(true);
+      if (res.data.success) {
+        // Show OTP verification
+        setTempUser({ email: form.email });
+        setShowOTP(true);
+        resetRecaptcha();
+        setError("");
+      } else {
+        throw new Error(res.data.message || "Registration failed");
+      }
       
     } catch (err) {
-      setError(err.response?.data?.message || "❌ Registration failed");
+      console.error('❌ Registration error:', err);
+      setError(err.response?.data?.message || err.message || "❌ Registration failed");
+      resetRecaptcha();
     } finally {
       setLoading(false);
     }
@@ -107,16 +218,21 @@ export default function Register() {
   const handleOTPVerify = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
 
     try {
-      await api.post("/auth/verify-email", {
+      const res = await api.post("/auth/verify-email", {
         email: tempUser.email,
         otp: otp
       });
-      
-      navigate("/login", { 
-        state: { message: "✅ Registration successful! Please login." } 
-      });
+
+      if (res.data.success) {
+        navigate("/login", { 
+          state: { message: "✅ Registration successful! Please login." } 
+        });
+      } else {
+        throw new Error(res.data.message || "Verification failed");
+      }
     } catch (err) {
       setError(err.response?.data?.message || "❌ Invalid OTP");
     } finally {
@@ -131,11 +247,6 @@ export default function Register() {
       {/* Left Panel - Welcome Message */}
       <div className={styles.leftPanel}>
         <div className={styles.welcomeContainer}>
-          <h2 className={styles.welcomeTitle}>Welcome Back!</h2>
-          <p className={styles.welcomeText}>
-            To keep connected with us please login<br />
-            with your personal info
-          </p>
           <button 
             className={styles.signInButton}
             onClick={() => navigate("/login")}
@@ -152,7 +263,11 @@ export default function Register() {
           
           {/* Google Button Only */}
           <div className={styles.socialButtons}>
-            <button type="button" onClick={handleGoogleLogin} className={`${styles.socialButton} ${styles.google}`}>
+            <button 
+              type="button" 
+              onClick={handleGoogleLogin} 
+              className={`${styles.socialButton} ${styles.google}`}
+            >
               <span className={styles.socialIcon}>G+</span>
             </button>
           </div>
@@ -168,11 +283,12 @@ export default function Register() {
                 <input
                   type="text"
                   name="name"
-                  placeholder="Name"
+                  placeholder="Name *"
                   value={form.name}
                   onChange={handleChange}
                   required
                   className={styles.input}
+                  disabled={loading}
                 />
               </div>
               
@@ -180,11 +296,12 @@ export default function Register() {
                 <input
                   type="email"
                   name="email"
-                  placeholder="Email"
+                  placeholder="Email *"
                   value={form.email}
                   onChange={handleChange}
                   required
                   className={styles.input}
+                  disabled={loading}
                 />
               </div>
               
@@ -192,11 +309,12 @@ export default function Register() {
                 <input
                   type="password"
                   name="password"
-                  placeholder="Password"
+                  placeholder="Password *"
                   value={form.password}
                   onChange={handleChange}
                   required
                   className={styles.input}
+                  disabled={loading}
                 />
               </div>
 
@@ -224,13 +342,32 @@ export default function Register() {
                 </div>
               )}
 
+              {/* Google reCAPTCHA v2 Widget */}
+              <div className={styles.recaptchaContainer}>
+                {!recaptchaLoaded ? (
+                  <div className={styles.recaptchaLoading}>
+                    Loading security verification...
+                  </div>
+                ) : (
+                  <div 
+                    ref={recaptchaRef}
+                    className="g-recaptcha"
+                    data-sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                  />
+                )}
+              </div>
+
               {error && (
                 <div className={styles.errorContainer}>
                   <p className={styles.error}>{error}</p>
                 </div>
               )}
 
-              <button type="submit" className={styles.submitButton} disabled={loading}>
+              <button 
+                type="submit" 
+                className={styles.submitButton} 
+                disabled={loading || !recaptchaLoaded}
+              >
                 {loading ? "CREATING ACCOUNT..." : "SIGN UP"}
               </button>
             </form>
@@ -243,20 +380,32 @@ export default function Register() {
                 <p>Please check your Gmail and enter the OTP below:</p>
               </div>
               
-              <input
-                type="text"
-                placeholder="Enter 6-digit OTP"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                className={styles.input}
-                maxLength="6"
-                required
-              />
+              <div className={styles.inputGroup}>
+                <input
+                  type="text"
+                  placeholder="Enter 6-digit OTP"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className={styles.input}
+                  maxLength="6"
+                  required
+                  disabled={loading}
+                />
+              </div>
               
+              {error && (
+                <div className={styles.errorContainer}>
+                  <p className={styles.error}>{error}</p>
+                </div>
+              )}
+
               <div className={styles.otpButtons}>
                 <button 
                   type="button" 
-                  onClick={() => setShowOTP(false)} 
+                  onClick={() => {
+                    setShowOTP(false);
+                    setError("");
+                  }} 
                   className={styles.backButton}
                   disabled={loading}
                 >
@@ -272,10 +421,6 @@ export default function Register() {
               </div>
             </form>
           )}
-
-          <button className={styles.visitSiteButton}>
-            Visit site
-          </button>
         </div>
       </div>
     </div>

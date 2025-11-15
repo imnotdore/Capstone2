@@ -1,4 +1,4 @@
-// models/Class.js - UPDATED WITH ARCHIVE
+// models/Class.js - UPDATED WITH CLASSWORK
 const mongoose = require("mongoose");
 
 const classSchema = new mongoose.Schema({
@@ -11,7 +11,8 @@ const classSchema = new mongoose.Schema({
     joinedAt: { type: Date, default: Date.now }
   }],
   exams: [{ type: mongoose.Schema.Types.ObjectId, ref: "Exam", unique: true }],
-  // ✅ ADD ARCHIVE FIELDS
+  classwork: [{ type: mongoose.Schema.Types.ObjectId, ref: "Assignment" }], // ✅ NEW
+  topics: [{ type: String }], // ✅ NEW
   isArchived: { type: Boolean, default: false },
   archivedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },

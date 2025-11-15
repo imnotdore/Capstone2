@@ -4,7 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const mongoose = require("mongoose");
 const Exam = require("../models/Exam");
-const Class = require("../models/class");
+const Class = require("../models/Class"); // ✅ Fixed case sensitivity
 const auth = require("../middleware/authMiddleware");
 const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
@@ -168,16 +168,46 @@ const upload = multer({
   }
 });
 
-// ===== UPDATED ROUTES =====
+// ===== UPDATED ROUTES WITH BETTER ERROR HANDLING =====
+
+// ✅ Health check for exams
+router.get("/health", (req, res) => {
+  res.json({
+    success: true,
+    message: "Exam routes are working",
+    routes: [
+      "GET /form/:examId",
+      "GET /deployed/:classId", 
+      "POST /upload/:classId",
+      "GET /:classId",
+      "DELETE /:examId",
+      "GET /:examId/questions",
+      "PATCH /deploy/:examId",
+      "PUT /:examId/questions"
+    ]
+  });
+});
 
 // ✅ Get exam form (Public route - no auth needed for taking exam)
 router.get("/form/:examId", async (req, res) => {
   try {
     console.log("🎯 FORM ROUTE HIT for exam:", req.params.examId);
+    
+    // Validate examId
+    if (!mongoose.Types.ObjectId.isValid(req.params.examId)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid exam ID format" 
+      });
+    }
+
     const exam = await Exam.findById(req.params.examId);
     if (!exam) {
       console.log("❌ Exam not found:", req.params.examId);
-      return res.status(404).json({ success: false, message: "Exam not found" });
+      return res.status(404).json({ 
+        success: false, 
+        message: "Exam not found" 
+      });
     }
 
     console.log("✅ Exam found:", exam.title, "Questions:", exam.questions.length);
@@ -187,7 +217,11 @@ router.get("/form/:examId", async (req, res) => {
 
   } catch (err) {
     console.error("❌ Generate form error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to generate exam form",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -204,7 +238,11 @@ router.get("/deployed/:classId", auth, checkClassAccess, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Fetch deployed exam error:", err);
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch deployed exam",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -215,10 +253,21 @@ router.post("/upload/:classId", auth, checkClassAccess, checkTeacherAccess, uplo
     const { title, scheduledAt } = req.body;
 
     if (!req.file) {
-      return res.status(400).json({ success: false, message: "No file uploaded" });
+      return res.status(400).json({ 
+        success: false, 
+        message: "No file uploaded" 
+      });
     }
 
-    // ✅ No need to check teacher permissions - middleware already did
+    if (!title) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ 
+        success: false, 
+        message: "Exam title is required" 
+      });
+    }
 
     let questions = [];
     const ext = path.extname(req.file.originalname).toLowerCase();
@@ -260,7 +309,7 @@ router.post("/upload/:classId", auth, checkClassAccess, checkTeacherAccess, uplo
       title,
       fileUrl: `/uploads/${req.file.filename}`,
       classId,
-      createdBy: req.user.id, // ✅ CHANGED: teacherId → createdBy
+      createdBy: req.user.id,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       questions,
       isDeployed: false,
@@ -287,7 +336,11 @@ router.post("/upload/:classId", auth, checkClassAccess, checkTeacherAccess, uplo
       fs.unlinkSync(req.file.path);
     }
     console.error("❌ Upload exam error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to upload exam",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -314,7 +367,11 @@ router.get("/:classId", auth, checkClassAccess, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Fetch exams error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch exams",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -322,12 +379,18 @@ router.get("/:classId", auth, checkClassAccess, async (req, res) => {
 router.delete("/:examId", auth, async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
-    if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
+    if (!exam) return res.status(404).json({ 
+      success: false, 
+      message: "Exam not found" 
+    });
     
     // ✅ Check if user is class teacher for this exam
     const classData = await Class.findById(exam.classId);
     if (!classData || classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: "Not authorized" });
+      return res.status(403).json({ 
+        success: false, 
+        message: "Not authorized to delete this exam" 
+      });
     }
 
     // Delete associated file
@@ -342,10 +405,17 @@ router.delete("/:examId", auth, async (req, res) => {
     await Class.findByIdAndUpdate(exam.classId, { $pull: { exams: exam._id } });
     await Exam.findByIdAndDelete(req.params.examId);
 
-    res.json({ success: true, message: "Exam deleted successfully" });
+    res.json({ 
+      success: true, 
+      message: "Exam deleted successfully" 
+    });
   } catch (err) {
     console.error("❌ Delete exam error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to delete exam",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -353,7 +423,10 @@ router.delete("/:examId", auth, async (req, res) => {
 router.get("/:examId/questions", auth, async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
-    if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
+    if (!exam) return res.status(404).json({ 
+      success: false, 
+      message: "Exam not found" 
+    });
 
     // ✅ Check if user has access to this exam's class
     const classData = await Class.findById(exam.classId);
@@ -363,7 +436,10 @@ router.get("/:examId/questions", auth, async (req, res) => {
     );
 
     if (!hasAccess) {
-      return res.status(403).json({ success: false, message: "Not authorized" });
+      return res.status(403).json({ 
+        success: false, 
+        message: "Not authorized to access these questions" 
+      });
     }
 
     res.json({ 
@@ -373,7 +449,11 @@ router.get("/:examId/questions", auth, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Fetch questions error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch questions",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -381,12 +461,18 @@ router.get("/:examId/questions", auth, async (req, res) => {
 router.patch("/deploy/:examId", auth, async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
-    if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
+    if (!exam) return res.status(404).json({ 
+      success: false, 
+      message: "Exam not found" 
+    });
 
     // ✅ Check if user is class teacher for this exam
     const classData = await Class.findById(exam.classId);
     if (!classData || classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: "Not authorized to deploy this exam" });
+      return res.status(403).json({ 
+        success: false, 
+        message: "Not authorized to deploy this exam" 
+      });
     }
 
     exam.isDeployed = true;
@@ -399,7 +485,11 @@ router.patch("/deploy/:examId", auth, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Deploy exam error:", err);
-    res.status(500).json({ success: false, message: "Failed to deploy exam" });
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to deploy exam",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -409,12 +499,18 @@ router.put("/:examId/questions", auth, async (req, res) => {
     const { questions } = req.body;
     const exam = await Exam.findById(req.params.examId);
     
-    if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
+    if (!exam) return res.status(404).json({ 
+      success: false, 
+      message: "Exam not found" 
+    });
 
     // ✅ Check if user is class teacher for this exam
     const classData = await Class.findById(exam.classId);
     if (!classData || classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: "Not authorized" });
+      return res.status(403).json({ 
+        success: false, 
+        message: "Not authorized to update questions" 
+      });
     }
 
     exam.questions = questions;
@@ -427,7 +523,11 @@ router.put("/:examId/questions", auth, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Update questions error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to update questions",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -556,4 +656,4 @@ function generateFormHTML(exam) {
 </html>`;
 }
 
-module.exports = router;  
+module.exports = router;

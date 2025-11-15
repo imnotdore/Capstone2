@@ -1,4 +1,4 @@
-// server.js - CLEAN VERSION
+// server.js - FIXED 404 HANDLER
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -18,6 +18,8 @@ require("./config/passport");
 const classRoutes = require("./routes/classes");
 const examRoutes = require("./routes/examRoutes");
 const authRoutes = require("./routes/auth");
+const classworkRoutes = require("./routes/classwork");
+const announcementRoutes = require("./routes/announcements");
 
 const app = express();
 const server = http.createServer(app);
@@ -57,17 +59,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// ===== CLEAN ROUTES - USE ONLY ONE APPROACH =====
+// ===== CLEAN ROUTES - UPDATED WITH ANNOUNCEMENTS =====
 app.use("/api/auth", authRoutes);
 app.use("/api/class", classRoutes);
 app.use("/api/exams", examRoutes);
+app.use("/api/classwork", classworkRoutes);
+app.use("/api/announcements", announcementRoutes);
 
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Server is running with flexible role system",
+    message: "Server is running with Announcements system",
     googleAuth: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    announcementsEnabled: true,
     timestamp: new Date().toISOString()
   });
 });
@@ -134,6 +139,24 @@ io.on("connection", (socket) => {
   });
 });
 
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+  console.error("❌ Server Error:", err);
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// ===== FIXED 404 HANDLER =====
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`
+  });
+});
+
 // ===== MONGODB & START SERVER =====
 mongoose
   .connect(process.env.MONGO_URL)
@@ -147,6 +170,8 @@ mongoose
       console.log(`✅ Auth Routes: /api/auth`);
       console.log(`✅ Class Routes: /api/class`);
       console.log(`✅ Exam Routes: /api/exams`);
+      console.log(`✅ Classwork Routes: /api/classwork`);
+      console.log(`✅ Announcement Routes: /api/announcements`);
     });
   })
   .catch((err) => console.error("❌ DB connection error:", err));

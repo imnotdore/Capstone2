@@ -135,19 +135,14 @@ export default function Login() {
       {/* Right Panel - Welcome Message */}
       <div className={styles.rightPanel}>
         <div className={styles.welcomeContainer}>
-          <h2 className={styles.welcomeTitle}>Hello, Friend!</h2>
-          <p className={styles.welcomeText}>
-            Enter your personal details and start journey with us
-          </p>
+         
           <button 
             className={styles.signUpButton}
             onClick={() => navigate("/register")}
           >
             SIGN UP
           </button>
-          <button className={styles.visitSiteButton}>
-            Visit site
-          </button>
+          
         </div>
       </div>
     </div>

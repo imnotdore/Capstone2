@@ -1,32 +1,41 @@
-// src/pages/RoleSelectionModal.jsx
+// src/pages/RoleSelectionModal.jsx - UPDATED VERSION
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import "./RoleSelectionModal.css";
 
-export default function RoleSelectionModal({ user, onClose }) {
-  const navigate = useNavigate();
+export default function RoleSelectionModal({ user, onRoleSelected }) {
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState("");
+  const [error, setError] = useState("");
 
   const handleRoleSelect = async (role) => {
     setLoading(true);
     setSelectedRole(role);
+    setError("");
     
     try {
-      // Update user role in backend
-      await api.put("/auth/update-role", { role });
+      console.log("🎯 Selecting role:", role, "for user:", user._id);
       
-      // Store role in localStorage
-      localStorage.setItem("userRole", role);
-      
-      // Redirect to dashboard
-      navigate("/dashboard");
+      // Use the new role selection endpoint
+      const response = await api.post("/auth/select-role", {
+        role: role,
+        userId: user._id
+      });
+
+      if (response.data.success) {
+        console.log("✅ Role selection successful:", response.data.message);
+        onRoleSelected(role);
+      } else {
+        throw new Error(response.data.message || "Failed to select role");
+      }
     } catch (error) {
-      console.error("Failed to update role:", error);
-      // Still redirect but with default role
-      localStorage.setItem("userRole", role);
-      navigate("/dashboard");
+      console.error("❌ Role selection error:", error);
+      setError(error.response?.data?.message || error.message || "Failed to select role");
+      
+      // Fallback: Still proceed to dashboard but show error
+      setTimeout(() => {
+        onRoleSelected(role);
+      }, 2000);
     } finally {
       setLoading(false);
     }
@@ -35,52 +44,59 @@ export default function RoleSelectionModal({ user, onClose }) {
   return (
     <div className="role-modal-overlay">
       <div className="role-modal">
+        {/* Header */}
         <div className="role-modal-header">
-          <h2>Welcome, {user.name}!</h2>
-          <p>Please select your role to continue</p>
+          <div className="welcome-icon"></div>
+          <h2>Welcome to CAPSTONE, {user.name}!</h2>
+          <p>Please choose your role</p>
         </div>
         
+        {/* Error Message */}
+        {error && (
+          <div className="role-error-message">
+            ⚠️ {error}
+            <br />
+            <small>Redirecting to dashboard...</small>
+          </div>
+        )}
+        
+        {/* Role Selection Cards */}
         <div className="role-selection">
           <button
-            className={`role-card ${selectedRole === "teacher" ? "selected" : ""}`}
+            className={`role-card teacher ${selectedRole === "teacher" ? "selected" : ""}`}
             onClick={() => handleRoleSelect("teacher")}
             disabled={loading}
           >
-            <div className="role-icon">👨‍🏫</div>
             <h3>TEACHER</h3>
-            <p>Create and manage classes, assignments, and exams</p>
-            <div className="role-features">
-              <span>• Create classes</span>
-              <span>• Manage students</span>
-              <span>• Grade assignments</span>
-            </div>
+            <p>Create classes, manage students, and conduct exams</p>
+           
             {loading && selectedRole === "teacher" && (
-              <div className="loading-spinner">⏳</div>
+              <div className="role-loading">
+                <div className="loading-spinner"></div>
+                <span>Setting up teacher account...</span>
+              </div>
             )}
           </button>
 
           <button
-            className={`role-card ${selectedRole === "student" ? "selected" : ""}`}
+            className={`role-card student ${selectedRole === "student" ? "selected" : ""}`}
             onClick={() => handleRoleSelect("student")}
             disabled={loading}
           >
-            <div className="role-icon">🎓</div>
             <h3>STUDENT</h3>
-            <p>Join classes, submit assignments, and take exams</p>
-            <div className="role-features">
-              <span>• Join classes</span>
-              <span>• Submit work</span>
-              <span>• Take exams</span>
-            </div>
+            <p>Join classes, take exams, and submit assignments</p>
+            
             {loading && selectedRole === "student" && (
-              <div className="loading-spinner">⏳</div>
+              <div className="role-loading">
+                <div className="loading-spinner"></div>
+                <span>Setting up student account...</span>
+              </div>
             )}
           </button>
         </div>
 
-        <div className="role-modal-note">
-          <p>You can change this later in your profile settings</p>
-        </div>
+        {/* Footer Note */}
+       
       </div>
     </div>
   );
