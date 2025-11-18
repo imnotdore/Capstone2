@@ -1,10 +1,11 @@
+// backend/routes/examRoutes.js - UPDATED WITH ANSWER KEY & POINTS FUNCTIONALITY
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const mongoose = require("mongoose");
 const Exam = require("../models/Exam");
-const Class = require("../models/Class"); // ✅ Fixed case sensitivity
+const Class = require("../models/Class");
 const auth = require("../middleware/authMiddleware");
 const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
@@ -13,9 +14,9 @@ const FormData = require("form-data");
 const { checkClassAccess, checkTeacherAccess } = require("../middleware/classAuth");
 
 const router = express.Router();
-console.log("🔧 Exam routes loaded - form route available at: /api/exams/form/:examId");
+console.log("🔧 Exam routes loaded - quiz creation endpoints added");
 
-// ===== FILE PARSING FUNCTIONS (SAME) =====
+// ===== FILE PARSING FUNCTIONS =====
 const parsePDF = async (filePath) => {
   try {
     try {
@@ -47,9 +48,14 @@ const parsePDF = async (filePath) => {
         if (questionText.length > 10) {
           questions.push({
             type: "essay",
+            title: questionText,
             question: questionText,
             options: [],
-            answer: ""
+            required: false,
+            points: 1,
+            correctAnswer: null,
+            correctAnswers: [],
+            answerKey: ""
           });
         }
       }
@@ -89,9 +95,14 @@ const parseDOCX = async (filePath) => {
         
         questions.push({
           type: "essay",
+          title: line,
           question: line,
           options: [],
-          answer: ""
+          required: false,
+          points: 1,
+          correctAnswer: null,
+          correctAnswers: [],
+          answerKey: ""
         });
       }
     });
@@ -139,7 +150,7 @@ const callPythonService = async (filePath, fileType) => {
   }
 };
 
-// ===== MULTER SETUP (SAME) =====
+// ===== MULTER SETUP =====
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -168,7 +179,622 @@ const upload = multer({
   }
 });
 
-// ===== UPDATED ROUTES WITH BETTER ERROR HANDLING =====
+// ===== FIXED QUIZ CREATION ENDPOINTS =====
+
+// ✅ CREATE QUIZ (UPDATED WITH ANSWER KEY & POINTS)
+router.post("/create/:classId", auth, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { title, description, questions, settings, theme, isPublished, totalPoints } = req.body;
+
+    console.log("🎯 CREATE QUIZ ROUTE HIT:", { 
+      classId, 
+      title, 
+      questions: questions?.length,
+      totalPoints: totalPoints || 0,
+      settings: !!settings,
+      theme: !!theme
+    });
+
+    // Validate required fields
+    if (!title || !classId) {
+      return res.status(400).json({
+        success: false,
+        message: "Title and classId are required"
+      });
+    }
+
+    // Check if user is teacher for this class
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({
+        success: false,
+        message: "Class not found"
+      });
+    }
+
+    if (classData.ownerId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Only teachers can create quizzes"
+      });
+    }
+
+    // Create new exam/quiz with enhanced fields including answer keys
+    const newExam = new Exam({
+      title,
+      description: description || "Form description",
+      classId,
+      createdBy: req.user.id,
+      questions: questions || [],
+      totalPoints: totalPoints || 0, // ✅ ADDED: Total points
+      isQuiz: true,
+      isPublished: isPublished || false,
+      settings: settings || {
+        collectEmails: false,
+        limitOneResponse: false,
+        showProgressBar: true,
+        confirmationMessage: "Your response has been recorded.",
+        allowEditing: true,
+        shuffleQuestions: false
+      },
+      theme: theme || {
+        headerColor: "#4285f4",
+        themeColor: "#4285f4", 
+        fontStyle: "default"
+      },
+      isDeployed: false,
+      fileUrl: null
+    });
+
+    const savedExam = await newExam.save();
+
+    // Add to class's exams array
+    await Class.findByIdAndUpdate(
+      classId,
+      { $addToSet: { exams: savedExam._id } }
+    );
+
+    console.log("✅ Quiz created successfully:", savedExam._id, "Total Points:", savedExam.totalPoints);
+
+    res.status(201).json({
+      success: true,
+      message: "Quiz created successfully",
+      data: savedExam
+    });
+
+  } catch (err) {
+    console.error("❌ Create quiz error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create quiz",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ UPDATE QUIZ QUESTIONS (UPDATED WITH ANSWER KEY & POINTS)
+router.put("/:examId/quiz-questions", auth, async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const { title, description, questions, settings, theme, isPublished, totalPoints } = req.body;
+
+    console.log("🎯 UPDATE QUIZ QUESTIONS ROUTE HIT:", examId, "Total Points:", totalPoints);
+
+    // Validate examId
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid exam ID format"
+      });
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+
+    // Check if user is authorized to update this quiz
+    const classData = await Class.findById(exam.classId);
+    if (!classData || classData.ownerId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this quiz"
+      });
+    }
+
+    // Update quiz with all fields including answer keys and points
+    const updateData = {
+      updatedAt: new Date()
+    };
+    
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (questions !== undefined) updateData.questions = questions;
+    if (settings !== undefined) updateData.settings = settings;
+    if (theme !== undefined) updateData.theme = theme;
+    if (totalPoints !== undefined) updateData.totalPoints = totalPoints; // ✅ ADDED: Total points
+    if (isPublished !== undefined) {
+      updateData.isPublished = isPublished;
+      if (isPublished && !exam.publishedAt) {
+        updateData.publishedAt = new Date();
+      }
+    }
+
+    const updatedExam = await Exam.findByIdAndUpdate(
+      examId,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    console.log("✅ Quiz updated successfully:", examId, "New Total Points:", updatedExam.totalPoints);
+
+    res.json({
+      success: true,
+      message: "Quiz updated successfully",
+      data: updatedExam
+    });
+
+  } catch (err) {
+    console.error("❌ Update quiz error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update quiz",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ DEPLOY/ PUBLISH EXAM (FIXED ENDPOINT)
+router.patch("/deploy/:examId", auth, async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    console.log("🎯 DEPLOY EXAM ROUTE HIT:", examId);
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+
+    // Check if user is authorized
+    const classData = await Class.findById(exam.classId);
+    if (!classData || classData.ownerId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to deploy this exam"
+      });
+    }
+
+    const updatedExam = await Exam.findByIdAndUpdate(
+      examId,
+      { 
+        isPublished: true,
+        isDeployed: true,
+        publishedAt: new Date(),
+        updatedAt: new Date()
+      },
+      { new: true }
+    );
+
+    console.log("✅ Exam deployed successfully:", examId, "Total Points:", updatedExam.totalPoints);
+
+    res.json({
+      success: true,
+      message: "Exam published successfully",
+      data: updatedExam
+    });
+
+  } catch (err) {
+    console.error("❌ Deploy exam error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to deploy exam",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ GET QUIZ FOR EDITING (FIXED ENDPOINT)
+router.get("/:examId/edit", auth, async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    console.log("🎯 GET QUIZ FOR EDIT ROUTE HIT:", examId);
+
+    // Validate examId
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid exam ID format"
+      });
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+
+    // Check if user has access to this quiz's class
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this quiz"
+      });
+    }
+
+    console.log("✅ Quiz loaded for editing:", examId, "Total Points:", exam.totalPoints);
+
+    res.json({
+      success: true,
+      data: exam
+    });
+
+  } catch (err) {
+    console.error("❌ Get quiz for edit error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load quiz",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ GET QUIZ FOR STUDENT TO TAKE (FIXED ENDPOINT)
+router.get("/take/:examId", auth, async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    console.log("🎯 GET QUIZ FOR STUDENT ROUTE HIT:", examId);
+
+    // Validate examId
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid exam ID format"
+      });
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+
+    // Check if quiz is deployed and published - FIXED LOGIC
+    if (!exam.isPublished && !exam.isDeployed) {
+      return res.status(403).json({
+        success: false,
+        message: "This quiz is not available for taking"
+      });
+    }
+
+    // Check if user has access to this quiz's class
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to take this quiz"
+      });
+    }
+
+    console.log("✅ Quiz loaded for student:", examId, "Total Points:", exam.totalPoints);
+
+    res.json({
+      success: true,
+      data: exam
+    });
+
+  } catch (err) {
+    console.error("❌ Get quiz for student error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load quiz",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ SUBMIT QUIZ ANSWERS (ENHANCED WITH AUTO-GRADING)
+router.post("/:examId/submit", auth, async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const { answers } = req.body;
+
+    console.log("🎯 SUBMIT QUIZ ANSWERS ROUTE HIT:", examId);
+
+    // Validate examId
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid exam ID format"
+      });
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+
+    // Check if quiz is available for taking
+    if (!exam.isPublished && !exam.isDeployed) {
+      return res.status(403).json({
+        success: false,
+        message: "This quiz is not available for taking"
+      });
+    }
+
+    // Check if user has access to this quiz's class
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to take this quiz"
+      });
+    }
+
+    // ✅ ADDED: Auto-grading functionality
+    let score = 0;
+    let maxScore = exam.totalPoints || 0;
+    const gradingResults = [];
+
+    if (exam.questions && exam.questions.length > 0) {
+      exam.questions.forEach((question, index) => {
+        const userAnswer = answers[`q${index}`];
+        let isCorrect = false;
+        let pointsEarned = 0;
+
+        if (userAnswer) {
+          switch (question.type) {
+            case 'multiple-choice':
+              if (question.correctAnswer !== null && question.correctAnswer === parseInt(userAnswer)) {
+                isCorrect = true;
+                pointsEarned = question.points || 1;
+                score += pointsEarned;
+              }
+              break;
+            
+            case 'checkboxes':
+              if (question.correctAnswers && question.correctAnswers.length > 0) {
+                const userAnswers = Array.isArray(userAnswer) ? userAnswer : [userAnswer];
+                const allCorrect = question.correctAnswers.every(correctIdx => 
+                  userAnswers.includes(correctIdx.toString())
+                ) && userAnswers.length === question.correctAnswers.length;
+                
+                if (allCorrect) {
+                  isCorrect = true;
+                  pointsEarned = question.points || 1;
+                  score += pointsEarned;
+                }
+              }
+              break;
+            
+            case 'short-answer':
+            case 'paragraph':
+              // For text answers, we'll just record the answer for manual grading
+              // You could implement text similarity checking here later
+              pointsEarned = 0; // Manual grading required
+              break;
+            
+            default:
+              pointsEarned = 0;
+          }
+        }
+
+        gradingResults.push({
+          questionIndex: index,
+          questionTitle: question.title,
+          userAnswer: userAnswer,
+          correct: isCorrect,
+          pointsEarned: pointsEarned,
+          maxPoints: question.points || 1
+        });
+      });
+    }
+
+    console.log("✅ Quiz answers submitted by user:", req.user.id);
+    console.log("📊 Grading results - Score:", score, "/", maxScore);
+    console.log("📝 Answers:", answers);
+
+    res.json({
+      success: true,
+      message: "Quiz submitted successfully",
+      data: {
+        examId,
+        submittedAt: new Date(),
+        answersCount: Object.keys(answers).length,
+        studentId: req.user.id,
+        studentName: req.user.name,
+        score: score,
+        maxScore: maxScore,
+        percentage: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0,
+        gradingResults: gradingResults
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Submit quiz error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to submit quiz",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ GET QUIZ RESULTS (NEW ENDPOINT)
+router.get("/:examId/results", auth, async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    console.log("🎯 GET QUIZ RESULTS ROUTE HIT:", examId);
+
+    // Validate examId
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid exam ID format"
+      });
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+
+    // Check if user is authorized (teacher only)
+    const classData = await Class.findById(exam.classId);
+    if (!classData || classData.ownerId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Only teachers can view quiz results"
+      });
+    }
+
+    // In a real implementation, you would fetch submissions from a database
+    // For now, return the exam with answer keys for teacher review
+    res.json({
+      success: true,
+      message: "Quiz results loaded successfully",
+      data: {
+        exam: exam,
+        answerKeys: exam.questions.map((q, index) => ({
+          questionIndex: index,
+          questionTitle: q.title,
+          correctAnswer: q.correctAnswer,
+          correctAnswers: q.correctAnswers,
+          answerKey: q.answerKey,
+          points: q.points || 1,
+          type: q.type
+        })),
+        totalPoints: exam.totalPoints
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Get quiz results error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load quiz results",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ DELETE ALL QUIZZES/FORMS FOR A CLASS (TEACHER ONLY)
+router.delete("/class/:classId/delete-all", auth, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const teacherId = req.user.id;
+
+    console.log("🎯 DELETE ALL QUIZZES ROUTE HIT:", { classId, teacherId });
+
+    // Validate classId
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid class ID format"
+      });
+    }
+
+    // Verify the teacher owns this class
+    const classObj = await Class.findOne({ _id: classId, ownerId: teacherId });
+    if (!classObj) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to delete forms from this class"
+      });
+    }
+
+    // Find all exams/quizzes for this class created by this teacher
+    const examsToDelete = await Exam.find({ 
+      classId: classId,
+      createdBy: teacherId
+    });
+
+    if (examsToDelete.length === 0) {
+      return res.json({
+        success: true,
+        message: "No quizzes/forms found to delete",
+        deletedCount: 0
+      });
+    }
+
+    // Delete associated files
+    examsToDelete.forEach(exam => {
+      if (exam.fileUrl) {
+        const filename = exam.fileUrl.split('/').pop();
+        const filePath = path.join(uploadDir, filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    });
+
+    // Delete all exams
+    const result = await Exam.deleteMany({ 
+      classId: classId,
+      createdBy: teacherId
+    });
+
+    // Remove exams from class's exams array
+    await Class.findByIdAndUpdate(
+      classId,
+      { $set: { exams: [] } }
+    );
+
+    console.log("✅ All quizzes deleted successfully:", result.deletedCount);
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} quizzes/forms`,
+      deletedCount: result.deletedCount
+    });
+
+  } catch (err) {
+    console.error("❌ Delete all quizzes error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete quizzes",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ===== EXISTING EXAM ROUTES =====
 
 // ✅ Health check for exams
 router.get("/health", (req, res) => {
@@ -176,14 +802,20 @@ router.get("/health", (req, res) => {
     success: true,
     message: "Exam routes are working",
     routes: [
+      "POST /create/:classId",
+      "PUT /:examId/quiz-questions", 
+      "GET /:examId/edit",
+      "GET /take/:examId",
+      "POST /:examId/submit",
+      "GET /:examId/results", // ✅ ADDED: Results endpoint
       "GET /form/:examId",
       "GET /deployed/:classId", 
       "POST /upload/:classId",
       "GET /:classId",
       "DELETE /:examId",
+      "DELETE /class/:classId/delete-all",
       "GET /:examId/questions",
-      "PATCH /deploy/:examId",
-      "PUT /:examId/questions"
+      "PATCH /deploy/:examId"
     ]
   });
 });
@@ -210,7 +842,7 @@ router.get("/form/:examId", async (req, res) => {
       });
     }
 
-    console.log("✅ Exam found:", exam.title, "Questions:", exam.questions.length);
+    console.log("✅ Exam found:", exam.title, "Questions:", exam.questions.length, "Total Points:", exam.totalPoints);
     
     const formHTML = generateFormHTML(exam);
     res.send(formHTML);
@@ -226,10 +858,36 @@ router.get("/form/:examId", async (req, res) => {
 });
 
 // ✅ Get deployed exam for a class (Any class member can access)
-router.get("/deployed/:classId", auth, checkClassAccess, async (req, res) => {
+router.get("/deployed/:classId", auth, async (req, res) => {
   try {
     const classId = new mongoose.Types.ObjectId(req.params.classId);
-    const exam = await Exam.findOne({ classId, isDeployed: true });
+    
+    // Check if user has access to this class
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({
+        success: false,
+        message: "Class not found"
+      });
+    }
+
+    const hasAccess = classData.ownerId.toString() === req.user.id ||
+                     classData.members.some(m => m.userId && m.userId.toString() === req.user.id);
+    
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this class"
+      });
+    }
+
+    const exam = await Exam.findOne({ 
+      classId, 
+      $or: [
+        { isDeployed: true },
+        { isPublished: true }
+      ]
+    });
     
     return res.status(200).json({
       success: true,
@@ -247,10 +905,22 @@ router.get("/deployed/:classId", auth, checkClassAccess, async (req, res) => {
 });
 
 // ✅ Upload exam (TEACHER ONLY)
-router.post("/upload/:classId", auth, checkClassAccess, checkTeacherAccess, upload.single("file"), async (req, res) => {
+router.post("/upload/:classId", auth, upload.single("file"), async (req, res) => {
   try {
     const { classId } = req.params;
     const { title, scheduledAt } = req.body;
+
+    // Check if user is teacher for this class
+    const classData = await Class.findById(classId);
+    if (!classData || classData.ownerId.toString() !== req.user.id) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(403).json({
+        success: false,
+        message: "Only teachers can upload exams"
+      });
+    }
 
     if (!req.file) {
       return res.status(400).json({ 
@@ -299,9 +969,14 @@ router.post("/upload/:classId", auth, checkClassAccess, checkTeacherAccess, uplo
     if (questions.length === 0) {
       questions.push({
         type: "essay",
+        title: "No questions were automatically detected. Please manually add questions or check your file format.",
         question: "No questions were automatically detected. Please manually add questions or check your file format.",
         options: [],
-        answer: ""
+        required: false,
+        points: 1,
+        correctAnswer: null,
+        correctAnswers: [],
+        answerKey: ""
       });
     }
 
@@ -313,6 +988,7 @@ router.post("/upload/:classId", auth, checkClassAccess, checkTeacherAccess, uplo
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       questions,
       isDeployed: false,
+      isPublished: false,
     });
 
     await newExam.save();
@@ -345,18 +1021,39 @@ router.post("/upload/:classId", auth, checkClassAccess, checkTeacherAccess, uplo
 });
 
 // ✅ Get all exams for a class (Any class member can access)
-router.get("/:classId", auth, checkClassAccess, async (req, res) => {
+router.get("/:classId", auth, async (req, res) => {
   try {
     const classId = new mongoose.Types.ObjectId(req.params.classId);
+    
+    // Check if user has access to this class
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({
+        success: false,
+        message: "Class not found"
+      });
+    }
+
+    const hasAccess = classData.ownerId.toString() === req.user.id ||
+                     classData.members.some(m => m.userId && m.userId.toString() === req.user.id);
+    
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this class"
+      });
+    }
+
     const exams = await Exam.find({ classId }).sort({ createdAt: -1 });
 
     const updatedExams = exams.map((exam) => {
-      const relativePath = exam.fileUrl.startsWith("/uploads")
+      const relativePath = exam.fileUrl && exam.fileUrl.startsWith("/uploads")
         ? exam.fileUrl
-        : `/uploads/${exam.fileUrl}`;
+        : exam.fileUrl ? `/uploads/${exam.fileUrl}` : null;
+      
       return {
         ...exam._doc,
-        fileUrl: `${req.protocol}://${req.get("host")}${relativePath}`,
+        fileUrl: relativePath ? `${req.protocol}://${req.get("host")}${relativePath}` : null,
       };
     });
 
@@ -432,7 +1129,7 @@ router.get("/:examId/questions", auth, async (req, res) => {
     const classData = await Class.findById(exam.classId);
     const hasAccess = classData && (
       classData.ownerId.toString() === req.user.id ||
-      classData.members.some(m => m.userId.toString() === req.user.id)
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
     );
 
     if (!hasAccess) {
@@ -457,81 +1154,7 @@ router.get("/:examId/questions", auth, async (req, res) => {
   }
 });
 
-// ✅ Deploy exam (TEACHER ONLY)
-router.patch("/deploy/:examId", auth, async (req, res) => {
-  try {
-    const exam = await Exam.findById(req.params.examId);
-    if (!exam) return res.status(404).json({ 
-      success: false, 
-      message: "Exam not found" 
-    });
-
-    // ✅ Check if user is class teacher for this exam
-    const classData = await Class.findById(exam.classId);
-    if (!classData || classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({ 
-        success: false, 
-        message: "Not authorized to deploy this exam" 
-      });
-    }
-
-    exam.isDeployed = true;
-    await exam.save();
-
-    res.json({ 
-      success: true, 
-      message: "Exam deployed successfully", 
-      data: exam 
-    });
-  } catch (err) {
-    console.error("❌ Deploy exam error:", err);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to deploy exam",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ✅ Update questions (TEACHER ONLY)
-router.put("/:examId/questions", auth, async (req, res) => {
-  try {
-    const { questions } = req.body;
-    const exam = await Exam.findById(req.params.examId);
-    
-    if (!exam) return res.status(404).json({ 
-      success: false, 
-      message: "Exam not found" 
-    });
-
-    // ✅ Check if user is class teacher for this exam
-    const classData = await Class.findById(exam.classId);
-    if (!classData || classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({ 
-        success: false, 
-        message: "Not authorized to update questions" 
-      });
-    }
-
-    exam.questions = questions;
-    await exam.save();
-
-    res.json({ 
-      success: true, 
-      message: "Questions updated successfully", 
-      data: exam.questions 
-    });
-  } catch (err) {
-    console.error("❌ Update questions error:", err);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to update questions",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ===== HELPER FUNCTIONS (SAME) =====
+// ===== HELPER FUNCTIONS =====
 function generateFormHTML(exam) {
   return `
 <!DOCTYPE html>
@@ -557,20 +1180,22 @@ function generateFormHTML(exam) {
         .submit-btn:hover { background: #3367d6; }
         .char-count { font-size: 12px; color: #5f6368; text-align: right; margin-top: 4px; }
         .timer { background: #f8f9fa; border: 1px solid #dadce0; border-radius: 4px; padding: 10px 16px; font-size: 14px; color: #5f6368; display: inline-block; margin-bottom: 20px; }
+        .points-info { background: #e8f0fe; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 14px; color: #1a73e8; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1 class="exam-title">${exam.title}</h1>
-            <div class="exam-description">Please answer all questions below. Your responses will be saved automatically.</div>
+            <div class="exam-description">${exam.description || "Please answer all questions below. Your responses will be saved automatically."}</div>
+            ${exam.totalPoints > 0 ? `<div class="points-info"><strong>Total Points: ${exam.totalPoints}</strong></div>` : ''}
         </div>
         
         <form id="examForm">
             ${exam.questions.map((question, index) => `
                 <div class="question-card">
-                    <div class="question-number">Question ${index + 1}</div>
-                    <div class="question-text">${question.question}</div>
+                    <div class="question-number">Question ${index + 1} ${question.points > 1 ? `(${question.points} points)` : ''}</div>
+                    <div class="question-text">${question.title || question.question}</div>
                     <textarea class="answer-field" name="q${index}" placeholder="Type your answer here..." oninput="updateCharCount(this)"></textarea>
                     <div class="char-count"><span id="charCount${index}">0</span> characters</div>
                 </div>
@@ -591,14 +1216,20 @@ function generateFormHTML(exam) {
         
         document.getElementById('examForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const formData = new FormData(this);
-            const answers = {};
-            
-            for (let [key, value] of formData.entries()) {
-                answers[key] = value;
-            }
+            const submitBtn = this.querySelector('.submit-btn');
+            const originalText = submitBtn.textContent;
             
             try {
+                submitBtn.textContent = 'Submitting...';
+                submitBtn.disabled = true;
+                
+                const formData = new FormData(this);
+                const answers = {};
+                
+                for (let [key, value] of formData.entries()) {
+                    answers[key] = value;
+                }
+                
                 const response = await fetch('/api/exams/submit/${exam._id}', {
                     method: 'POST',
                     headers: {
@@ -611,15 +1242,18 @@ function generateFormHTML(exam) {
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('Answers submitted successfully!');
-                    if (window.opener) {
-                        window.close();
-                    }
+                    alert('✅ Answers submitted successfully! Your score: ' + result.data.score + '/' + result.data.maxScore);
+                    localStorage.removeItem('exam_${exam._id}_autosave');
+                    window.location.href = '/dashboard';
                 } else {
-                    alert('Error: ' + result.message);
+                    alert('❌ Error: ' + result.message);
                 }
             } catch (error) {
-                alert('Network error. Please try again.');
+                alert('❌ Network error. Please try again.');
+                console.error('Submission error:', error);
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
             }
         });
         

@@ -1,81 +1,109 @@
-// routes/classwork.js
+// routes/classwork.js - FULLY UPDATED VERSION WITH EXAM MERGE
 const express = require("express");
 const router = express.Router();
 const Class = require("../models/Class");
 const Assignment = require("../models/Assignment");
+const Exam = require("../models/Exam"); // ✅ added once at the top
 const authMiddleware = require("../middleware/authMiddleware");
 const { checkClassAccess, checkTeacherAccess } = require("../middleware/classAuth");
 
-// ✅ GET classwork for a class
+
+// ✅ GET classwork for a class (Merged with Exams/Quizzes)
 router.get("/:classId", authMiddleware, checkClassAccess, async (req, res) => {
   try {
+    // Get regular classwork
     const classData = await Class.findById(req.params.classId)
       .populate({
         path: "classwork",
         populate: { path: "createdBy", select: "name email" }
       });
 
+    // Get exams/quizzes
+    const exams = await Exam.find({
+      classId: req.params.classId
+    }).populate("createdBy", "name email");
+
+    // Combine classwork + exams/quizzes
+    const combinedClasswork = [
+      ...(classData.classwork || []),
+      ...exams.map(exam => ({
+        ...exam.toObject(),
+        type: "quiz",         // force type = quiz
+        isPublished: exam.isDeployed || false
+      }))
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
     res.json({
       success: true,
-      data: classData.classwork || []
+      data: combinedClasswork
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("❌ Get classwork error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch classwork",
+      data: []
+    });
   }
 });
 
-// ✅ CREATE new classwork item
-router.post("/:classId/create", authMiddleware, checkTeacherAccess, async (req, res) => {
-  try {
-    const { classId } = req.params;
-    const { 
-      title, 
-      description, 
-      type, 
-      dueDate, 
-      points, 
-      questions, 
-      attachments, 
-      topic 
-    } = req.body;
 
-    // Create the assignment
-    const assignment = await Assignment.create({
+// ✅ CREATE classwork - NEW ENDPOINT
+router.post("/create", authMiddleware, checkTeacherAccess, async (req, res) => {
+  try {
+    const { title, description, type, classId, points, dueDate } = req.body;
+
+    console.log("📝 Creating classwork:", { title, type, classId });
+
+    // Validate required fields
+    if (!title || !type || !classId) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, type, and classId are required"
+      });
+    }
+
+    // Create new classwork
+    const newClasswork = new Assignment({
       title,
       description,
       type,
       classId,
       createdBy: req.user.id,
-      dueDate,
-      points,
-      questions,
-      attachments,
-      topic,
+      points: points ? parseInt(points) : 0,
+      dueDate: dueDate || null,
       isPublished: true
     });
 
-    // Add to class classwork array and update topics if new
-    await Class.findByIdAndUpdate(classId, {
-      $push: { 
-        classwork: assignment._id
-      },
-      $addToSet: { topics: topic } // Only add if not exists
-    });
+    const savedClasswork = await newClasswork.save();
 
-    // Populate createdBy for response
-    await assignment.populate("createdBy", "name email");
+    // Add to class.classwork array
+    await Class.findByIdAndUpdate(
+      classId,
+      { $push: { classwork: savedClasswork._id } }
+    );
+
+    // Populate createdBy
+    await savedClasswork.populate("createdBy", "name email");
+
+    console.log("✅ Classwork created successfully:", savedClasswork._id);
 
     res.json({
       success: true,
-      message: `${type.charAt(0).toUpperCase() + type.slice(1)} created successfully`,
-      data: assignment
+      message: "Classwork created successfully",
+      data: savedClasswork
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("❌ Classwork creation error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 });
 
-// ✅ GET topics for a class
+
+// ✅ GET topics for class
 router.get("/:classId/topics", authMiddleware, checkClassAccess, async (req, res) => {
   try {
     const classData = await Class.findById(req.params.classId);
@@ -88,48 +116,5 @@ router.get("/:classId/topics", authMiddleware, checkClassAccess, async (req, res
   }
 });
 
-// ✅ DELETE classwork item
-router.delete("/:classId/item/:itemId", authMiddleware, checkTeacherAccess, async (req, res) => {
-  try {
-    const { classId, itemId } = req.params;
-
-    // Remove from classwork array
-    await Class.findByIdAndUpdate(classId, {
-      $pull: { classwork: itemId }
-    });
-
-    // Delete the assignment
-    await Assignment.findByIdAndDelete(itemId);
-
-    res.json({
-      success: true,
-      message: "Classwork item deleted successfully"
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ✅ UPDATE classwork item
-router.put("/:classId/item/:itemId", authMiddleware, checkTeacherAccess, async (req, res) => {
-  try {
-    const { itemId } = req.params;
-    const updateData = req.body;
-
-    const assignment = await Assignment.findByIdAndUpdate(
-      itemId, 
-      updateData, 
-      { new: true }
-    ).populate("createdBy", "name email");
-
-    res.json({
-      success: true,
-      message: "Classwork item updated successfully",
-      data: assignment
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
 
 module.exports = router;

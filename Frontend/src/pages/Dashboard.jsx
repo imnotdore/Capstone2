@@ -1,13 +1,22 @@
-// src/pages/Dashboard.jsx - COMPLETELY UPDATED WITH ERROR FIXES
-import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight } from "react-icons/fa";
-import api from "../lib/api";
+// src/components/Dashboard.jsx - COMPLETE FIXED VERSION
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEllipsisV, FaChevronDown } from "react-icons/fa";
+import api, { 
+  deleteAllQuizzes, 
+  deleteQuiz, 
+  getQuizForStudent, 
+  updateAnnouncement, 
+  deleteAnnouncement, 
+  addCommentToAnnouncement, 
+  deleteCommentFromAnnouncement 
+} from "../lib/api";
 import "./Dashboard.css";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [user, setUser] = useState({ name: "Loading...", email: "" });
+  const location = useLocation();
+  const [user, setUser] = useState({ name: "Loading...", email: "", _id: "" });
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [activeSidebar, setActiveSidebar] = useState("home");
@@ -23,26 +32,25 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
   // Announcement states
+  const [announcements, setAnnouncements] = useState([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [announcementContent, setAnnouncementContent] = useState("");
-  const [announcements, setAnnouncements] = useState([]);
-  const [showPostOptions, setShowPostOptions] = useState(false);
-  const [isScheduling, setIsScheduling] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState("");
-  const [scheduleTime, setScheduleTime] = useState("");
-  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+  const [postingAnnouncement, setPostingAnnouncement] = useState(false);
+
+  // Comment states
+  const [postingComments, setPostingComments] = useState({});
+  const [showCommentMenu, setShowCommentMenu] = useState(null);
+  const [showCommentDeleteMenu, setShowCommentDeleteMenu] = useState(null);
 
   // CLASSWORK STATES
   const [classwork, setClasswork] = useState([]);
-  const [showClassworkModal, setShowClassworkModal] = useState(false);
-  const [classworkType, setClassworkType] = useState("assignment");
-  const [classworkForm, setClassworkForm] = useState({
-    title: "",
-    description: "",
-    dueDate: "",
-    points: "",
-    topic: ""
-  });
+
+  // DELETE ALL QUIZZES STATE
+  const [deletingAll, setDeletingAll] = useState(false);
+
+  // INDIVIDUAL QUIZ DELETE STATE
+  const [deletingQuiz, setDeletingQuiz] = useState(null);
 
   // UNENROLL STATES
   const [showMenuForClass, setShowMenuForClass] = useState(null);
@@ -72,21 +80,264 @@ export default function Dashboard() {
   // REVIEW COUNT STATE
   const [itemsToReview, setItemsToReview] = useState(0);
 
+  // CREATE DROPDOWN STATE
+  const [showCreateDropdown, setShowCreateDropdown] = useState(false);
+
   // Refs for click outside detection
   const userDropdownRef = useRef(null);
   const createJoinDropdownRef = useRef(null);
   const sidebarRef = useRef(null);
-  const postOptionsRef = useRef(null);
   const menuRef = useRef(null);
+  const commentMenuRef = useRef(null);
+  const commentDeleteMenuRef = useRef(null);
+  const createDropdownRef = useRef(null);
 
   // Separate classes into teaching and enrolled
   const teachingClasses = classes.filter(classData => classData.userRole === "teacher" || classData.isTeacher);
   const enrolledClasses = classes.filter(classData => classData.userRole === "student" || !classData.isTeacher);
   const allClasses = [...classes];
 
-  // ===== FIXED DATA FETCHING FUNCTIONS =====
+  // ===== NEW: STUDENT QUIZ ACCESS FUNCTION =====
+  const handleStartQuiz = async (examId, examTitle) => {
+    try {
+      console.log("🎯 Student starting quiz:", examId, examTitle);
+      
+      // Check if quiz is available
+      const response = await getQuizForStudent(examId);
+      
+      if (response.success) {
+        // Navigate to the student quiz page
+        navigate(`/student-quiz/${examId}`);
+      } else {
+        alert('Quiz not available: ' + response.message);
+      }
+    } catch (error) {
+      console.error("Failed to start quiz:", error);
+      alert("Failed to start quiz: " + (error.response?.data?.message || error.message));
+    }
+  };
 
-  // FIXED: Fetch archived classes with better error handling
+  // ===== NEW: Check if quiz is available for students =====
+  const isQuizAvailableForStudent = (item) => {
+    // Multiple conditions for quiz availability
+    if (item.isPublished) return true;
+    if (item.isDeployed) return true;
+    if (item.isQuiz) return true; // If it's marked as a quiz, assume it's available
+    if (item.type === 'quiz') return true; // If type is quiz, assume it's available
+    
+    return false;
+  };
+
+  // ===== INDIVIDUAL QUIZ DELETE FUNCTION =====
+  const handleDeleteQuiz = async (quizId, quizTitle) => {
+    if (!window.confirm(`Are you sure you want to delete "${quizTitle}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    setDeletingQuiz(quizId);
+    try {
+      const response = await deleteQuiz(quizId);
+      
+      if (response.success) {
+        alert(`✅ "${quizTitle}" deleted successfully!`);
+        
+        // Refresh the classwork data
+        fetchClasswork();
+      }
+    } catch (error) {
+      console.error("Failed to delete quiz:", error);
+      alert("Failed to delete quiz: " + (error.response?.data?.message || error.message));
+    } finally {
+      setDeletingQuiz(null);
+    }
+  };
+
+  // ===== DELETE ALL QUIZZES FUNCTION =====
+  const handleDeleteAllQuizzes = async () => {
+    if (!selectedClass) return;
+    
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ALL quizzes and forms from "${selectedClass.name}"? This action cannot be undone.`
+    );
+    
+    if (!confirmDelete) return;
+    
+    setDeletingAll(true);
+    try {
+      const response = await deleteAllQuizzes(selectedClass._id);
+      
+      if (response.success) {
+        alert(`✅ ${response.message}`);
+        
+        // Refresh the classwork data
+        fetchClasswork();
+      }
+    } catch (error) {
+      console.error("Failed to delete all quizzes:", error);
+      alert("Failed to delete quizzes: " + (error.response?.data?.message || error.message));
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
+  // ===== NEW: HANDLE REDIRECT STATE FROM FORM CREATION =====
+  useEffect(() => {
+    // Handle redirect state from form creation
+    if (location.state) {
+      const { selectedClassId, activeTab, showClasswork, refreshClasswork } = location.state;
+      
+      console.log("🔄 Handling redirect state:", location.state);
+      
+      if (selectedClassId && classes.length > 0) {
+        const targetClass = classes.find(c => c._id === selectedClassId);
+        if (targetClass) {
+          console.log("🎯 Selecting class from redirect:", targetClass.name);
+          setSelectedClass(targetClass);
+          
+          if (activeTab) {
+            setActiveTab(activeTab);
+            console.log("📁 Setting active tab:", activeTab);
+          }
+          
+          // If we need to show classwork specifically
+          if (showClasswork) {
+            setActiveTab('classwork');
+            console.log("🎯 Forcing classwork tab");
+          }
+          
+          // Refresh classwork data if needed
+          if (refreshClasswork && activeTab === 'classwork') {
+            fetchClasswork();
+            console.log("🔄 Refreshing classwork data");
+          }
+        }
+      }
+      
+      // Clear the state to avoid re-triggering on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, classes]);
+
+  // ===== FIXED DELETE FUNCTION =====
+  const handleDeleteAnnouncement = async (announcementId) => {
+    if (!window.confirm("Are you sure you want to delete this announcement?")) return;
+    
+    try {
+      console.log("🗑️ Attempting to delete announcement:", announcementId);
+      
+      const response = await deleteAnnouncement(announcementId);
+      console.log("✅ Delete response:", response);
+      
+      if (response.success) {
+        // Remove announcement from list
+        setAnnouncements(prev => prev.filter(announcement => announcement._id !== announcementId));
+        setShowCommentMenu(null);
+        alert("Announcement deleted successfully!");
+      } else {
+        console.error("❌ Delete failed - no success in response");
+        alert("Failed to delete announcement: " + (response.message || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("❌ Failed to delete announcement:", error);
+      console.error("Error response:", error.response?.data);
+      alert("Failed to delete announcement: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  // ===== FIXED COMMENT DELETE FUNCTION =====
+  const handleDeleteComment = async (announcementId, commentId) => {
+    if (!window.confirm("Are you sure you want to delete this comment?")) return;
+    
+    try {
+      console.log("🗑️ Attempting to delete comment:", commentId, "from announcement:", announcementId);
+      
+      const response = await deleteCommentFromAnnouncement(announcementId, commentId);
+      console.log("✅ Delete comment response:", response);
+      
+      if (response.success) {
+        // Remove comment from announcement
+        setAnnouncements(prev => prev.map(announcement => 
+          announcement._id === announcementId 
+            ? {
+                ...announcement,
+                comments: announcement.comments.filter(comment => comment._id !== commentId)
+              }
+            : announcement
+        ));
+        setShowCommentDeleteMenu(null);
+        alert("Comment deleted successfully!");
+      } else {
+        console.error("❌ Comment delete failed - no success in response");
+        alert("Failed to delete comment: " + (response.message || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("❌ Failed to delete comment:", error);
+      console.error("Error response:", error.response?.data);
+      alert("Failed to delete comment: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  // Toggle comment menu
+  const toggleCommentMenu = (announcementId, event) => {
+    event.stopPropagation();
+    setShowCommentMenu(showCommentMenu === announcementId ? null : announcementId);
+  };
+
+  // Toggle comment delete menu
+  const toggleCommentDeleteMenu = (commentId, event) => {
+    event.stopPropagation();
+    setShowCommentDeleteMenu(showCommentDeleteMenu === commentId ? null : commentId);
+  };
+
+  // Check if user is teacher for the selected class
+  const isTeacher = selectedClass?.userRole === "teacher";
+
+  // Check if user can delete comment (teacher or comment author)
+  const canDeleteComment = (comment, announcement) => {
+    if (!user._id) return false;
+    
+    const isCommentAuthor = comment.author?._id === user._id;
+    const isAnnouncementCreator = announcement.createdBy?._id === user._id;
+    const userIsTeacher = isTeacher;
+    
+    return isCommentAuthor || isAnnouncementCreator || userIsTeacher;
+  };
+
+  // Click outside handler for all dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+        setShowUserDropdown(false);
+      }
+      
+      if (createJoinDropdownRef.current && !createJoinDropdownRef.current.contains(event.target)) {
+        setShowCreateJoinDropdown(false);
+      }
+
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenuForClass(null);
+      }
+
+      if (commentMenuRef.current && !commentMenuRef.current.contains(event.target)) {
+        setShowCommentMenu(null);
+      }
+
+      if (commentDeleteMenuRef.current && !commentDeleteMenuRef.current.contains(event.target)) {
+        setShowCommentDeleteMenu(null);
+      }
+
+      if (createDropdownRef.current && !createDropdownRef.current.contains(event.target)) {
+        setShowCreateDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // ===== EXISTING DATA FETCHING FUNCTIONS =====
   const fetchArchivedClasses = async () => {
     try {
       console.log("📦 Fetching archived classes...");
@@ -95,11 +346,10 @@ export default function Dashboard() {
       setArchivedClasses(res.data.data || []);
     } catch (error) {
       console.error("❌ Failed to fetch archived classes:", error);
-      setArchivedClasses([]); // Set empty array on error
+      setArchivedClasses([]);
     }
   };
 
-  // FIXED: Fetch review count with better error handling
   const fetchReviewCount = async () => {
     if (userRole === 'teacher') {
       try {
@@ -109,12 +359,11 @@ export default function Dashboard() {
         setItemsToReview(res.data.count || 0);
       } catch (error) {
         console.error('❌ Failed to fetch review count:', error);
-        setItemsToReview(0); // Set to 0 on error
+        setItemsToReview(0);
       }
     }
   };
 
-  // FIXED: Fetch announcements with better error handling
   const fetchAnnouncements = async () => {
     if (!selectedClass) return;
     
@@ -123,16 +372,25 @@ export default function Dashboard() {
       console.log("📢 Fetching announcements for class:", selectedClass._id);
       const res = await api.get(`/announcements/class/${selectedClass._id}`);
       console.log("✅ Announcements response:", res.data);
-      setAnnouncements(res.data.data || []);
+      
+      const announcementsWithComments = (res.data.data || []).map(announcement => ({
+        ...announcement,
+        comments: announcement.comments || []
+      }));
+      
+      setAnnouncements(announcementsWithComments);
     } catch (error) {
       console.error("❌ Failed to fetch announcements:", error);
-      setAnnouncements([]); // Use empty array instead of mock data
+      // Don't set empty array on error, keep existing announcements
+      if (announcements.length === 0) {
+        setAnnouncements([]);
+      }
     } finally {
       setLoadingAnnouncements(false);
     }
   };
 
-  // FIXED: Main data fetching with better error handling
+  // Main data fetching
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -148,7 +406,6 @@ export default function Dashboard() {
         setUser(userData);
         console.log("✅ User data:", userData);
 
-        // ENHANCED ROLE CHECK
         const storedRole = localStorage.getItem('userRole');
         const userRoleFromAPI = userData.role;
         
@@ -172,13 +429,12 @@ export default function Dashboard() {
             console.log("✅ Detected role:", finalRole);
           } catch (classError) {
             console.error("❌ Failed to fetch classes for role detection:", classError);
-            finalRole = "student"; // Default to student on error
+            finalRole = "student";
           }
         }
 
         setUserRole(finalRole);
 
-        // Fetch classes
         try {
           console.log("🏫 Fetching classes...");
           const classesRes = await api.get("/class/my-classes");
@@ -190,7 +446,6 @@ export default function Dashboard() {
           setClasses([]);
         }
 
-        // Fetch archived classes
         await fetchArchivedClasses();
         
       } catch (error) {
@@ -205,59 +460,28 @@ export default function Dashboard() {
     fetchData();
   }, [navigate]);
 
-  // FIXED: Fetch review count when user role changes
   useEffect(() => {
     if (userRole) {
       fetchReviewCount();
     }
   }, [userRole]);
 
-  // FIXED: Fetch announcements when class is selected
   useEffect(() => {
     if (selectedClass && activeTab === 'stream') {
       fetchAnnouncements();
     }
   }, [selectedClass, activeTab]);
 
-  // FIXED: Fetch classwork when class is selected and active tab is classwork
   useEffect(() => {
     if (selectedClass && activeTab === 'classwork') {
       fetchClasswork();
     }
   }, [selectedClass, activeTab]);
 
-  // Click outside handlers
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
-        setShowUserDropdown(false);
-      }
-      
-      if (createJoinDropdownRef.current && !createJoinDropdownRef.current.contains(event.target)) {
-        setShowCreateJoinDropdown(false);
-      }
-
-      if (postOptionsRef.current && !postOptionsRef.current.contains(event.target)) {
-        setShowPostOptions(false);
-      }
-
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowMenuForClass(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  // Generate calendar events when classes change
   useEffect(() => {
     generateCalendarEvents();
   }, [classes]);
 
-  // NEW: Fetch classwork
   const fetchClasswork = async () => {
     if (!selectedClass) return;
     
@@ -282,44 +506,37 @@ export default function Dashboard() {
     }
   };
 
-  // NEW: Create classwork item
-  const createClasswork = async (e) => {
+  const createAnnouncement = useCallback(async (e) => {
     e.preventDefault();
-    if (!classworkForm.title) {
-      alert("Title is required");
-      return;
-    }
-
+    if (!announcementContent.trim() || !selectedClass) return;
+    
+    setPostingAnnouncement(true);
     try {
-      const res = await api.post(`/classwork/${selectedClass._id}/create`, {
-        ...classworkForm,
-        type: classworkType,
-        points: classworkForm.points ? parseInt(classworkForm.points) : undefined,
-        dueDate: classworkForm.dueDate || undefined
+      const res = await api.post("/announcements", {
+        classId: selectedClass._id,
+        content: announcementContent,
+        status: 'published'
       });
 
-      setClasswork([...classwork, res.data]);
-      setClassworkForm({ title: "", description: "", dueDate: "", points: "", topic: "" });
-      setShowClassworkModal(false);
-      alert(res.data.message || "Classwork created successfully!");
-    } catch (err) {
-      console.error(err);
-      // Mock success for demo
-      const newItem = {
-        _id: Date.now().toString(),
-        ...classworkForm,
-        type: classworkType,
-        createdBy: { name: user.name },
-        createdAt: new Date().toISOString()
-      };
-      setClasswork([...classwork, newItem]);
-      setClassworkForm({ title: "", description: "", dueDate: "", points: "", topic: "" });
-      setShowClassworkModal(false);
-      alert("Classwork created successfully! (Demo Mode)");
+      const newAnnouncement = { ...res.data.data, comments: [] };
+      setAnnouncements(prev => [newAnnouncement, ...prev]);
+      
+      setAnnouncementContent("");
+      setShowAnnouncementModal(false);
+      
+      alert("Announcement posted successfully!");
+    } catch (error) {
+      console.error("Failed to create announcement:", error);
+      alert(error.response?.data?.message || "Failed to post announcement");
+    } finally {
+      setPostingAnnouncement(false);
     }
-  };
+  }, [announcementContent, selectedClass]);
 
-  // NEW: Get icon for classwork type
+  const handleAnnouncementInputChange = useCallback((e) => {
+    setAnnouncementContent(e.target.value);
+  }, []);
+
   const getClassworkIcon = (type) => {
     const icons = {
       assignment: "📝",
@@ -330,6 +547,44 @@ export default function Dashboard() {
       topic: "📂"
     };
     return icons[type] || "📄";
+  };
+
+  // UPDATED: CREATE DROPDOWN HANDLER WITH QUIZ NAVIGATION AND DELETE ALL
+  const handleCreateOption = (option) => {
+    console.log("Selected:", option);
+    setShowCreateDropdown(false);
+    
+    switch(option) {
+      case 'assignment':
+        alert('Create Assignment clicked');
+        // navigate to assignment creation or open modal
+        break;
+      case 'quiz':
+        // Navigate to quiz creation page
+        if (selectedClass) {
+          navigate(`/class/${selectedClass._id}/quiz/new`);
+        } else {
+          alert('Please select a class first');
+        }
+        break;
+      case 'question':
+        alert('Create Question clicked');
+        break;
+      case 'material':
+        alert('Create Material clicked');
+        break;
+      case 'reuse':
+        alert('Reuse Post clicked');
+        break;
+      case 'topic':
+        alert('Create Topic clicked');
+        break;
+      case 'delete-all':
+        handleDeleteAllQuizzes();
+        break;
+      default:
+        break;
+    }
   };
 
   // CALENDAR FUNCTIONS
@@ -558,16 +813,21 @@ export default function Dashboard() {
     }
   };
 
-  // Select class and fetch details - AUTO NAVIGATE TO STREAM
+  // UPDATED: Select class and fetch details
   const handleSelectClass = async (classData) => {
+    console.log("🎯 Selecting class:", classData.name);
     setSelectedClass(classData);
-    setActiveTab("stream");
+    setActiveTab("stream"); // Reset to stream when selecting class
+    
     try {
       const examsRes = await api.get(`/exams/${classData._id}`);
-      setExams(examsRes.data.data || examsRes.data);
+      setExams(examsRes.data || []);
 
       const membersRes = await api.get(`/class/${classData._id}/members`);
-      setStudents(membersRes.data.data || membersRes.data);
+      setStudents(membersRes.data || []);
+      
+      // Fetch classwork immediately when class is selected
+      fetchClasswork();
     } catch (error) {
       console.error("Failed to fetch class details:", error);
     }
@@ -580,98 +840,326 @@ export default function Dashboard() {
     window.location.href = "/login";
   };
 
-  // FIXED: Create announcement with proper endpoint
-  const createAnnouncement = async (status = 'published') => {
-    try {
-      const announcementData = {
-        classId: selectedClass._id,
-        content: announcementContent,
-        status: status
-      };
-
-      if (status === 'scheduled' && scheduleDate && scheduleTime) {
-        const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-        announcementData.scheduledFor = scheduledDateTime;
-      }
-
-      // Use the correct announcement endpoint
-      const res = await api.post('/announcements', announcementData);
-      
-      const newAnnouncement = res.data.data;
-      setAnnouncements(prev => [newAnnouncement, ...prev]);
-      setAnnouncementContent("");
-      setShowAnnouncementModal(false);
-      setIsScheduling(false);
-      setScheduleDate("");
-      setScheduleTime("");
-      
-      alert(status === 'published' ? 'Announcement posted successfully!' : 
-            status === 'scheduled' ? 'Announcement scheduled successfully!' : 
-            'Draft saved successfully!');
-    } catch (error) {
-      console.error('Failed to create announcement:', error);
-      
-      // Fallback to mock data if API fails
-      const mockAnnouncement = {
-        _id: Date.now().toString(),
-        classId: selectedClass._id,
-        content: announcementContent,
-        status: status,
-        createdBy: { name: user.name },
-        createdAt: new Date().toISOString(),
-        scheduledFor: status === 'scheduled' && scheduleDate && scheduleTime ? 
-          new Date(`${scheduleDate}T${scheduleTime}`).toISOString() : null
-      };
-      
-      setAnnouncements(prev => [mockAnnouncement, ...prev]);
-      setAnnouncementContent("");
-      setShowAnnouncementModal(false);
-      setIsScheduling(false);
-      setScheduleDate("");
-      setScheduleTime("");
-      
-      alert(`Announcement ${status} successfully! (Demo Mode)`);
-    }
-  };
-
-  // Post announcement handler
-  const handlePostAnnouncement = () => {
-    if (!announcementContent.trim()) {
-      alert('Please enter announcement content');
-      return;
-    }
-    createAnnouncement('published');
-  };
-
-  // Schedule announcement handler
-  const handleScheduleAnnouncement = () => {
-    if (!announcementContent.trim()) {
-      alert('Please enter announcement content');
-      return;
-    }
-    if (!scheduleDate || !scheduleTime) {
-      alert('Please select date and time for scheduling');
-      return;
-    }
-    createAnnouncement('scheduled');
-  };
-
-  // Save draft handler
-  const handleSaveDraft = () => {
-    if (!announcementContent.trim()) {
-      alert('Please enter announcement content');
-      return;
-    }
-    createAnnouncement('draft');
-  };
-
   // Helper function for random colors
   const getRandomColor = () => {
     const colors = ['blue', 'green', 'yellow', 'red', 'purple', 'teal'];
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
-  // CLASS CARD COMPONENT WITH MENU
+  // ===== COMPLETELY FIXED ANNOUNCEMENT CARD COMPONENT =====
+  const AnnouncementCard = ({ announcement }) => {
+    // FIXED: Use user state instead of localStorage
+    const currentUserId = user._id;
+    const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
+    const canEditDelete = isAnnouncementCreator || isTeacher;
+    
+    console.log("🔍 Delete permission check:");
+    console.log("   Announcement Creator ID:", announcement.createdBy?._id);
+    console.log("   Current User ID:", currentUserId);
+    console.log("   Is Teacher:", isTeacher);
+    console.log("   Can Delete:", canEditDelete);
+    
+    // Local state for everything
+    const [localCommentInput, setLocalCommentInput] = useState("");
+    const [localEditContent, setLocalEditContent] = useState(announcement.content);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isPostingComment, setIsPostingComment] = useState(false);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+    
+    const textareaRef = useRef(null);
+
+    // Auto-focus when editing starts
+    useEffect(() => {
+      if (isEditing && textareaRef.current) {
+        textareaRef.current.focus();
+        const length = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(length, length);
+      }
+    }, [isEditing]);
+
+    // Edit functions
+    const startEditAnnouncement = () => {
+      setIsEditing(true);
+      setLocalEditContent(announcement.content);
+      setShowCommentMenu(null);
+    };
+
+    const cancelEditAnnouncement = () => {
+      setIsEditing(false);
+      setLocalEditContent(announcement.content);
+    };
+
+    const saveEditAnnouncement = async () => {
+      if (!localEditContent.trim()) return;
+      
+      setIsSavingEdit(true);
+      try {
+        const response = await updateAnnouncement(announcement._id, {
+          content: localEditContent.trim()
+        });
+
+        console.log("✅ Edit response:", response);
+
+        // Update announcement in list
+        setAnnouncements(prev => prev.map(ann => 
+          ann._id === announcement._id 
+            ? { ...ann, content: localEditContent.trim() }
+            : ann
+        ));
+
+        setIsEditing(false);
+        alert("Announcement updated successfully!");
+      } catch (error) {
+        console.error("❌ Failed to edit announcement:", error);
+        console.error("Error details:", error.response?.data);
+        alert("Failed to edit announcement: " + (error.response?.data?.message || error.message));
+      } finally {
+        setIsSavingEdit(false);
+      }
+    };
+
+    // Comment submission
+    const handleCommentSubmit = async () => {
+      if (!localCommentInput.trim()) return;
+      
+      setIsPostingComment(true);
+      
+      try {
+        const response = await addCommentToAnnouncement(announcement._id, {
+          content: localCommentInput.trim()
+        });
+
+        console.log("✅ Comment response:", response);
+
+        // Update announcements with new comment
+        setAnnouncements(prev => prev.map(ann => 
+          ann._id === announcement._id 
+            ? { 
+                ...ann, 
+                comments: [...(ann.comments || []), response.data] 
+              }
+            : ann
+        ));
+
+        setLocalCommentInput("");
+      } catch (error) {
+        console.error("Failed to add comment:", error);
+        alert(error.response?.data?.message || "Failed to add comment");
+      } finally {
+        setIsPostingComment(false);
+      }
+    };
+
+    // Handle Enter key press for comments
+    const handleKeyPress = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleCommentSubmit();
+      }
+    };
+
+    // Handle edit textarea key press
+    const handleEditKeyPress = (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        saveEditAnnouncement();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEditAnnouncement();
+      }
+    };
+
+    // Comment Item Component with Delete Functionality
+    const CommentItem = ({ comment, announcement }) => {
+      const currentUserId = user._id;
+      const isCommentAuthor = comment.author?._id === currentUserId;
+      const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
+      const canDeleteComment = isCommentAuthor || isAnnouncementCreator || isTeacher;
+      
+      return (
+        <div className="comment-item">
+          <div className="comment-avatar">
+            <img 
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(comment.author?.name || 'User')}&background=34a853&color=fff`}
+              alt={comment.author?.name}
+            />
+          </div>
+          <div className="comment-content">
+            <div className="comment-header">
+              <div className="comment-author-info">
+                <span className="comment-author">{comment.author?.name || 'User'}</span>
+                <span className="comment-time">
+                  {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              
+              {/* Comment Delete Menu */}
+              {canDeleteComment && (
+                <div className="comment-actions" ref={commentDeleteMenuRef}>
+                  <button 
+                    className="comment-menu-btn"
+                    onClick={(e) => toggleCommentDeleteMenu(comment._id, e)}
+                  >
+                    <FaEllipsisV className="comment-menu-icon" />
+                  </button>
+                  
+                  {showCommentDeleteMenu === comment._id && (
+                    <div className="comment-menu-dropdown">
+                      <button 
+                        className="comment-menu-item delete"
+                        onClick={() => handleDeleteComment(announcement._id, comment._id)}
+                      >
+                        <FaTrash className="comment-menu-item-icon" />
+                        Delete Comment
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <p className="comment-text">{comment.content}</p>
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div key={announcement._id} className="announcement-card">
+        <div className="announcement-header">
+          <div className="announcement-avatar">
+            <img 
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(announcement.createdBy?.name || 'User')}&background=4285f4&color=fff`}
+              alt={announcement.createdBy?.name}
+            />
+          </div>
+          <div className="announcement-info">
+            <div className="announcement-author">
+              {announcement.createdBy?.name || 'Teacher'}
+              {isTeacher && <span className="teacher-badge">Teacher</span>}
+            </div>
+            <div className="announcement-time">
+              {new Date(announcement.createdAt).toLocaleString()}
+            </div>
+          </div>
+          
+          {/* FIXED: Announcement Menu (Teacher or announcement creator) */}
+          {canEditDelete && !isEditing && (
+            <div className="announcement-menu" ref={commentMenuRef}>
+              <button 
+                className="menu-btn"
+                onClick={(e) => toggleCommentMenu(announcement._id, e)}
+              >
+                <FaEllipsisV className="menu-icon" />
+              </button>
+              
+              {showCommentMenu === announcement._id && (
+                <div className="announcement-menu-dropdown">
+                  <button 
+                    className="menu-item"
+                    onClick={startEditAnnouncement}
+                  >
+                    <FaEdit className="menu-item-icon" />
+                    Edit
+                  </button>
+                  <button 
+                    className="menu-item delete"
+                    onClick={() => handleDeleteAnnouncement(announcement._id)}
+                  >
+                    <FaTrash className="menu-item-icon" />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Announcement Content */}
+        <div className="announcement-content">
+          {isEditing ? (
+            <div className="edit-announcement">
+              <textarea
+                ref={textareaRef}
+                className="edit-announcement-textarea"
+                value={localEditContent}
+                onChange={(e) => setLocalEditContent(e.target.value)}
+                onKeyDown={handleEditKeyPress}
+                rows="3"
+                disabled={isSavingEdit}
+              />
+              <div className="edit-actions">
+                <button 
+                  className="cancel-edit-btn"
+                  onClick={cancelEditAnnouncement}
+                  disabled={isSavingEdit}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="save-edit-btn"
+                  onClick={saveEditAnnouncement}
+                  disabled={!localEditContent.trim() || isSavingEdit}
+                >
+                  {isSavingEdit ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p>{announcement.content}</p>
+          )}
+        </div>
+
+        {/* Comments Section */}
+        {!isEditing && (
+          <div className="announcement-comments">
+            {/* Comments List */}
+            {announcement.comments && announcement.comments.length > 0 && (
+              <div className="comments-list">
+                {announcement.comments.map((comment) => (
+                  <CommentItem 
+                    key={comment._id} 
+                    comment={comment} 
+                    announcement={announcement}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Add Comment Form */}
+            <div className="add-comment">
+              <div className="comment-avatar">
+                <img 
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=ea4335&color=fff`}
+                  alt={user.name}
+                />
+              </div>
+              <div className="comment-input-container">
+                <input
+                  type="text"
+                  className="comment-input"
+                  placeholder="Add class comment..."
+                  value={localCommentInput}
+                  onChange={(e) => setLocalCommentInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={isPostingComment}
+                />
+                <button 
+                  className="comment-submit-btn"
+                  onClick={handleCommentSubmit}
+                  disabled={!localCommentInput.trim() || isPostingComment}
+                >
+                  {isPostingComment ? "Posting..." : "Post"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // CLASS CARD COMPONENT
   const ClassCard = ({ classData }) => {
     const isTeacher = classData.userRole === "teacher";
     
@@ -681,7 +1169,7 @@ export default function Dashboard() {
         className="class-card bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 border border-gray-200 cursor-pointer relative overflow-visible"
         onClick={() => handleSelectClass(classData)}
       >
-        {/* Menu Button - Show different options for teachers vs students */}
+        {/* Menu Button */}
         <div className="absolute top-3 right-3 z-50">
           <button 
             className="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-md border border-gray-200"
@@ -942,210 +1430,89 @@ export default function Dashboard() {
     );
   };
 
-  // CLASSWORK MODAL
-  const ClassworkModal = () => {
-    if (!showClassworkModal) return null;
+  // ANNOUNCEMENT MODAL COMPONENT
+  const AnnouncementModal = useCallback(() => {
+    if (!showAnnouncementModal || !selectedClass) return null;
 
     return (
-      <div className="modal">
-        <div className="modal-content large-modal">
-          <h3>Create</h3>
-          
-          {/* Type Selection */}
-          <div className="type-selection">
-            <label>Select type:</label>
-            <div className="type-grid">
-              {["assignment", "quiz", "question", "material", "announcement", "topic"].map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  className={`type-btn ${classworkType === type ? "active" : ""}`}
-                  onClick={() => setClassworkType(type)}
-                >
-                  {getClassworkIcon(type)} {type.charAt(0).toUpperCase() + type.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <form onSubmit={createClasswork}>
-            <input
-              type="text"
-              placeholder="Title"
-              value={classworkForm.title}
-              onChange={(e) => setClassworkForm({...classworkForm, title: e.target.value})}
-              required
-            />
-            
-            <textarea
-              placeholder="Description (optional)"
-              value={classworkForm.description}
-              onChange={(e) => setClassworkForm({...classworkForm, description: e.target.value})}
-              rows="3"
-            />
-
-            <div className="form-row">
-              <input
-                type="text"
-                placeholder="Topic (optional)"
-                value={classworkForm.topic}
-                onChange={(e) => setClassworkForm({...classworkForm, topic: e.target.value})}
-              />
-              
-              {(classworkType === "assignment" || classworkType === "quiz") && (
-                <input
-                  type="number"
-                  placeholder="Points"
-                  value={classworkForm.points}
-                  onChange={(e) => setClassworkForm({...classworkForm, points: e.target.value})}
-                />
-              )}
-            </div>
-
-            {(classworkType === "assignment" || classworkType === "quiz") && (
-              <input
-                type="datetime-local"
-                value={classworkForm.dueDate}
-                onChange={(e) => setClassworkForm({...classworkForm, dueDate: e.target.value})}
-              />
-            )}
-
-            <div className="modal-actions">
-              <button type="submit" className="primary-btn">
-                Create {classworkType}
-              </button>
-              <button type="button" onClick={() => setShowClassworkModal(false)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  // FIXED ANNOUNCEMENT MODAL
-  const AnnouncementModal = () => {
-    if (!showAnnouncementModal) return null;
-
-    return (
-      <div className="modal">
-        <div className="modal-content large-modal">
-          <div className="modal-header">
-            <h3>Create Announcement</h3>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+          <div className="flex justify-between items-center p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">New announcement</h2>
             <button 
-              className="close-btn"
+              className="text-gray-400 hover:text-gray-600 transition-colors"
               onClick={() => {
                 setShowAnnouncementModal(false);
                 setAnnouncementContent("");
-                setIsScheduling(false);
-                setScheduleDate("");
-                setScheduleTime("");
               }}
             >
-              ×
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
 
-          {/* Class Selection */}
-          <div className="announcement-for-section">
-            <p className="announcement-for-label">For</p>
-            <div className="class-selection">
-              <div className="selected-class">
-                <span className="class-name">{selectedClass?.name || 'No class selected'}</span>
+          <div className="p-6">
+            <div className="mb-6">
+              <p className="text-sm font-medium text-gray-700 mb-2">For</p>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <span className="font-medium text-gray-900">{selectedClass.name}</span>
+                  <span className="text-sm text-gray-500">({selectedClass.code})</span>
+                </div>
+                <span className="text-sm text-gray-600">All students</span>
               </div>
+            </div>
+
+            <div className="mb-6">
+              <textarea
+                className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                placeholder="Announce something to your class"
+                value={announcementContent}
+                onChange={handleAnnouncementInputChange}
+                rows="6"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex space-x-2 mb-6">
+              <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors" title="Add file">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                </svg>
+              </button>
+              <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors" title="Add link">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+                </svg>
+              </button>
             </div>
           </div>
 
-          <div className="announcement-editor">
-            <textarea
-              className="announcement-textarea"
-              placeholder="Announce something to your class"
-              value={announcementContent}
-              onChange={(e) => setAnnouncementContent(e.target.value)}
-              rows="6"
-            />
-          </div>
-
-          {/* Attachment Buttons */}
-          <div className="attachment-buttons">
-            <button className="attachment-btn" title="Add Google Drive file">
-              📎
-            </button>
-            <button className="attachment-btn" title="Add YouTube video">
-              🎬
-            </button>
-            <button className="attachment-btn" title="Upload file">
-              📤
-            </button>
-            <button className="attachment-btn" title="Add link">
-              🔗
-            </button>
-          </div>
-
-          {/* Scheduling Section */}
-          {isScheduling && (
-            <div className="scheduling-section">
-              <h4>Schedule Announcement</h4>
-              <div className="schedule-inputs">
-                <input
-                  type="date"
-                  value={scheduleDate}
-                  onChange={(e) => setScheduleDate(e.target.value)}
-                  className="schedule-input"
-                />
-                <input
-                  type="time"
-                  value={scheduleTime}
-                  onChange={(e) => setScheduleTime(e.target.value)}
-                  className="schedule-input"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="modal-actions announcement-actions">
+          <div className="flex justify-between items-center p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
             <button 
-              className="cancel-btn"
+              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               onClick={() => {
                 setShowAnnouncementModal(false);
                 setAnnouncementContent("");
-                setIsScheduling(false);
               }}
             >
               Cancel
             </button>
-            
-            <div className="post-actions">
+            <div className="flex space-x-2">
               <button 
-                className="secondary-btn"
-                onClick={() => setIsScheduling(!isScheduling)}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                onClick={createAnnouncement}
+                disabled={!announcementContent.trim() || postingAnnouncement}
               >
-                {isScheduling ? 'Cancel Schedule' : 'Schedule'}
-              </button>
-              
-              <button 
-                className="secondary-btn"
-                onClick={handleSaveDraft}
-                disabled={!announcementContent.trim()}
-              >
-                Save Draft
-              </button>
-              
-              <button 
-                className="primary-btn"
-                onClick={isScheduling ? handleScheduleAnnouncement : handlePostAnnouncement}
-                disabled={!announcementContent.trim() || (isScheduling && (!scheduleDate || !scheduleTime))}
-              >
-                {isScheduling ? 'Schedule' : 'Post'}
+                {postingAnnouncement ? "Posting..." : "Post"}
               </button>
             </div>
           </div>
         </div>
       </div>
     );
-  };
+  }, [showAnnouncementModal, selectedClass, announcementContent, postingAnnouncement, handleAnnouncementInputChange, createAnnouncement]);
 
   // GOOGLE CLASSROOM STYLE CALENDAR COMPONENT
   const GoogleClassroomCalendar = () => {
@@ -1153,15 +1520,12 @@ export default function Dashboard() {
     const firstDayOfMonth = getFirstDayOfMonth(currentDate);
     const today = new Date();
     
-    // Generate calendar days
     const calendarDays = [];
     
-    // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayOfMonth; i++) {
       calendarDays.push(null);
     }
     
-    // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
       const dayEvents = getEventsForDate(date);
@@ -1176,7 +1540,6 @@ export default function Dashboard() {
 
     return (
       <div className="google-classroom-calendar">
-        {/* Calendar Header */}
         <div className="calendar-header-section">
           <div className="calendar-nav">
             <button 
@@ -1196,7 +1559,6 @@ export default function Dashboard() {
             </button>
           </div>
           
-          {/* Class Filter */}
           <div className="class-filter-section">
             <select 
               value={selectedClassFilter}
@@ -1213,9 +1575,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Calendar Grid */}
         <div className="calendar-grid-container">
-          {/* Weekday Headers */}
           <div className="calendar-weekdays">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div key={day} className="weekday-header">
@@ -1224,7 +1584,6 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Calendar Days Grid */}
           <div className="calendar-days-grid">
             {calendarDays.map((dayData, index) => (
               <div
@@ -1259,7 +1618,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Upcoming Events Sidebar */}
         <div className="calendar-sidebar">
           <div className="sidebar-section">
             <h3 className="sidebar-title">Upcoming</h3>
@@ -1298,7 +1656,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Today's Events */}
           <div className="sidebar-section">
             <h3 className="sidebar-title">Today</h3>
             <div className="todays-events-list">
@@ -1327,7 +1684,7 @@ export default function Dashboard() {
     );
   };
 
-  // Rest of your existing render functions remain the same...
+  // RENDER FUNCTIONS
   const renderMainContent = () => {
     switch (activeSidebar) {
       case "home":
@@ -1343,34 +1700,30 @@ export default function Dashboard() {
     }
   };
 
-  // Update the stream tab to show announcements
+  // FIXED: Stream content with working announcements
   const renderStreamContent = () => {
     return (
       <div className="stream-content">
-        {/* Stream Actions */}
-        <div className="stream-actions">
-          <button 
-            className="new-announcement-btn"
-            onClick={() => setShowAnnouncementModal(true)}
-          >
-            <span className="btn-icon">
-              <i className="material-icons">edit</i>
-            </span>
-            New announcement
-          </button>
-          <button 
-            className="repost-btn" 
-            aria-label="Reuse post"
-            onClick={() => alert('Repost feature - Select posts from other classes you teach')}
-          >
-            <span className="btn-icon">
-              <i className="material-icons">repeat</i>
-            </span>
-            <span className="btn-text">Repost</span>
-          </button>
-        </div>
+        {isTeacher && (
+          <div className="stream-actions">
+            <button 
+              className="new-announcement-btn"
+              onClick={() => setShowAnnouncementModal(true)}
+            >
+              <span className="btn-icon">
+                <i className="material-icons">campaign</i>
+              </span>
+              New announcement
+            </button>
+            <button className="repost-btn">
+              <span className="btn-icon">
+                <i className="material-icons">repeat</i>
+              </span>
+              Repost
+            </button>
+          </div>
+        )}
 
-        {/* Loading State */}
         {loadingAnnouncements && (
           <div className="announcements-loading">
             <div className="loading-spinner"></div>
@@ -1378,50 +1731,16 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Announcements List */}
         {!loadingAnnouncements && announcements.length > 0 ? (
           <div className="announcements-list">
             {announcements.map((announcement) => (
-              <div key={announcement._id} className="announcement-card">
-                <div className="announcement-header">
-                  <div className="announcement-avatar">
-                    <img 
-                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(announcement.createdBy?.name || 'User')}&background=4285f4&color=fff`}
-                      alt={announcement.createdBy?.name}
-                    />
-                  </div>
-                  <div className="announcement-info">
-                    <div className="announcement-author">
-                      {announcement.createdBy?.name || 'Teacher'}
-                    </div>
-                    <div className="announcement-time">
-                      {new Date(announcement.createdAt).toLocaleString()}
-                      {announcement.status === 'scheduled' && ' (Scheduled)'}
-                      {announcement.status === 'draft' && ' (Draft)'}
-                    </div>
-                  </div>
-                </div>
-                <div className="announcement-content">
-                  {announcement.content}
-                </div>
-                {announcement.attachments && announcement.attachments.length > 0 && (
-                  <div className="announcement-attachments">
-                    {announcement.attachments.map((attachment, index) => (
-                      <div key={index} className="attachment-item">
-                        {attachment.type === 'file' && '📎 File'}
-                        {attachment.type === 'link' && '🔗 Link'}
-                        {attachment.type === 'video' && '🎬 Video'}
-                        {attachment.type === 'drive' && '📁 Drive'}
-                        {attachment.name && ` ${attachment.name}`}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AnnouncementCard 
+                key={announcement._id} 
+                announcement={announcement} 
+              />
             ))}
           </div>
         ) : !loadingAnnouncements && (
-          /* Empty State */
           <div className="stream-empty-state">
             <div className="empty-illustration">
               <svg viewBox="0 0 241 149" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1430,16 +1749,25 @@ export default function Dashboard() {
               </svg>
             </div>
             <div className="empty-content">
-              <p className="empty-title">This is where you can talk to your class</p>
-              <p className="empty-description">Use the stream to share announcements, post assignments, and respond to student questions</p>
+              <p className="empty-title">Class announcements</p>
+              <p className="empty-description">
+                {isTeacher 
+                  ? "Use announcements to post updates, reminders, and more to your class." 
+                  : "Announcements from your teacher will appear here."}
+              </p>
               <div className="empty-actions">
-                <button className="stream-settings-btn">
-                  <svg className="settings-icon" focusable="false" width="18" height="18" viewBox="0 0 24 24">
-                    <path d="M13.85 22.25h-3.7c-.74 0-1.36-.54-1.45-1.27l-.27-1.89c-.27-.14-.53-.29-.79-.46l-1.8.72c-.7.26-1.47-.03-1.81-.65L2.2 15.53c-.35-.66-.2-1.44.36-1.88l1.53-1.19c-.01-.15-.02-.3-.02-.46 0-.15.01-.31.02-.46l-1.52-1.19c-.59-.45-.74-1.26-.37-1.88l1.85-3.19c.34-.62 1.11-.9 1.79-.63l1.81.73c.26-.17.52-.32.78-.46l.27-1.91c.09-.7.71-1.25 1.44-1.25h3.7c.74 0 1.36.54 1.45 1.27l.27 1.89c.27.14.53.29.79.46l1.8-.72c.71-.26 1.48.03 1.82.65l1.84 3.18c.36.66.2 1.44-.36 1.88l-1.52 1.19c.01.15.02.3.02.46s-.01.31-.02.46l1.52 1.19c.56.45.72 1.23.37 1.86l-1.86 3.22c-.34.62-1.11.9-1.8.63l-1.8-.72c-.26.17-.52.32-.78.46l-.27 1.91c-.1.68-.72 1.22-1.46 1.22zm-3.23-2h2.76l.37-2.55.53-.22c.44-.18.88-.44 1.34-.78l.45-.34 2.38.96 1.38-2.4-2.03-1.58.07-.56c.03-.26.06-.51.06-.78s-.03-.53-.06-.78l-.07-.56 2.03-1.58-1.39-2.4-2.39.96-.45-.35c-.42-.32-.87-.58-1.33-.77l-.52-.22-.37-2.55h-2.76l-.37 2.55-.53.21c-.44.19-.88.44-1.34.79l-.45.33-2.38-.95-1.39 2.39 2.03 1.58-.07.56a7 7 0 0 0-.06.79c0 .26.02.53.06.78l.07.56-2.03 1.58 1.38 2.4 2.39-.96.45.35c.43.33.86.58 1.33.77l.53.22.38 2.55z"></path>
-                    <circle cx="12" cy="12" r="3.5"></circle>
-                  </svg>
-                  Stream settings
-                </button>
+                {isTeacher && (
+                  <button 
+                    className="stream-settings-btn"
+                    onClick={() => setShowAnnouncementModal(true)}
+                  >
+                    <svg className="settings-icon" focusable="false" width="18" height="18" viewBox="0 0 24 24">
+                      <path d="M13.85 22.25h-3.7c-.74 0-1.36-.54-1.45-1.27l-.27-1.89c-.27-.14-.53-.29-.79-.46l-1.8.72c-.7.26-1.47-.03-1.81-.65L2.2 15.53c-.35-.66-.2-1.44.36-1.88l1.53-1.19c-.01-.15-.02-.3-.02-.46 0-.15.01-.31.02-.46l-1.52-1.19c-.59-.45-.74-1.26-.37-1.88l1.85-3.19c-.34-.62-1.11-.9-1.79-.63l1.81.73c.26-.17.52-.32.78-.46l.27-1.91c.09-.7.71-1.25 1.44-1.25h3.7c.74 0 1.36.54 1.45 1.27l.27 1.89c.27.14.53.29.79.46l1.8-.72c.71-.26 1.48.03 1.82.65l1.84 3.18c.36.66.2 1.44-.36 1.88l-1.52 1.19c.01.15.02.3.02.46s-.01.31-.02.46l1.52 1.19c.56.45.72 1.23.37 1.86l-1.86 3.22c-.34.62-1.11.9-1.8.63l-1.8-.72c-.26.17-.52.32-.78.46l-.27 1.91c-.1.68-.72 1.22-1.46 1.22zm-3.23-2h2.76l.37-2.55.53-.22c.44-.18.88-.44 1.34-.78l.45-.34 2.38.96 1.38-2.4-2.03-1.58.07-.56c.03-.26.06-.51.06-.78s-.03-.53-.06-.78l-.07-.56 2.03-1.58-1.39-2.4-2.39.96-.45-.35c-.42-.32-.87-.58-1.33-.77l-.52-.22-.37-2.55h-2.76l-.37 2.55-.53.21c-.44.19-.88.44-1.34.79l-.45.33-2.38-.95-1.39 2.39 2.03 1.58-.07.56a7 7 0 0 0-.06.79c0 .26.02.53.06.78l.07.56-2.03 1.58 1.38 2.4 2.39-.96.45.35c.43.33.86.58 1.33.77l.53.22.38 2.55z"></path>
+                      <circle cx="12" cy="12" r="3.5"></circle>
+                    </svg>
+                    Create announcement
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1448,70 +1776,138 @@ export default function Dashboard() {
     );
   };
 
-  // NEW: RENDER CLASSWORK TAB
+  // Classwork Tab with START QUIZ BUTTON FOR STUDENTS
   const renderClassworkTab = () => {
     return (
       <div className="classwork-tab">
-        {/* Classwork Header with Create Button */}
         <div className="classwork-header-section">
           <div className="classwork-header">
-            <h2>Classwork</h2>
             {selectedClass?.userRole === "teacher" && (
-              <button 
-                className="create-classwork-btn"
-                onClick={() => setShowClassworkModal(true)}
-              >
-                + Create
-              </button>
+              <div className="create-dropdown-container" ref={createDropdownRef}>
+                <button 
+                  className="create-btn dropdown-trigger"
+                  onClick={() => setShowCreateDropdown(!showCreateDropdown)}
+                >
+                  <FaPlus className="btn-icon" />
+                  Create
+                  <span className={`dropdown-arrow ${showCreateDropdown ? 'open' : ''}`}>
+                    <FaChevronDown />
+                  </span>
+                </button>
+                
+                {showCreateDropdown && (
+                  <div className="create-dropdown-menu">
+                    <div className="dropdown-item" onClick={() => handleCreateOption('assignment')}>
+                      <span className="dropdown-icon">📝</span>
+                      <div className="dropdown-content">
+                        <div className="dropdown-title">Assignment</div>
+                        <div className="dropdown-description">Create a new assignment for students</div>
+                      </div>
+                    </div>
+                    
+                    <div className="dropdown-item" onClick={() => handleCreateOption('quiz')}>
+                      <span className="dropdown-icon">❓</span>
+                      <div className="dropdown-content">
+                        <div className="dropdown-title">Quiz/Exam</div>
+                        <div className="dropdown-description">Create a quiz or test</div>
+                      </div>
+                    </div>
+                    
+                    <div className="dropdown-item" onClick={() => handleCreateOption('question')}>
+                      <span className="dropdown-icon">💬</span>
+                      <div className="dropdown-content">
+                        <div className="dropdown-title">Question</div>
+                        <div className="dropdown-description">Post a question for students</div>
+                      </div>
+                    </div>
+                    
+                    <div className="dropdown-item" onClick={() => handleCreateOption('material')}>
+                      <span className="dropdown-icon">📎</span>
+                      <div className="dropdown-content">
+                        <div className="dropdown-title">Material</div>
+                        <div className="dropdown-description">Share learning materials</div>
+                      </div>
+                    </div>
+                    
+                    <div className="dropdown-item" onClick={() => handleCreateOption('reuse')}>
+                      <span className="dropdown-icon">🔄</span>
+                      <div className="dropdown-content">
+                        <div className="dropdown-title">Reuse post</div>
+                        <div className="dropdown-description">Reuse a post from another class</div>
+                      </div>
+                    </div>
+                    
+                    <div className="dropdown-item" onClick={() => handleCreateOption('topic')}>
+                      <span className="dropdown-icon">📂</span>
+                      <div className="dropdown-content">
+                        <div className="dropdown-title">Topic</div>
+                        <div className="dropdown-description">Create a new topic</div>
+                      </div>
+                    </div>
+
+                    {/* Delete All Option - Only show if there are quizzes */}
+                    {classwork.some(item => item.type === 'quiz') && (
+                      <>
+                        <div className="dropdown-divider"></div>
+                        <div 
+                          className="dropdown-item delete-all" 
+                          onClick={() => handleCreateOption('delete-all')}
+                        >
+                          <span className="dropdown-icon">🗑️</span>
+                          <div className="dropdown-content">
+                            <div className="dropdown-title">Delete All Quizzes</div>
+                            <div className="dropdown-description">Remove all quizzes and forms from this class</div>
+                          </div>
+                          {deletingAll && (
+                            <div className="loading-spinner-small"></div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Teacher/Student Status Indicator */}
           <div className="role-indicator">
             {selectedClass?.userRole === "teacher" ? (
               <div className="teacher-indicator">
-                ✅ You are viewing this class as a <strong>teacher</strong>. You can create assignments and manage classwork.
+                👨‍🏫 You are viewing this class as a <strong>teacher</strong>.
+                {classwork.some(item => item.type === 'quiz') && (
+                  <button 
+                    className="delete-all-quizzes-btn"
+                    onClick={handleDeleteAllQuizzes}
+                    disabled={deletingAll}
+                  >
+                    {deletingAll ? 'Deleting...' : 'Delete All Quizzes'}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="student-indicator">
-                👨‍🎓 You are viewing this class as a <strong>student</strong>. You can view assignments but cannot create them.
+                👨‍🎓 You are viewing this class as a <strong>student</strong>.
               </div>
             )}
           </div>
         </div>
 
-        {/* Classwork Content */}
         <div className="classwork-content">
-          {/* If no classwork exists */}
           {classwork.length === 0 ? (
             <div className="classwork-empty-state">
               <div className="empty-illustration">
-                <svg width="200" height="150" viewBox="0 0 200 150" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="40" y="50" width="120" height="80" rx="8" fill="#F8F9FA" stroke="#DADCE0" strokeWidth="2"/>
-                  <rect x="50" y="60" width="100" height="12" rx="6" fill="#E8F0FE"/>
-                  <rect x="50" y="80" width="80" height="8" rx="4" fill="#F1F3F4"/>
-                  <rect x="50" y="95" width="60" height="8" rx="4" fill="#F1F3F4"/>
-                  <circle cx="160" cy="110" r="15" fill="#1A73E8" fillOpacity="0.1" stroke="#1A73E8" strokeWidth="2"/>
-                  <path d="M155 110L158 113L165 106" stroke="#1A73E8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+                
               </div>
               <div className="empty-content">
-                <h3 className="empty-title">This is where you'll assign work</h3>
-                <p className="empty-description">
-                  You can add assignments and other work for the class, then organize it into topics.
+                <h3>No classwork yet</h3>
+                <p>
+                  {selectedClass?.userRole === "teacher" 
+                    ? "Create assignments, quizzes, or materials to get started."
+                    : "Your teacher hasn't posted any classwork yet."}
                 </p>
-                {selectedClass?.userRole === "teacher" && (
-                  <button 
-                    className="primary-btn"
-                    onClick={() => setShowClassworkModal(true)}
-                  >
-                    + Create your first assignment
-                  </button>
-                )}
               </div>
             </div>
           ) : (
-            /* Classwork Grid */
             <div className="classwork-grid">
               {classwork.map((item) => (
                 <div className="classwork-card" key={item._id}>
@@ -1519,11 +1915,28 @@ export default function Dashboard() {
                     <span className="classwork-icon">
                       {getClassworkIcon(item.type)}
                     </span>
-                    <div>
+                    <div className="classwork-title-section">
                       <h3>{item.title}</h3>
                       <p className="classwork-type">{item.type}</p>
                     </div>
+                    
+                    {/* TEACHER ACTIONS */}
+                    {selectedClass?.userRole === "teacher" && item.type === 'quiz' && (
+                      <button 
+                        className="delete-quiz-btn"
+                        onClick={() => handleDeleteQuiz(item._id, item.title)}
+                        disabled={deletingQuiz === item._id}
+                        title="Delete this quiz"
+                      >
+                        {deletingQuiz === item._id ? (
+                          <div className="loading-spinner-small"></div>
+                        ) : (
+                          '🗑️'
+                        )}
+                      </button>
+                    )}
                   </div>
+                  
                   {item.description && (
                     <p className="classwork-description">{item.description}</p>
                   )}
@@ -1537,7 +1950,29 @@ export default function Dashboard() {
                     {item.topic && (
                       <span>Topic: {item.topic}</span>
                     )}
+                    {item.questions && (
+                      <span>Questions: {item.questions.length || 0}</span>
+                    )}
                   </div>
+
+                  {/* START QUIZ BUTTON FOR STUDENTS */}
+                  {selectedClass?.userRole === "student" && item.type === 'quiz' && (
+                    <div className="classwork-actions">
+                      <button 
+                        className="start-quiz-btn"
+                        onClick={() => handleStartQuiz(item._id, item.title)}
+                        title="Start this quiz"
+                      >
+                        🚀 Start Quiz
+                      </button>
+                      {!isQuizAvailableForStudent(item) && (
+                        <div className="quiz-info">
+                          <small>This quiz is not available yet</small>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="classwork-footer">
                     <span>Created by {item.createdBy?.name || 'Teacher'}</span>
                     <span>{new Date(item.createdAt).toLocaleDateString()}</span>
@@ -1553,7 +1988,6 @@ export default function Dashboard() {
 
   const renderHomeContent = () => {
     if (selectedClass) {
-      // Class details view - shows when a class is selected
       return (
         <div className="class-details">
           <div className="class-header">
@@ -1572,7 +2006,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Google Classroom Style Tabs */}
           <div className="classroom-tabs">
             <button 
               className={`classroom-tab ${activeTab === "stream" ? "active" : ""}`}
@@ -1600,10 +2033,8 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {/* Stream Tab */}
           {activeTab === "stream" && (
             <div className="stream-tab">
-              {/* Class Header with Banner */}
               <div className="class-banner-section">
                 <div className="class-banner" style={{backgroundImage: `url('https://scontent.fmnl17-5.fna.fbcdn.net/v/t39.30808-6/494203091_3994132537522695_7595594291222788294_n.jpg?_nc_cat=102&ccb=1-7&_nc_sid=cc71e4&_nc_ohc=SqxEwdvqLKQQ7kNvwFwMVp9&_nc_oc=AdmRHi39VExKIqZg_iuh6zkQ2z-w_kQBIDfvzN_J9rd_lYPcfy1WpR5M2dE3rkJN93o&_nc_zt=23&_nc_ht=scontent.fmnl17-5.fna&_nc_gid=yLrhV52ESP0XRMBSluIoMg&oh=00_Afh7lnNbvVnDgW1jwWRIqyNQW_SUUFmXjpXxJ9yZ7eb-Ug&oe=6911E7F0')`}}>
                   <div className="banner-overlay"></div>
@@ -1627,10 +2058,8 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Sidebar Information */}
               <div className="stream-layout">
                 <aside className="stream-sidebar">
-                  {/* Class Code Section */}
                   <div className="sidebar-section">
                     <div className="sidebar-header">
                       <h3>Class code</h3>
@@ -1652,7 +2081,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Upcoming Section */}
                   <div className="sidebar-section">
                     <div className="sidebar-header">
                       <h3>Upcoming</h3>
@@ -1669,7 +2097,6 @@ export default function Dashboard() {
                   </div>
                 </aside>
 
-                {/* Main Stream Content */}
                 <main className="stream-main">
                   {renderStreamContent()}
                 </main>
@@ -1677,7 +2104,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Classwork Tab */}
           {activeTab === "classwork" && renderClassworkTab()}
 
           {activeTab === "people" && (
@@ -1685,26 +2111,22 @@ export default function Dashboard() {
               <div className="people-header">
                 <h3>People</h3>
               </div>
-              {/* People content... */}
             </div>
           )}
 
           {activeTab === "grades" && (
             <div className="grades-tab">
-              {/* Grades content... */}
             </div>
           )}
         </div>
       );
     }
 
-    // HOME VIEW - Shows all classes
     return (
       <div className="home-view">
         {allClasses.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-actions">
-              {/* Show different buttons based on user role */}
               {userRole === "teacher" ? (
                 <button 
                   className="primary-btn"
@@ -1735,7 +2157,6 @@ export default function Dashboard() {
     );
   };
 
-  // UPDATED CALENDAR CONTENT - Google Classroom Style
   const renderCalendarContent = () => (
     <div className="calendar-view">
       <div className="calendar-header">
@@ -1823,7 +2244,6 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-wrapper">
-      {/* HEADER */}
       <header className="dashboard-header">
         <div className="header-left">
           <button 
@@ -1847,7 +2267,6 @@ export default function Dashboard() {
             </button>
             {showCreateJoinDropdown && (
               <div className="create-join-dropdown">
-                {/* Show only Create Class for Teachers */}
                 {userRole === "teacher" && (
                   <button 
                     className="create-join-item"
@@ -1861,7 +2280,6 @@ export default function Dashboard() {
                   </button>
                 )}
                 
-                {/* Show only Join Class for Students */}
                 {userRole === "student" && (
                   <button 
                     className="create-join-item"
@@ -1931,9 +2349,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* MAIN LAYOUT */}
       <main className="dashboard-main">
-        {/* Sidebar */}
         <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`} ref={sidebarRef}>
           <nav className="sidebar-nav">
             <button 
@@ -1957,7 +2373,6 @@ export default function Dashboard() {
             
             <hr className="sidebar-separator" />
             
-            {/* TEACHER-ONLY TEACHING DROPDOWN SECTION */}
             {userRole === "teacher" && (
               <>
                 {teachingClasses.length > 0 ? (
@@ -1974,7 +2389,6 @@ export default function Dashboard() {
                     
                     {teachingDropdownOpen && (
                       <div className="teaching-dropdown">
-                        {/* To Review Button */}
                         <button 
                           className="review-button"
                           onClick={() => navigate('/review')}
@@ -1984,7 +2398,6 @@ export default function Dashboard() {
                           <span className="review-badge">{itemsToReview}</span>
                         </button>
                         
-                        {/* Teaching Classes List */}
                         <div className="teaching-classes-list">
                           {teachingClasses.map((classData) => (
                             <div
@@ -2020,7 +2433,6 @@ export default function Dashboard() {
               </>
             )}
             
-            {/* STUDENT-ONLY ENROLLED SECTION WITH TO DO BUTTON */}
             {userRole === "student" && enrolledClasses.length > 0 && (
               <>
                 <div 
@@ -2035,7 +2447,6 @@ export default function Dashboard() {
                 
                 {enrolledDropdownOpen && (
                   <div className="enrolled-dropdown">
-                    {/* To Do Button - ONLY FOR STUDENTS */}
                     <button 
                       className="todo-button"
                       onClick={() => navigate('/todo')}
@@ -2044,7 +2455,6 @@ export default function Dashboard() {
                       <span className="todo-text">To do</span>
                     </button>
                     
-                    {/* Enrolled Classes List */}
                     <div className="enrolled-classes-list">
                       {enrolledClasses.slice(0, 8).map((classData) => (
                         <div
@@ -2068,7 +2478,6 @@ export default function Dashboard() {
               </>
             )}
             
-            {/* EMPTY STATE FOR STUDENTS */}
             {userRole === "student" && enrolledClasses.length === 0 && (
               <div className="empty-sidebar-section">
                 <p className="empty-sidebar-text">You haven't enrolled in any classes yet</p>
@@ -2083,7 +2492,6 @@ export default function Dashboard() {
             
             <hr className="sidebar-separator" />
             
-            {/* To Do Button in Main Sidebar - ONLY SHOW FOR STUDENTS */}
             {userRole === "student" && (
               <button 
                 className="sidebar-item"
@@ -2111,14 +2519,12 @@ export default function Dashboard() {
           </nav>
         </aside>
 
-        {/* Main Content */}
         <div className={`main-content ${sidebarOpen ? '' : 'expanded'}`}>
           {renderMainContent()}
         </div>
       </main>
 
       {/* MODALS SECTION */}
-      {/* Create Class Modal */}
       {showCreateModal && (
         <div className="modal">
           <div className="modal-content">
@@ -2143,7 +2549,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Join Class Modal */}
       {showJoinModal && (
         <div className="modal">
           <div className="modal-content">
@@ -2168,19 +2573,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Classwork Modal */}
-      <ClassworkModal />
-
-      {/* Announcement Modal */}
-      <AnnouncementModal />
-
-      {/* Unenroll Modal */}
+      {AnnouncementModal()}
       <UnenrollModal />
-
-      {/* Archive Modal */}
       <ArchiveModal />
-
-      {/* Restore Modal */}
       <RestoreModal />
     </div>
   );

@@ -1,7 +1,8 @@
-// ClassDetails.jsx - SIMPLIFIED FIX
+// ClassDetails.jsx - FULLY FIXED WITH START QUIZ BUTTON
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import api from "../lib/api";
+import { FaPlus, FaEdit, FaEye, FaRocket, FaTrash } from "react-icons/fa";
+import { getClassDetails, getClassMembers, getClasswork, getClassAnnouncements, createAnnouncement, getQuizForStudent } from "../lib/api";
 import "./ClassDetails.css";
 
 export default function ClassDetails() {
@@ -10,70 +11,74 @@ export default function ClassDetails() {
 
   const [classInfo, setClassInfo] = useState(null);
   const [students, setStudents] = useState([]);
-  const [exams, setExams] = useState([]);
   const [classwork, setClasswork] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("classwork");
+  const [activeTab, setActiveTab] = useState("stream");
   
-  // Exam modal states
-  const [examTitle, setExamTitle] = useState("");
-  const [examDate, setExamDate] = useState("");
-  const [examFile, setExamFile] = useState(null);
-  const [showExamModal, setShowExamModal] = useState(false);
-  
-  // Classwork modal states
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  // Announcement/Comment states
+  const [newAnnouncement, setNewAnnouncement] = useState("");
+  const [newComment, setNewComment] = useState({});
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Classwork Create Modal States
+  const [showCreateClassworkModal, setShowCreateClassworkModal] = useState(false);
   const [classworkType, setClassworkType] = useState("assignment");
-  const [classworkForm, setClassworkForm] = useState({
-    title: "",
-    description: "",
-    dueDate: "",
-    points: "",
-    topic: ""
-  });
+  const [classworkTitle, setClassworkTitle] = useState("");
+  const [classworkDescription, setClassworkDescription] = useState("");
+  const [classworkPoints, setClassworkPoints] = useState("");
+  const [classworkDueDate, setClassworkDueDate] = useState("");
+  const [creatingClasswork, setCreatingClasswork] = useState(false);
+
+  // Delete states
+  const [deletingItem, setDeletingItem] = useState(null);
 
   useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    console.log("👤 Current User:", userData);
+    setCurrentUser(userData);
+    
     const fetchClassDetails = async () => {
       try {
-        const token = localStorage.getItem("token");
+        setLoading(true);
+        console.log("📋 Fetching class details for:", id);
 
-        // Fetch class info
-        const classRes = await api.get(`/classes/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        console.log("📦 Class Data:", classRes.data);
-        setClassInfo(classRes.data);
+        // Use API functions instead of direct calls
+        const [classRes, announcementsRes, studentRes, classworkRes] = await Promise.all([
+          getClassDetails(id),
+          getClassAnnouncements(id).catch(err => {
+            console.log("No announcements found:", err);
+            return { data: [] };
+          }),
+          getClassMembers(id).catch(err => {
+            console.log("Failed to fetch members:", err);
+            return { data: [] };
+          }),
+          getClasswork(id).catch(err => {
+            console.log("Classwork endpoint not available:", err);
+            return { data: [] };
+          })
+        ]);
 
-        // Fetch enrolled students
-        const studentRes = await api.get(`/classes/${id}/members`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setStudents(studentRes.data?.data || studentRes.data || []);
+        console.log("✅ Class Data:", classRes);
+        console.log("✅ Announcements:", announcementsRes.data);
+        console.log("✅ Students:", studentRes.data);
+        console.log("✅ Classwork:", classworkRes.data);
 
-        // Fetch exams
-        try {
-          const examRes = await api.get(`/exams/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          setExams(examRes.data?.data || examRes.data || []);
-        } catch (examErr) {
-          console.log("No exams found");
-          setExams([]);
+        if (classRes.success) {
+          setClassInfo(classRes.data);
+        } else {
+          throw new Error(classRes.message || 'Failed to fetch class details');
         }
 
-        // Fetch classwork
-        try {
-          const classworkRes = await api.get(`/classwork/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          setClasswork(classworkRes.data?.data || classworkRes.data || []);
-        } catch (classworkErr) {
-          console.log("Classwork endpoint not available yet");
-          setClasswork([]);
-        }
+        setAnnouncements(announcementsRes.data || []);
+        setStudents(studentRes.data || []);
+        setClasswork(classworkRes.data || []);
 
       } catch (err) {
-        console.error("Failed to fetch class details:", err);
+        console.error("❌ Failed to fetch class details:", err);
+        alert("Failed to load class details: " + (err.response?.data?.message || err.message));
       } finally {
         setLoading(false);
       }
@@ -82,15 +87,13 @@ export default function ClassDetails() {
     fetchClassDetails();
   }, [id]);
 
-  // ✅ SIMPLE FIX: Check if user is teacher
+  // Check if user is teacher
   const isTeacher = () => {
     if (!classInfo) return false;
     
-    // Check multiple possible role indicators
     if (classInfo.userRole === "teacher") return true;
     if (classInfo.role === "teacher") return true;
     
-    // If no role is detected but you're the class owner, you're a teacher
     if (classInfo.ownerId) {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (classInfo.ownerId._id === userData.id || classInfo.ownerId === userData.id) {
@@ -101,30 +104,189 @@ export default function ClassDetails() {
     return false;
   };
 
-  // Create Classwork Item
-  const createClasswork = async (e) => {
-    e.preventDefault();
-    if (!classworkForm.title) return alert("Title is required");
+  // CREATE CLASSWORK FUNCTION
+  const handleCreateClasswork = async () => {
+    if (!classworkTitle.trim()) {
+      alert("Please enter a title");
+      return;
+    }
 
+    setCreatingClasswork(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await api.post(`/classwork/${id}/create`, {
-        ...classworkForm,
+      const classworkData = {
+        title: classworkTitle.trim(),
+        description: classworkDescription.trim(),
         type: classworkType,
-        points: classworkForm.points ? parseInt(classworkForm.points) : undefined,
-        dueDate: classworkForm.dueDate || undefined
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
+        classId: id,
+        points: classworkPoints ? parseInt(classworkPoints) : undefined,
+        dueDate: classworkDueDate || undefined
+      };
+
+      const response = await fetch('/api/classwork/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(classworkData)
       });
 
-      setClasswork([...classwork, res.data]);
-      setClassworkForm({ title: "", description: "", dueDate: "", points: "", topic: "" });
-      setShowCreateModal(false);
-      alert(res.data.message);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to create classwork item.");
+      const result = await response.json();
+      
+      if (result.success) {
+        setClasswork(prev => [result.data, ...prev]);
+        
+        // Reset form
+        setClassworkTitle("");
+        setClassworkDescription("");
+        setClassworkPoints("");
+        setClassworkDueDate("");
+        setClassworkType("assignment");
+        setShowCreateClassworkModal(false);
+        
+        alert("Classwork created successfully!");
+      } else {
+        alert("Failed to create classwork: " + result.message);
+      }
+    } catch (error) {
+      console.error("Failed to create classwork:", error);
+      alert("Failed to create classwork: " + (error.message));
+    } finally {
+      setCreatingClasswork(false);
     }
+  };
+
+  // DELETE CLASSWORK FUNCTION
+  const handleDeleteClasswork = async (itemId, itemTitle, itemType) => {
+    if (!window.confirm(`Are you sure you want to delete "${itemTitle}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingItem(itemId);
+    try {
+      let response;
+      
+      if (itemType === 'quiz') {
+        // Delete quiz/exam using your examRoutes.js DELETE endpoint
+        response = await fetch(`/api/exams/${itemId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        response = await response.json();
+      } else {
+        // Delete regular classwork
+        response = await fetch(`/api/classwork/${itemId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        response = await response.json();
+      }
+
+      if (response.success) {
+        // Remove from state
+        setClasswork(prev => prev.filter(item => item._id !== itemId));
+        alert(`${itemType === 'quiz' ? 'Quiz' : 'Assignment'} deleted successfully!`);
+      } else {
+        alert("Failed to delete: " + response.message);
+      }
+    } catch (error) {
+      console.error("Failed to delete:", error);
+      alert("Failed to delete: " + (error.response?.data?.message || error.message));
+    } finally {
+      setDeletingItem(null);
+    }
+  };
+
+  // DEPLOY EXAM FUNCTION - Uses your existing examRoutes.js endpoint
+  const handleDeployExam = async (examId, examTitle) => {
+    if (!window.confirm(`Are you sure you want to publish "${examTitle}"? Students will be able to see and take it.`)) {
+      return;
+    }
+
+    try {
+      // Use your existing examRoutes.js deploy endpoint
+      const response = await fetch(`/api/exams/deploy/${examId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the exam in state - your endpoint sets both isPublished and isDeployed to true
+        setClasswork(prev => prev.map(item => 
+          item._id === examId 
+            ? { 
+                ...item, 
+                isPublished: true,
+                isDeployed: true 
+              }
+            : item
+        ));
+        alert("Quiz published successfully! Students can now see it.");
+      } else {
+        alert("Failed to publish quiz: " + result.message);
+      }
+    } catch (error) {
+      console.error("Failed to publish quiz:", error);
+      alert("Failed to publish quiz: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  // FIXED: STUDENT QUIZ ACCESS FUNCTION - IMPROVED LOGIC
+  const handleStartQuiz = async (examId, examTitle) => {
+    try {
+      console.log("🎯 Student starting quiz:", examId, examTitle);
+      
+      // Check if quiz is available
+      const response = await getQuizForStudent(examId);
+      
+      if (response.success) {
+        // Navigate to the student quiz page
+        navigate(`/student-quiz/${examId}`);
+      } else {
+        alert('Quiz not available: ' + response.message);
+      }
+    } catch (error) {
+      console.error("Failed to start quiz:", error);
+      alert("Failed to start quiz: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  // Check if quiz is available for students - FIXED LOGIC
+  const isQuizAvailableForStudent = (item) => {
+    // Multiple conditions for quiz availability
+    if (item.isPublished) return true;
+    if (item.isDeployed) return true;
+    if (item.isQuiz) return true; // If it's marked as a quiz, assume it's available
+    if (item.type === 'quiz') return true; // If type is quiz, assume it's available
+    
+    return false;
+  };
+
+  // REFRESH CLASSWORK FUNCTION
+  const refreshClasswork = async () => {
+    try {
+      const classworkRes = await getClasswork(id);
+      setClasswork(classworkRes.data || []);
+    } catch (error) {
+      console.error("Failed to refresh classwork:", error);
+    }
+  };
+
+  // Reset classwork form
+  const resetClassworkForm = () => {
+    setClassworkTitle("");
+    setClassworkDescription("");
+    setClassworkPoints("");
+    setClassworkDueDate("");
+    setClassworkType("assignment");
+    setShowCreateClassworkModal(false);
   };
 
   // Get icon for classwork type
@@ -140,22 +302,66 @@ export default function ClassDetails() {
     return icons[type] || "📄";
   };
 
-  if (loading) return <p>Loading class details...</p>;
-  if (!classInfo) return <p>Class not found.</p>;
+  // Get formatted time
+  const getFormattedTime = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString();
+  };
+
+  if (loading) return (
+    <div className="class-details-page">
+      <div className="loading">Loading class details...</div>
+    </div>
+  );
+
+  if (!classInfo) return (
+    <div className="class-details-page">
+      <div className="error-message">
+        <h2>Class Not Found</h2>
+        <p>The class you're looking for doesn't exist or you don't have access.</p>
+        <button onClick={() => navigate("/dashboard")} className="back-btn">
+          ← Back to Dashboard
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="class-details-page">
       <header className="class-header">
-        <h1>{classInfo.name}</h1>
-        <p>Code: <strong>{classInfo.code}</strong></p>
-        <p>Your role: <strong>{classInfo.userRole || 'Teacher'}</strong></p>
         <button className="back-btn" onClick={() => navigate("/dashboard")}>
           ⬅ Back to Dashboard
         </button>
+        <div className="class-info">
+          <h1>{classInfo.name}</h1>
+          <p className="class-code">Class Code: <strong>{classInfo.code}</strong></p>
+          {classInfo.description && (
+            <p className="class-description">{classInfo.description}</p>
+          )}
+          <p className="class-role">Your role: <strong>{isTeacher() ? 'Teacher' : 'Student'}</strong></p>
+        </div>
       </header>
 
       {/* Tab Navigation */}
       <div className="tabs-navigation">
+        <button 
+          className={`tab-btn ${activeTab === "stream" ? "active" : ""}`}
+          onClick={() => setActiveTab("stream")}
+        >
+          Stream
+        </button>
         <button 
           className={`tab-btn ${activeTab === "classwork" ? "active" : ""}`}
           onClick={() => setActiveTab("classwork")}
@@ -166,168 +372,321 @@ export default function ClassDetails() {
           className={`tab-btn ${activeTab === "students" ? "active" : ""}`}
           onClick={() => setActiveTab("students")}
         >
-          People
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === "exams" ? "active" : ""}`}
-          onClick={() => setActiveTab("exams")}
-        >
-          Exams
+          People ({students.length})
         </button>
       </div>
 
-      {/* CLASSWORK TAB */}
+      {/* CLASSWORK TAB WITH FIXED START QUIZ BUTTON */}
       {activeTab === "classwork" && (
         <section className="section">
           <div className="section-header">
             <h2>Classwork</h2>
-            
-            {/* ✅ FIXED: Always show create button for now */}
-            <button 
-              className="create-btn"
-              onClick={() => setShowCreateModal(true)}
-            >
-              + Create
-            </button>
+            {isTeacher() && (
+              <div className="create-actions">
+                <button 
+                  className="create-btn"
+                  onClick={() => setShowCreateClassworkModal(true)}
+                >
+                  <FaPlus className="btn-icon" />
+                  Create
+                </button>
+                <button 
+                  className="create-btn secondary"
+                  onClick={() => navigate(`/class/${id}/quiz/new`)}
+                >
+                  <FaPlus className="btn-icon" />
+                  New Quiz
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Teacher status indicator */}
-          <div style={{
-            background: '#e8f5e8',
-            border: '1px solid #4caf50',
-            padding: '12px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            color: '#2e7d32',
-            fontSize: '14px'
-          }}>
-            ✅ You are viewing this class as a <strong>teacher</strong>. You can create assignments and manage classwork.
-          </div>
+          {/* MAIN CLASSWORK AREA */}
+          <div className="classwork-content">
+            {classwork.length > 0 ? (
+              <div className="classwork-grid">
+                {classwork.map((item) => {
+                  // Debug logging for quiz items
+                  if (item.type === 'quiz') {
+                    console.log("📝 Quiz Item Debug:", {
+                      id: item._id,
+                      title: item.title,
+                      type: item.type,
+                      isPublished: item.isPublished,
+                      isDeployed: item.isDeployed,
+                      isQuiz: item.isQuiz,
+                      available: isQuizAvailableForStudent(item)
+                    });
+                  }
 
-          {classwork.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">📚</div>
-              <h3>This is where you'll assign work</h3>
-              <p>You can add assignments and other work for the class, then organize it into topics.</p>
-              <button 
-                className="primary-btn"
-                onClick={() => setShowCreateModal(true)}
-              >
-                + Create your first assignment
-              </button>
-            </div>
-          ) : (
-            <div className="classwork-grid">
-              {classwork.map((item) => (
-                <div className="classwork-card" key={item._id}>
-                  <div className="classwork-header">
-                    <span className="classwork-icon">
-                      {getClassworkIcon(item.type)}
-                    </span>
-                    <div>
-                      <h3>{item.title}</h3>
-                      <p className="classwork-type">{item.type}</p>
+                  const isQuizAvailable = isQuizAvailableForStudent(item);
+
+                  return (
+                    <div className="classwork-card" key={item._id}>
+                      <div className="classwork-header">
+                        <span className="classwork-icon">
+                          {getClassworkIcon(item.type)}
+                        </span>
+                        <div>
+                          <h3>{item.title}</h3>
+                          <p className="classwork-type">{item.type}</p>
+                        </div>
+                      </div>
+                      {item.description && (
+                        <p className="classwork-description">{item.description}</p>
+                      )}
+                      <div className="classwork-meta">
+                        {item.dueDate && (
+                          <span>Due: {new Date(item.dueDate).toLocaleDateString()}</span>
+                        )}
+                        {item.points && (
+                          <span>{item.points} points</span>
+                        )}
+                        {item.questions && (
+                          <span>Questions: {item.questions.length || 0}</span>
+                        )}
+                        {/* Show status based on your examRoutes.js fields */}
+                        {(item.isPublished || item.isDeployed) && (
+                          <span className="status published">Published</span>
+                        )}
+                        {!item.isPublished && !item.isDeployed && item.type === 'quiz' && (
+                          <span className="status draft">Draft</span>
+                        )}
+                      </div>
+                      <div className="classwork-actions">
+                        {isTeacher() ? (
+                          <>
+                            {item.type === 'quiz' ? (
+                              <>
+                                <button 
+                                  className="btn-primary btn-small"
+                                  onClick={() => navigate(`/class/${id}/quiz/${item._id}/edit`)}
+                                >
+                                  <FaEdit /> Edit
+                                </button>
+                                <button 
+                                  className="btn-secondary btn-small"
+                                  onClick={() => navigate(`/exam/form/${item._id}`)}
+                                >
+                                  <FaEye /> Preview
+                                </button>
+                                {/* Show deploy button only for unpublished quizzes */}
+                                {!item.isPublished && !item.isDeployed && (
+                                  <button 
+                                    className="deploy-btn btn-small"
+                                    onClick={() => handleDeployExam(item._id, item.title)}
+                                  >
+                                    <FaRocket /> Publish
+                                  </button>
+                                )}
+                                <button 
+                                  className="delete-btn btn-small"
+                                  onClick={() => handleDeleteClasswork(item._id, item.title, 'quiz')}
+                                  disabled={deletingItem === item._id}
+                                >
+                                  <FaTrash /> 
+                                  {deletingItem === item._id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button 
+                                  className="btn-primary btn-small"
+                                  onClick={() => {/* Edit assignment logic */}}
+                                >
+                                  <FaEdit /> Edit
+                                </button>
+                                <button 
+                                  className="delete-btn btn-small"
+                                  onClick={() => handleDeleteClasswork(item._id, item.title, 'assignment')}
+                                  disabled={deletingItem === item._id}
+                                >
+                                  <FaTrash /> 
+                                  {deletingItem === item._id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          // FIXED: Student view - ALWAYS show Start Quiz button for quiz items
+                          item.type === 'quiz' && (
+                            <div className="student-quiz-section">
+                              <button 
+                                className="start-quiz-btn"
+                                onClick={() => handleStartQuiz(item._id, item.title)}
+                                title={isQuizAvailable ? "Start this quiz" : "Quiz not available yet"}
+                              >
+                                🚀 Start Quiz
+                              </button>
+                              {!isQuizAvailable && (
+                                <div className="quiz-info">
+                                  <small>This quiz is not available yet</small>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        )}
+                      </div>
+                      <div className="classwork-footer">
+                        <span>Created by {item.createdBy?.name || 'Teacher'}</span>
+                        <span>{getFormattedTime(item.createdAt)}</span>
+                      </div>
                     </div>
-                  </div>
-                  {item.description && (
-                    <p className="classwork-description">{item.description}</p>
-                  )}
-                  <div className="classwork-meta">
-                    {item.dueDate && (
-                      <span>Due: {new Date(item.dueDate).toLocaleDateString()}</span>
-                    )}
-                    {item.points && (
-                      <span>{item.points} points</span>
-                    )}
-                    {item.topic && (
-                      <span>Topic: {item.topic}</span>
-                    )}
-                  </div>
-                  <div className="classwork-footer">
-                    <span>Created by {item.createdBy?.name || 'Teacher'}</span>
-                    <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                  </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="classwork-empty-state">
+                <div className="empty-illustration">
+                  <svg width="200" height="150" viewBox="0 0 200 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="40" y="50" width="120" height="80" rx="8" fill="#F8F9FA" stroke="#DADCE0" strokeWidth="2"/>
+                    <rect x="50" y="60" width="100" height="12" rx="6" fill="#E8F0FE"/>
+                    <rect x="50" y="80" width="80" height="8" rx="4" fill="#F1F3F4"/>
+                    <rect x="50" y="95" width="60" height="8" rx="4" fill="#F1F3F4"/>
+                    <circle cx="160" cy="110" r="15" fill="#1A73E8" fillOpacity="0.1" stroke="#1A73E8" strokeWidth="2"/>
+                    <path d="M155 110L158 113L165 106" stroke="#1A73E8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="empty-content">
+                  <h3 className="empty-title">No classwork yet</h3>
+                  <p className="empty-description">
+                    {isTeacher() 
+                      ? "Create assignments, quizzes, or materials to get started."
+                      : "Your teacher hasn't created any classwork yet."
+                    }
+                  </p>
+                  {isTeacher() && (
+                    <div className="empty-actions">
+                      <button 
+                        className="btn-primary"
+                        onClick={() => setShowCreateClassworkModal(true)}
+                      >
+                        Create Your First Assignment
+                      </button>
+                      <button 
+                        className="btn-secondary"
+                        onClick={() => navigate(`/class/${id}/quiz/new`)}
+                      >
+                        Create a Quiz
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </section>
       )}
 
       {/* CREATE CLASSWORK MODAL */}
-      {showCreateModal && (
-        <div className="modal">
+      {showCreateClassworkModal && (
+        <div className="modal-overlay">
           <div className="modal-content large-modal">
-            <h3>Create</h3>
+            <div className="modal-header">
+              <h2>Create Classwork</h2>
+              <button className="close-btn" onClick={resetClassworkForm}>×</button>
+            </div>
             
             {/* Type Selection */}
             <div className="type-selection">
-              <label>Select type:</label>
+              <label>Type</label>
               <div className="type-grid">
-                {["assignment", "quiz", "question", "material", "announcement", "topic"].map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    className={`type-btn ${classworkType === type ? "active" : ""}`}
-                    onClick={() => setClassworkType(type)}
-                  >
-                    {getClassworkIcon(type)} {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </button>
-                ))}
+                <button 
+                  type="button"
+                  className={`type-btn ${classworkType === 'assignment' ? 'active' : ''}`}
+                  onClick={() => setClassworkType('assignment')}
+                >
+                  <span>📝</span>
+                  Assignment
+                </button>
+                <button 
+                  type="button"
+                  className={`type-btn ${classworkType === 'quiz' ? 'active' : ''}`}
+                  onClick={() => setClassworkType('quiz')}
+                >
+                  <span>❓</span>
+                  Quiz
+                </button>
+                <button 
+                  type="button"
+                  className={`type-btn ${classworkType === 'material' ? 'active' : ''}`}
+                  onClick={() => setClassworkType('material')}
+                >
+                  <span>📎</span>
+                  Material
+                </button>
+                <button 
+                  type="button"
+                  className={`type-btn ${classworkType === 'question' ? 'active' : ''}`}
+                  onClick={() => setClassworkType('question')}
+                >
+                  <span>💬</span>
+                  Question
+                </button>
               </div>
             </div>
 
-            <form onSubmit={createClasswork}>
+            {/* Form Fields */}
+            <div className="form-group">
+              <label>Title *</label>
               <input
                 type="text"
-                placeholder="Title"
-                value={classworkForm.title}
-                onChange={(e) => setClassworkForm({...classworkForm, title: e.target.value})}
+                placeholder="Enter title"
+                value={classworkTitle}
+                onChange={(e) => setClassworkTitle(e.target.value)}
                 required
               />
-              
+            </div>
+            
+            <div className="form-group">
+              <label>Description (optional)</label>
               <textarea
-                placeholder="Description (optional)"
-                value={classworkForm.description}
-                onChange={(e) => setClassworkForm({...classworkForm, description: e.target.value})}
+                placeholder="Enter description"
+                value={classworkDescription}
+                onChange={(e) => setClassworkDescription(e.target.value)}
                 rows="3"
               />
+            </div>
 
-              <div className="form-row">
+            <div className="form-row">
+              <div className="form-group">
+                <label>Points (optional)</label>
                 <input
-                  type="text"
-                  placeholder="Topic (optional)"
-                  value={classworkForm.topic}
-                  onChange={(e) => setClassworkForm({...classworkForm, topic: e.target.value})}
+                  type="number"
+                  placeholder="Points"
+                  value={classworkPoints}
+                  onChange={(e) => setClassworkPoints(e.target.value)}
                 />
-                
-                {(classworkType === "assignment" || classworkType === "quiz") && (
-                  <input
-                    type="number"
-                    placeholder="Points"
-                    value={classworkForm.points}
-                    onChange={(e) => setClassworkForm({...classworkForm, points: e.target.value})}
-                  />
-                )}
               </div>
-
-              {(classworkType === "assignment" || classworkType === "quiz") && (
+              
+              <div className="form-group">
+                <label>Due Date (optional)</label>
                 <input
                   type="datetime-local"
-                  value={classworkForm.dueDate}
-                  onChange={(e) => setClassworkForm({...classworkForm, dueDate: e.target.value})}
+                  value={classworkDueDate}
+                  onChange={(e) => setClassworkDueDate(e.target.value)}
                 />
-              )}
-
-              <div className="modal-actions">
-                <button type="submit" className="primary-btn">
-                  Create {classworkType}
-                </button>
-                <button type="button" onClick={() => setShowCreateModal(false)}>
-                  Cancel
-                </button>
               </div>
-            </form>
+            </div>
+
+            <div className="modal-actions">
+              <button 
+                type="button" 
+                onClick={resetClassworkForm}
+                disabled={creatingClasswork}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={handleCreateClasswork}
+                className="btn-primary"
+                disabled={!classworkTitle.trim() || creatingClasswork}
+              >
+                {creatingClasswork ? "Creating..." : "Create"}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-/* ClassDetails.css - COMPLETELY UPDATED WITH CLASSWORK SYSTEM */
+/* ClassDetails.css - FULLY FIXED WITH START QUIZ BUTTON */
 .class-details-page {
   max-width: 1200px;
   margin: 0 auto;
@@ -104,6 +104,7 @@
   font-weight: 600;
 }
 
+/* ✅ CREATE BUTTON */
 .create-btn {
   background: #1a73e8;
   color: white;
@@ -123,6 +124,74 @@
   background: #1669d6;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(26, 115, 232, 0.2);
+}
+
+.create-btn.secondary {
+  background: #f1f3f4;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+}
+
+.create-btn.secondary:hover {
+  background: #e8eaed;
+  border-color: #5f6368;
+}
+
+/* ✅ START QUIZ BUTTON - FIXED STYLING */
+.start-quiz-btn {
+  background: #34a853 !important;
+  color: white !important;
+  border: none;
+  padding: 12px 20px !important;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  box-shadow: 0 2px 4px rgba(52, 168, 83, 0.2);
+}
+
+.start-quiz-btn:hover {
+  background: #2e8b47 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 168, 83, 0.3);
+}
+
+.start-quiz-btn:active {
+  transform: translateY(0);
+}
+
+.student-quiz-section {
+  width: 100%;
+}
+
+.quiz-info {
+  text-align: center;
+  margin-top: 8px;
+  padding: 4px;
+  background: #fff3cd;
+  border-radius: 4px;
+  border: 1px solid #ffeaa7;
+}
+
+.quiz-info small {
+  color: #856404;
+  font-size: 11px;
+}
+
+.student-indicator {
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: #ef6c00;
+  font-size: 14px;
 }
 
 /* ✅ EMPTY STATE */
@@ -341,8 +410,63 @@ textarea {
   box-shadow: none;
 }
 
+.btn-primary {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1669d6;
+}
+
+.btn-primary:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+  background: #e8eaed;
+}
+
+.btn-small {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.btn-delete {
+  background: #f44336;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.btn-delete:hover {
+  background: #d32f2f;
+}
+
 /* MODALS */
-.modal {
+.modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -383,6 +507,39 @@ textarea {
   }
 }
 
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #3c4043;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #5f6368;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: #f1f3f4;
+  border-radius: 50%;
+}
+
 .modal-actions {
   display: flex;
   gap: 12px;
@@ -392,18 +549,151 @@ textarea {
   border-top: 1px solid #f1f3f4;
 }
 
-.modal-actions button:last-child {
-  background: #f1f3f4;
-  color: #3c4043;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
+/* FORM GROUPS */
+.form-group {
+  margin-bottom: 16px;
 }
 
-.modal-actions button:last-child:hover {
-  background: #e8eaed;
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #3c4043;
+  font-size: 14px;
+}
+
+/* ANNOUNCEMENTS & COMMENTS STYLES */
+.announcement-form {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.announcement-textarea {
+  width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 12px;
+  font-size: 14px;
+  resize: vertical;
+  margin-bottom: 12px;
+  min-height: 100px;
+}
+
+.announcement-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.announcements-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.announcement-card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.announcement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.announcement-author-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.announcement-author-info strong {
+  color: #333;
+  font-size: 14px;
+}
+
+.announcement-date {
+  color: #666;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.announcement-content {
+  color: #333;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+/* Comments Section */
+.comments-section {
+  border-top: 1px solid #eee;
+  padding-top: 16px;
+}
+
+.comments-list {
+  margin-bottom: 16px;
+}
+
+.comment {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.comment-author-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.comment-author-info strong {
+  font-size: 14px;
+  color: #333;
+}
+
+.comment-date {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.comment-content {
+  font-size: 14px;
+  color: #555;
+  line-height: 1.4;
+}
+
+.comment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.add-comment {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.comment-input {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
 }
 
 /* EXISTING STYLES FOR STUDENTS AND EXAMS */
@@ -413,7 +703,7 @@ textarea {
   margin: 0;
 }
 
-.student-list li {
+.student-item {
   padding: 12px 16px;
   border-bottom: 1px solid #f1f3f4;
   display: flex;
@@ -422,12 +712,36 @@ textarea {
   transition: background 0.2s;
 }
 
-.student-list li:hover {
+.student-item:hover {
   background: #f8f9fa;
 }
 
-.student-list li:last-child {
+.student-item:last-child {
   border-bottom: none;
+}
+
+.student-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.student-info strong {
+  color: #3c4043;
+  font-size: 14px;
+}
+
+.student-info span {
+  color: #5f6368;
+  font-size: 12px;
+}
+
+.student-role {
+  background: #e8f0fe;
+  color: #1a73e8;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .exam-grid {
@@ -462,6 +776,20 @@ textarea {
   font-size: 14px;
 }
 
+.exam-meta {
+  display: flex;
+  gap: 12px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: #5f6368;
+}
+
+.exam-meta span {
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
 .view-btn {
   display: inline-block;
   margin-top: 12px;
@@ -473,6 +801,8 @@ textarea {
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s;
+  border: none;
+  cursor: pointer;
 }
 
 .view-btn:hover {
@@ -480,6 +810,187 @@ textarea {
   text-decoration: none;
   color: white;
   transform: translateY(-1px);
+}
+
+/* ✅ CREATE ACTIONS */
+.create-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* ✅ CLASSWORK SECTIONS */
+.classwork-section {
+  margin-bottom: 32px;
+}
+
+.section-subtitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #3c4043;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f1f3f4;
+}
+
+/* ✅ EXAM CARD SPECIFIC STYLES */
+.exam-card {
+  border-left: 4px solid #4285f4;
+}
+
+.exam-card .classwork-type {
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+
+/* ✅ STATUS BADGES */
+.status {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status.published {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.status.draft {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+/* ✅ CLASSWORK ACTIONS */
+.classwork-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f3f4;
+  flex-wrap: wrap;
+}
+
+.classwork-actions .btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 70px;
+  justify-content: center;
+}
+
+/* ✅ EMPTY STATE IMPROVEMENTS */
+.classwork-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 2px dashed #dadce0;
+}
+
+.empty-illustration {
+  margin-bottom: 24px;
+}
+
+.empty-content {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.empty-title {
+  margin: 0 0 12px 0;
+  color: #3c4043;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.empty-description {
+  margin: 0 0 24px 0;
+  color: #5f6368;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.empty-actions .btn-primary,
+.empty-actions .btn-secondary {
+  padding: 12px 24px;
+  font-size: 14px;
+}
+
+/* DEPLOY BUTTON STYLES */
+.deploy-btn {
+  background: #34a853;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.deploy-btn:hover:not(:disabled) {
+  background: #2e8b47;
+  transform: translateY(-1px);
+}
+
+.deploy-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* DELETE BUTTON STYLES */
+.delete-btn {
+  background: #d93025;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #c5221f;
+  transform: translateY(-1px);
+}
+
+.delete-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* DRAFT SECTION STYLES */
+.draft-section {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 2px solid #f1f3f4;
+}
+
+.section-description {
+  color: #5f6368;
+  font-size: 14px;
+  margin-bottom: 16px;
+  margin-top: -8px;
 }
 
 /* RESPONSIVE DESIGN */
@@ -508,12 +1019,59 @@ textarea {
     margin: 20px;
     width: calc(100% - 40px);
   }
+  
+  .section-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .create-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .create-actions .create-btn {
+    justify-content: center;
+  }
+  
+  .empty-actions {
+    flex-direction: column;
+  }
+  
+  .classwork-actions {
+    flex-direction: column;
+  }
+  
+  .classwork-actions .btn-small {
+    min-width: auto;
+  }
 }
 
 /* LOADING STATES */
 .loading {
-  opacity: 0.6;
-  pointer-events: none;
+  text-align: center;
+  padding: 40px;
+  color: #5f6368;
+  font-size: 16px;
+}
+
+.error-message {
+  text-align: center;
+  padding: 40px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.error-message h2 {
+  color: #d93025;
+  margin-bottom: 12px;
+}
+
+.error-message p {
+  color: #5f6368;
+  margin-bottom: 20px;
 }
 
 .skeleton {
@@ -531,7 +1089,6 @@ textarea {
     background-position: -200% 0;
   }
 }
-/* Add these to your existing ClassDetails.css */
 
 /* Debug Panel Styles */
 .debug-panel {
@@ -564,15 +1121,6 @@ textarea {
   max-width: 500px;
 }
 
-@keyframes loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
 .error-state {
   text-align: center;
   padding: 40px;
@@ -587,25 +1135,4 @@ textarea {
   border-radius: 6px;
   cursor: pointer;
   margin-top: 16px;
-}
-
-/* Role Indicators */
-.teacher-indicator {
-  background: #e8f5e8;
-  border: 1px solid #4caf50;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  color: #2e7d32;
-  font-size: 14px;
-}
-
-.student-indicator {
-  background: #fff3e0;
-  border: 1px solid #ffb74d;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  color: #ef6c00;
-  font-size: 14px;
 }

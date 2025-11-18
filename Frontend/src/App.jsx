@@ -1,4 +1,4 @@
-// src/App.jsx - UPDATED WITH ROLE PROTECTION
+// src/App.jsx - UPDATED WITH STUDENT QUIZ ROUTE
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
@@ -7,8 +7,10 @@ import ToDoPage from "./pages/ToDoPage";
 import ReviewPage from "./pages/ReviewPage";
 import ClassDetails from "./pages/ClassDetails";
 import ExamRoomWrapper from "./pages/ExamRoomWrapper";
-import ExamFormView from "./pages/ExamformView";
+import ExamFormView from "./pages/ExamFormView";
 import AuthSuccess from "./pages/AuthSuccess";
+import QuizFormPage from "./pages/QuizFormPage";
+import StudentQuiz from "./pages/StudentQuiz"; // NEW IMPORT
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -51,6 +53,19 @@ function App() {
           </ProtectedRoute>
         } />
 
+        {/* Quiz Creation Routes */}
+        <Route path="/class/:classId/quiz/new" element={
+          <ProtectedRoute requiredRole="teacher">
+            <QuizFormPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/class/:classId/quiz/:examId/edit" element={
+          <ProtectedRoute requiredRole="teacher">
+            <QuizFormPage />
+          </ProtectedRoute>
+        } />
+
         {/* Exam Room */}
         <Route path="/room/:roomId" element={
           <ProtectedRoute>
@@ -58,15 +73,22 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* Exam Form */}
+        {/* ✅ STUDENT QUIZ ACCESS ROUTE - FIXED */}
         <Route path="/exam/form/:examId" element={
           <ProtectedRoute>
             <ExamFormView />
           </ProtectedRoute>
         } />
 
-        {/* ✅ CATCH ALL ROUTE - REDIRECT TO LOGIN */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* ✅ NEW: STUDENT QUIZ TAKING ROUTE */}
+        <Route path="/student-quiz/:examId" element={
+          <ProtectedRoute>
+            <StudentQuiz />
+          </ProtectedRoute>
+        } />
+
+        {/* ✅ CATCH ALL ROUTE - REDIRECT TO DASHBOARD */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   );

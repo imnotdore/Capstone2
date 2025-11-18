@@ -1,4 +1,4 @@
-// server.js - FIXED 404 HANDLER
+// server.js - UPDATED WITHOUT MISSING IMPORT
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -18,7 +18,7 @@ require("./config/passport");
 const classRoutes = require("./routes/classes");
 const examRoutes = require("./routes/examRoutes");
 const authRoutes = require("./routes/auth");
-const classworkRoutes = require("./routes/classwork");
+const classworkRoutes = require("./routes/classwork"); // UPDATED - single file
 const announcementRoutes = require("./routes/announcements");
 
 const app = express();
@@ -59,19 +59,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// ===== CLEAN ROUTES - UPDATED WITH ANNOUNCEMENTS =====
+// ===== CLEAN ROUTES - UPDATED =====
 app.use("/api/auth", authRoutes);
 app.use("/api/class", classRoutes);
 app.use("/api/exams", examRoutes);
-app.use("/api/classwork", classworkRoutes);
+app.use("/api/classwork", classworkRoutes); // Single classwork routes file
 app.use("/api/announcements", announcementRoutes);
 
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Server is running with Announcements system",
+    message: "Server is running with Classwork Create system",
     googleAuth: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    classworkCreateEnabled: true,
     announcementsEnabled: true,
     timestamp: new Date().toISOString()
   });
@@ -170,7 +171,7 @@ mongoose
       console.log(`✅ Auth Routes: /api/auth`);
       console.log(`✅ Class Routes: /api/class`);
       console.log(`✅ Exam Routes: /api/exams`);
-      console.log(`✅ Classwork Routes: /api/classwork`);
+      console.log(`✅ Classwork Routes: /api/classwork (with CREATE endpoint)`);
       console.log(`✅ Announcement Routes: /api/announcements`);
     });
   })
