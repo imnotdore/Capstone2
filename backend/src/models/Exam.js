@@ -1,4 +1,4 @@
-// backend/models/Exam.js - UPDATED WITH ANSWER KEY & POINTS
+// backend/models/Exam.js - COMPLETE FIXED VERSION
 const mongoose = require("mongoose");
 
 const examSchema = new mongoose.Schema({
@@ -10,7 +10,8 @@ const examSchema = new mongoose.Schema({
   // Quiz/Exam specific fields
   isQuiz: { type: Boolean, default: false },
   isDeployed: { type: Boolean, default: false },
-  totalPoints: { type: Number, default: 0 }, // ✅ ADDED: Total points for the quiz
+  isPublished: { type: Boolean, default: false }, // ✅ ADD THIS MISSING FIELD
+  totalPoints: { type: Number, default: 0 },
   
   // Questions array with enhanced answer key functionality
   questions: [{
@@ -30,25 +31,25 @@ const examSchema = new mongoose.Schema({
     },
     title: { type: String, required: true },
     required: { type: Boolean, default: false },
-    points: { type: Number, default: 1 }, // ✅ Points for this question
+    points: { type: Number, default: 1 },
     order: { type: Number, default: 0 },
     
     // For multiple choice, checkboxes, dropdown
     options: [String],
     
-    // ✅ ANSWER KEY FIELDS - Enhanced
+    // ✅ ANSWER KEY FIELDS
     correctAnswer: { 
       type: mongoose.Schema.Types.Mixed, 
       default: null 
-    }, // For single answer questions
+    },
     correctAnswers: { 
       type: [mongoose.Schema.Types.Mixed], 
       default: [] 
-    }, // For multiple answer questions
+    },
     answerKey: { 
       type: String, 
       default: "" 
-    }, // For text-based answers (short-answer, paragraph)
+    },
     
     // For linear scale
     scale: {
@@ -69,10 +70,11 @@ const examSchema = new mongoose.Schema({
   
   // Timestamps
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  publishedAt: { type: Date } // ✅ ADD THIS FIELD TOO
 });
 
-// ✅ ADDED: Calculate total points before saving
+// ✅ Calculate total points before saving
 examSchema.pre("save", function(next) {
   this.updatedAt = Date.now();
   

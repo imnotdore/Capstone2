@@ -14,76 +14,90 @@ import api, {
 import "./Dashboard.css";
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [user, setUser] = useState({ name: "Loading...", email: "", _id: "" });
-  const [classes, setClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState(null);
-  const [activeSidebar, setActiveSidebar] = useState("home");
-  const [activeTab, setActiveTab] = useState("stream");
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showJoinModal, setShowJoinModal] = useState(false);
-  const [className, setClassName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
-  const [exams, setExams] = useState([]);
-  const [students, setStudents] = useState([]);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [showCreateJoinDropdown, setShowCreateJoinDropdown] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  
-  // Announcement states
-  const [announcements, setAnnouncements] = useState([]);
-  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
-  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
-  const [announcementContent, setAnnouncementContent] = useState("");
-  const [postingAnnouncement, setPostingAnnouncement] = useState(false);
+  // ===== ROUTING HOOKS =====
+  const navigate = useNavigate(); // Para sa pag-navigate sa ibang pages
+  const location = useLocation(); // Para makuha ang current URL location
 
-  // Comment states
-  const [postingComments, setPostingComments] = useState({});
-  const [showCommentMenu, setShowCommentMenu] = useState(null);
-  const [showCommentDeleteMenu, setShowCommentDeleteMenu] = useState(null);
+  // ===== USER AT CLASS STATES =====
+  const [user, setUser] = useState({ name: "Loading...", email: "", _id: "" }); // User data
+  const [classes, setClasses] = useState([]); // Listahan ng mga classes
+  const [selectedClass, setSelectedClass] = useState(null); // Currently selected class
+  const [activeSidebar, setActiveSidebar] = useState("home"); // Active sidebar item
+  const [activeTab, setActiveTab] = useState("stream"); // Active tab sa class view
 
-  // CLASSWORK STATES
-  const [classwork, setClasswork] = useState([]);
+  // ===== MODAL STATES =====
+  const [showCreateModal, setShowCreateModal] = useState(false); // Modal para gumawa ng class
+  const [showJoinModal, setShowJoinModal] = useState(false); // Modal para sumali sa class
+  const [className, setClassName] = useState(""); // Pangalan ng bagong class
+  const [joinCode, setJoinCode] = useState(""); // Code para sumali sa class
 
-  // DELETE ALL QUIZZES STATE
-  const [deletingAll, setDeletingAll] = useState(false);
+  // ===== EXAM DEPLOYMENT STATES ===== 🚀 ADD THIS SECTION
+const [showDeployModal, setShowDeployModal] = useState(false);
+const [examToDeploy, setExamToDeploy] = useState(null);
+const [deployingExam, setDeployingExam] = useState(false);
+const [deployedExams, setDeployedExams] = useState([]);
 
-  // INDIVIDUAL QUIZ DELETE STATE
-  const [deletingQuiz, setDeletingQuiz] = useState(null);
+  // ===== CLASS DETAILS STATES =====
+  const [exams, setExams] = useState([]); // Listahan ng exams
+  const [students, setStudents] = useState([]); // Listahan ng students
 
-  // UNENROLL STATES
-  const [showMenuForClass, setShowMenuForClass] = useState(null);
-  const [showUnenrollModal, setShowUnenrollModal] = useState(false);
-  const [classToUnenroll, setClassToUnenroll] = useState(null);
+  // ===== DROPDOWN STATES =====
+  const [showUserDropdown, setShowUserDropdown] = useState(false); // User profile dropdown
+  const [showCreateJoinDropdown, setShowCreateJoinDropdown] = useState(false); // Create/Join dropdown
+  const [sidebarOpen, setSidebarOpen] = useState(true); // Sidebar visibility
+  const [quizLoading, setQuizLoading] = useState(false); // Add this line
+  // ===== ANNOUNCEMENT STATES =====
+  const [announcements, setAnnouncements] = useState([]); // Listahan ng announcements
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false); // Loading state para sa announcements
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false); // Modal para gumawa ng announcement
+  const [announcementContent, setAnnouncementContent] = useState(""); // Content ng announcement
+  const [postingAnnouncement, setPostingAnnouncement] = useState(false); // Loading state para sa pag-post ng announcement
 
-  // ARCHIVE STATES
-  const [archivedClasses, setArchivedClasses] = useState([]);
-  const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [classToArchive, setClassToArchive] = useState(null);
-  const [showRestoreModal, setShowRestoreModal] = useState(false);
-  const [classToRestore, setClassToRestore] = useState(null);
+  // ===== COMMENT STATES =====
+  const [postingComments, setPostingComments] = useState({}); // Loading states para sa comments
+  const [showCommentMenu, setShowCommentMenu] = useState(null); // Menu para sa announcement actions
+  const [showCommentDeleteMenu, setShowCommentDeleteMenu] = useState(null); // Menu para sa comment deletion
 
-  // CALENDAR STATES
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [calendarEvents, setCalendarEvents] = useState([]);
-  const [selectedClassFilter, setSelectedClassFilter] = useState("all");
+  // ===== CLASSWORK STATES =====
+  const [classwork, setClasswork] = useState([]); // Listahan ng classwork (assignments, quizzes, etc.)
 
-  // USER ROLE STATE
-  const [userRole, setUserRole] = useState("");
+  // ===== QUIZ MANAGEMENT STATES =====
+  const [deletingAll, setDeletingAll] = useState(false); // Loading state para sa delete all quizzes
+  const [deletingQuiz, setDeletingQuiz] = useState(null); // Loading state para sa individual quiz deletion
 
-  // DROPDOWN STATES
-  const [enrolledDropdownOpen, setEnrolledDropdownOpen] = useState(false);
-  const [teachingDropdownOpen, setTeachingDropdownOpen] = useState(false);
+  // ===== CLASS MANAGEMENT STATES =====
+  const [showMenuForClass, setShowMenuForClass] = useState(null); // Menu para sa class actions
+  const [showUnenrollModal, setShowUnenrollModal] = useState(false); // Modal para mag-unenroll
+  const [classToUnenroll, setClassToUnenroll] = useState(null); // Class na ie-unenroll
 
-  // REVIEW COUNT STATE
-  const [itemsToReview, setItemsToReview] = useState(0);
+  // ===== ARCHIVE STATES =====
+  const [archivedClasses, setArchivedClasses] = useState([]); // Listahan ng archived classes
+  const [showArchiveModal, setShowArchiveModal] = useState(false); // Modal para mag-archive
+  const [classToArchive, setClassToArchive] = useState(null); // Class na ie-archive
+  const [showRestoreModal, setShowRestoreModal] = useState(false); // Modal para i-restore
+  const [classToRestore, setClassToRestore] = useState(null); // Class na ie-restore
 
-  // CREATE DROPDOWN STATE
-  const [showCreateDropdown, setShowCreateDropdown] = useState(false);
+  // ===== CALENDAR STATES =====
+  const [currentDate, setCurrentDate] = useState(new Date()); // Current month sa calendar
+  const [selectedDate, setSelectedDate] = useState(null); // Selected date sa calendar
+  const [calendarEvents, setCalendarEvents] = useState([]); // Listahan ng calendar events
+  const [selectedClassFilter, setSelectedClassFilter] = useState("all"); // Filter para sa calendar
 
-  // Refs for click outside detection
+  // ===== USER ROLE STATE =====
+  const [userRole, setUserRole] = useState(""); // Role ng user (teacher/student)
+
+  // ===== SIDEBAR DROPDOWN STATES =====
+  const [enrolledDropdownOpen, setEnrolledDropdownOpen] = useState(false); // Dropdown para sa enrolled classes
+  const [teachingDropdownOpen, setTeachingDropdownOpen] = useState(false); // Dropdown para sa teaching classes
+
+  // ===== REVIEW COUNT STATE =====
+  const [itemsToReview, setItemsToReview] = useState(0); // Bilang ng items na kailangan i-review
+
+  // ===== CREATE DROPDOWN STATE =====
+  const [showCreateDropdown, setShowCreateDropdown] = useState(false); // Dropdown para sa create options
+
+  // ===== REFS FOR CLICK OUTSIDE DETECTION =====
+  // Ang mga refs na ito ay para madetect kung nag-click ang user sa labas ng dropdown para ito ay isara
   const userDropdownRef = useRef(null);
   const createJoinDropdownRef = useRef(null);
   const sidebarRef = useRef(null);
@@ -92,43 +106,80 @@ export default function Dashboard() {
   const commentDeleteMenuRef = useRef(null);
   const createDropdownRef = useRef(null);
 
-  // Separate classes into teaching and enrolled
+  // ===== SEPARATE CLASSES BY ROLE =====
+  // Hinihiwalay ang mga classes base sa role ng user
   const teachingClasses = classes.filter(classData => classData.userRole === "teacher" || classData.isTeacher);
   const enrolledClasses = classes.filter(classData => classData.userRole === "student" || !classData.isTeacher);
   const allClasses = [...classes];
 
-  // ===== NEW: STUDENT QUIZ ACCESS FUNCTION =====
-  const handleStartQuiz = async (examId, examTitle) => {
-    try {
-      console.log("🎯 Student starting quiz:", examId, examTitle);
-      
-      // Check if quiz is available
-      const response = await getQuizForStudent(examId);
-      
-      if (response.success) {
-        // Navigate to the student quiz page
-        navigate(`/student-quiz/${examId}`);
-      } else {
-        alert('Quiz not available: ' + response.message);
-      }
-    } catch (error) {
-      console.error("Failed to start quiz:", error);
-      alert("Failed to start quiz: " + (error.response?.data?.message || error.message));
-    }
-  };
+  // ===== QUIZ FUNCTIONS =====
 
-  // ===== NEW: Check if quiz is available for students =====
-  const isQuizAvailableForStudent = (item) => {
-    // Multiple conditions for quiz availability
-    if (item.isPublished) return true;
-    if (item.isDeployed) return true;
-    if (item.isQuiz) return true; // If it's marked as a quiz, assume it's available
-    if (item.type === 'quiz') return true; // If type is quiz, assume it's available
+  // Function para simulan ang quiz bilang student
+// Sa taas ng component, idagdag ang loading state:
+
+// Tapos palitan ang handleStartQuiz ng:
+const handleStartQuiz = async (examId, examTitle) => {
+  try {
+    console.log("🎯 Student starting quiz:", { examId, examTitle });
     
-    return false;
-  };
+    if (!examId) {
+      alert("Quiz ID is missing. Please try again.");
+      return;
+    }
 
-  // ===== INDIVIDUAL QUIZ DELETE FUNCTION =====
+    // Show loading state
+    setQuizLoading(true);
+    
+    // First check if quiz is accessible
+    const accessCheck = await getQuizForStudent(examId);
+    
+    if (accessCheck.success) {
+      console.log("✅ Quiz access granted, navigating to quiz page");
+      
+      // Navigate to the student quiz page
+      navigate(`/student-quiz/${examId}`, { 
+        state: { 
+          examTitle: examTitle,
+          classId: selectedClass?._id,
+          className: selectedClass?.name
+        }
+      });
+    } else {
+      console.error("❌ Quiz access denied:", accessCheck.message);
+      alert(`❌ ${accessCheck.message || "Quiz not available"}`);
+    }
+  } catch (error) {
+    console.error("❌ Failed to start quiz:", error);
+    alert("❌ Failed to start quiz. Please try again.");
+  } finally {
+    setQuizLoading(false);
+  }
+};
+// FIXED: Better quiz availability check for students
+const isQuizAvailableForStudent = (item) => {
+  if (!item) return false;
+  
+  // Multiple conditions for quiz availability
+  const isAvailable = 
+    item.isPublished || 
+    item.isDeployed ||  // 🚀 ADD THIS - Check if exam is deployed
+    item.isQuiz ||
+    item.type === 'quiz' ||
+    (item.questions && item.questions.length > 0);
+  
+  console.log(`📊 Quiz "${item.title}" availability:`, {
+    isPublished: item.isPublished,
+    isDeployed: item.isDeployed, // 🚀 ADD THIS
+    isQuiz: item.isQuiz,
+    type: item.type,
+    hasQuestions: item.questions?.length > 0,
+    finalAvailability: isAvailable
+  });
+  
+  return isAvailable;
+};
+
+  // Function para mag-delete ng individual quiz
   const handleDeleteQuiz = async (quizId, quizTitle) => {
     if (!window.confirm(`Are you sure you want to delete "${quizTitle}"? This action cannot be undone.`)) {
       return;
@@ -141,7 +192,7 @@ export default function Dashboard() {
       if (response.success) {
         alert(`✅ "${quizTitle}" deleted successfully!`);
         
-        // Refresh the classwork data
+        // I-refresh ang classwork data
         fetchClasswork();
       }
     } catch (error) {
@@ -152,7 +203,82 @@ export default function Dashboard() {
     }
   };
 
-  // ===== DELETE ALL QUIZZES FUNCTION =====
+
+  // ===== EXAM DEPLOYMENT FUNCTIONS ===== 🚀 ADD THIS SECTION
+const handleDeployExam = async (exam) => {
+  setExamToDeploy(exam);
+  setShowDeployModal(true);
+};
+
+const confirmDeployExam = async () => {
+  if (!examToDeploy) return;
+  
+  setDeployingExam(true);
+  try {
+    const response = await api.post(`/exams/${examToDeploy._id}/deploy`, {
+      isDeployed: true,
+      deploymentTime: new Date().toISOString()
+    });
+    
+    if (response.success) {
+      // Update the exam in classwork
+      setClasswork(prev => prev.map(item => 
+        item._id === examToDeploy._id 
+          ? { ...item, isDeployed: true, deploymentTime: new Date().toISOString() }
+          : item
+      ));
+      
+      // Add to deployed exams
+      setDeployedExams(prev => [...prev, {
+        ...examToDeploy,
+        isDeployed: true,
+        deploymentTime: new Date().toISOString()
+      }]);
+      
+      setShowDeployModal(false);
+      setExamToDeploy(null);
+      alert('✅ Exam deployed successfully! Students can now join the exam session.');
+    }
+  } catch (error) {
+    console.error('Failed to deploy exam:', error);
+    alert('Failed to deploy exam: ' + (error.response?.data?.message || error.message));
+  } finally {
+    setDeployingExam(false);
+  }
+};
+
+const handleUndeployExam = async (examId) => {
+  if (!window.confirm('Are you sure you want to undeploy this exam? Students will no longer be able to join.')) {
+    return;
+  }
+  
+  try {
+    const response = await api.post(`/exams/${examId}/deploy`, {
+      isDeployed: false
+    });
+    
+    if (response.success) {
+      // Update the exam in classwork
+      setClasswork(prev => prev.map(item => 
+        item._id === examId 
+          ? { ...item, isDeployed: false }
+          : item
+      ));
+      
+      // Remove from deployed exams
+      setDeployedExams(prev => prev.filter(exam => exam._id !== examId));
+      
+      alert('✅ Exam undeployed successfully!');
+    }
+  } catch (error) {
+    console.error('Failed to undeploy exam:', error);
+    alert('Failed to undeploy exam: ' + (error.response?.data?.message || error.message));
+  }
+};
+
+
+
+  // Function para mag-delete ng lahat ng quizzes
   const handleDeleteAllQuizzes = async () => {
     if (!selectedClass) return;
     
@@ -169,7 +295,7 @@ export default function Dashboard() {
       if (response.success) {
         alert(`✅ ${response.message}`);
         
-        // Refresh the classwork data
+        // I-refresh ang classwork data
         fetchClasswork();
       }
     } catch (error) {
@@ -180,9 +306,10 @@ export default function Dashboard() {
     }
   };
 
-  // ===== NEW: HANDLE REDIRECT STATE FROM FORM CREATION =====
+  // ===== EFFECT FOR HANDLING REDIRECT STATE =====
+  // Ito ay para ma-handle ang redirect galing sa form creation
   useEffect(() => {
-    // Handle redirect state from form creation
+    // I-handle ang redirect state galing sa form creation
     if (location.state) {
       const { selectedClassId, activeTab, showClasswork, refreshClasswork } = location.state;
       
@@ -199,13 +326,13 @@ export default function Dashboard() {
             console.log("📁 Setting active tab:", activeTab);
           }
           
-          // If we need to show classwork specifically
+          // Kung kailangan ipakita ang classwork specifically
           if (showClasswork) {
             setActiveTab('classwork');
             console.log("🎯 Forcing classwork tab");
           }
           
-          // Refresh classwork data if needed
+          // I-refresh ang classwork data kung kailangan
           if (refreshClasswork && activeTab === 'classwork') {
             fetchClasswork();
             console.log("🔄 Refreshing classwork data");
@@ -213,12 +340,14 @@ export default function Dashboard() {
         }
       }
       
-      // Clear the state to avoid re-triggering on refresh
+      // I-clear ang state para maiwasan ang re-trigger sa refresh
       window.history.replaceState({}, document.title);
     }
   }, [location.state, classes]);
 
-  // ===== FIXED DELETE FUNCTION =====
+  // ===== ANNOUNCEMENT FUNCTIONS =====
+
+  // Function para mag-delete ng announcement
   const handleDeleteAnnouncement = async (announcementId) => {
     if (!window.confirm("Are you sure you want to delete this announcement?")) return;
     
@@ -229,7 +358,7 @@ export default function Dashboard() {
       console.log("✅ Delete response:", response);
       
       if (response.success) {
-        // Remove announcement from list
+        // Alisin ang announcement sa listahan
         setAnnouncements(prev => prev.filter(announcement => announcement._id !== announcementId));
         setShowCommentMenu(null);
         alert("Announcement deleted successfully!");
@@ -244,7 +373,7 @@ export default function Dashboard() {
     }
   };
 
-  // ===== FIXED COMMENT DELETE FUNCTION =====
+  // Function para mag-delete ng comment
   const handleDeleteComment = async (announcementId, commentId) => {
     if (!window.confirm("Are you sure you want to delete this comment?")) return;
     
@@ -255,7 +384,7 @@ export default function Dashboard() {
       console.log("✅ Delete comment response:", response);
       
       if (response.success) {
-        // Remove comment from announcement
+        // Alisin ang comment sa announcement
         setAnnouncements(prev => prev.map(announcement => 
           announcement._id === announcementId 
             ? {
@@ -277,22 +406,22 @@ export default function Dashboard() {
     }
   };
 
-  // Toggle comment menu
+  // Function para i-toggle ang comment menu
   const toggleCommentMenu = (announcementId, event) => {
-    event.stopPropagation();
+    event.stopPropagation(); // Pigilan ang event propagation
     setShowCommentMenu(showCommentMenu === announcementId ? null : announcementId);
   };
 
-  // Toggle comment delete menu
+  // Function para i-toggle ang comment delete menu
   const toggleCommentDeleteMenu = (commentId, event) => {
-    event.stopPropagation();
+    event.stopPropagation(); // Pigilan ang event propagation
     setShowCommentDeleteMenu(showCommentDeleteMenu === commentId ? null : commentId);
   };
 
-  // Check if user is teacher for the selected class
+  // I-check kung teacher ang user para sa selected class
   const isTeacher = selectedClass?.userRole === "teacher";
 
-  // Check if user can delete comment (teacher or comment author)
+  // I-check kung pwedeng mag-delete ng comment (teacher or comment author)
   const canDeleteComment = (comment, announcement) => {
     if (!user._id) return false;
     
@@ -303,11 +432,12 @@ export default function Dashboard() {
     return isCommentAuthor || isAnnouncementCreator || userIsTeacher;
   };
 
-  // Click outside handler for all dropdowns
-  useEffect(() => {
+  // ===== CLICK OUTSIDE HANDLER =====
+  // Ito ay para madetect kung nag-click ang user sa labas ng dropdown at isara ito
+   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
-        setShowUserDropdown(false);
+      if (commentDeleteMenuRef.current && !commentDeleteMenuRef.current.contains(event.target)) {
+        setShowDeleteMenu(false);
       }
       
       if (createJoinDropdownRef.current && !createJoinDropdownRef.current.contains(event.target)) {
@@ -322,48 +452,46 @@ export default function Dashboard() {
         setShowCommentMenu(null);
       }
 
-      if (commentDeleteMenuRef.current && !commentDeleteMenuRef.current.contains(event.target)) {
-        setShowCommentDeleteMenu(null);
-      }
-
       if (createDropdownRef.current && !createDropdownRef.current.contains(event.target)) {
         setShowCreateDropdown(false);
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ===== EXISTING DATA FETCHING FUNCTIONS =====
+  // ===== DATA FETCHING FUNCTIONS =====
+
+  // Function para kunin ang archived classes
   const fetchArchivedClasses = async () => {
     try {
       console.log("📦 Fetching archived classes...");
-      const res = await api.get('/class/archived');
-      console.log("✅ Archived classes response:", res.data);
-      setArchivedClasses(res.data.data || []);
+     // const res = await api.get('/class/archived');
+     // console.log("✅ Archived classes response:", res.data);
+     //setArchivedClasses(res.data.data || []);
     } catch (error) {
       console.error("❌ Failed to fetch archived classes:", error);
-      setArchivedClasses([]);
+     // setArchivedClasses([]); 
     }
   };
 
+  // Function para kunin ang review count
   const fetchReviewCount = async () => {
     if (userRole === 'teacher') {
       try {
         console.log("📊 Fetching review count...");
-        const res = await api.get('/class/items-to-review');
-        console.log("✅ Review count response:", res.data);
-        setItemsToReview(res.data.count || 0);
+      //  const res = await api.get('/class/items-to-review');
+      //  console.log("✅ Review count response:", res.data);
+      //  setItemsToReview(res.data.count || 0);
       } catch (error) {
         console.error('❌ Failed to fetch review count:', error);
-        setItemsToReview(0);
+      //  setItemsToReview(0);
       }
     }
   };
 
+  // Function para kunin ang announcements
   const fetchAnnouncements = async () => {
     if (!selectedClass) return;
     
@@ -381,7 +509,7 @@ export default function Dashboard() {
       setAnnouncements(announcementsWithComments);
     } catch (error) {
       console.error("❌ Failed to fetch announcements:", error);
-      // Don't set empty array on error, keep existing announcements
+      // Huwag mag-set ng empty array kapag error, keep existing announcements
       if (announcements.length === 0) {
         setAnnouncements([]);
       }
@@ -390,7 +518,8 @@ export default function Dashboard() {
     }
   };
 
-  // Main data fetching
+  // ===== MAIN DATA FETCHING EFFECT =====
+  // Ito ang pangunahing effect para kunin ang user data at classes
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -460,28 +589,33 @@ export default function Dashboard() {
     fetchData();
   }, [navigate]);
 
+  // Effect para i-fetch ang review count kapag nagbago ang userRole
   useEffect(() => {
     if (userRole) {
       fetchReviewCount();
     }
   }, [userRole]);
 
+  // Effect para i-fetch ang announcements kapag nagbago ang selected class o active tab
   useEffect(() => {
     if (selectedClass && activeTab === 'stream') {
       fetchAnnouncements();
     }
   }, [selectedClass, activeTab]);
 
+  // Effect para i-fetch ang classwork kapag nagbago ang selected class o active tab
   useEffect(() => {
     if (selectedClass && activeTab === 'classwork') {
       fetchClasswork();
     }
   }, [selectedClass, activeTab]);
 
+  // Effect para i-generate ang calendar events kapag nagbago ang classes
   useEffect(() => {
     generateCalendarEvents();
   }, [classes]);
 
+  // Function para kunin ang classwork
   const fetchClasswork = async () => {
     if (!selectedClass) return;
     
@@ -506,6 +640,7 @@ export default function Dashboard() {
     }
   };
 
+  // Function para gumawa ng announcement
   const createAnnouncement = useCallback(async (e) => {
     e.preventDefault();
     if (!announcementContent.trim() || !selectedClass) return;
@@ -533,10 +668,12 @@ export default function Dashboard() {
     }
   }, [announcementContent, selectedClass]);
 
+  // Handler para sa announcement input change
   const handleAnnouncementInputChange = useCallback((e) => {
     setAnnouncementContent(e.target.value);
   }, []);
 
+  // Function para makuha ang icon base sa classwork type
   const getClassworkIcon = (type) => {
     const icons = {
       assignment: "📝",
@@ -549,45 +686,47 @@ export default function Dashboard() {
     return icons[type] || "📄";
   };
 
-  // UPDATED: CREATE DROPDOWN HANDLER WITH QUIZ NAVIGATION AND DELETE ALL
-  const handleCreateOption = (option) => {
-    console.log("Selected:", option);
-    setShowCreateDropdown(false);
-    
-    switch(option) {
-      case 'assignment':
-        alert('Create Assignment clicked');
-        // navigate to assignment creation or open modal
-        break;
-      case 'quiz':
-        // Navigate to quiz creation page
-        if (selectedClass) {
-          navigate(`/class/${selectedClass._id}/quiz/new`);
-        } else {
-          alert('Please select a class first');
-        }
-        break;
-      case 'question':
-        alert('Create Question clicked');
-        break;
-      case 'material':
-        alert('Create Material clicked');
-        break;
-      case 'reuse':
-        alert('Reuse Post clicked');
-        break;
-      case 'topic':
-        alert('Create Topic clicked');
-        break;
-      case 'delete-all':
-        handleDeleteAllQuizzes();
-        break;
-      default:
-        break;
-    }
-  };
+  // ===== CREATE DROPDOWN HANDLER =====
+// ===== CREATE DROPDOWN HANDLER =====
+const handleCreateOption = (option) => {
+  console.log("Selected:", option);
+  setShowCreateDropdown(false);
+  
+  switch(option) {
+    case 'assignment':
+      alert('Create Assignment clicked');
+      break;
+    case 'quiz':
+      // I-navigate sa quiz creation page
+      if (selectedClass) {
+        navigate(`/class/${selectedClass._id}/quiz/new`);
+      } else {
+        alert('Please select a class first');
+      }
+      break;
+    case 'question':
+      alert('Create Question clicked');
+      break;
+    case 'material':
+      alert('Create Material clicked');
+      break;
+    case 'reuse':
+      alert('Reuse Post clicked');
+      break;
+    case 'topic':
+      alert('Create Topic clicked');
+      break;
+    case 'delete-all':
+      handleDeleteAllQuizzes();
+      break;
+    default:
+      break;
+  }
+};
 
-  // CALENDAR FUNCTIONS
+  // ===== CALENDAR FUNCTIONS =====
+
+  // Function para makuha ang class color
   const getClassColor = (classId) => {
     const colors = [
       '#4285f4', '#34a853', '#fbbc04', '#ea4335', '#a142f4', 
@@ -597,6 +736,7 @@ export default function Dashboard() {
     return colors[index];
   };
 
+  // Function para i-generate ang calendar events
   const generateCalendarEvents = () => {
     const events = [];
     
@@ -651,6 +791,7 @@ export default function Dashboard() {
     setCalendarEvents(events);
   };
 
+  // Calendar utility functions
   const getDaysInMonth = (date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   };
@@ -692,12 +833,15 @@ export default function Dashboard() {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
-  // UNENROLL FUNCTIONS
+  // ===== CLASS MANAGEMENT FUNCTIONS =====
+
+  // Function para i-toggle ang class menu
   const toggleMenu = (classId, event) => {
     event.stopPropagation();
     setShowMenuForClass(showMenuForClass === classId ? null : classId);
   };
 
+  // Function para i-confirm ang unenroll
   const confirmUnenroll = (classData, event) => {
     event.stopPropagation();
     setClassToUnenroll(classData);
@@ -705,6 +849,7 @@ export default function Dashboard() {
     setShowMenuForClass(null);
   };
 
+  // Function para mag-unenroll sa class
   const unenrollFromClass = async () => {
     if (!classToUnenroll) return;
     
@@ -727,7 +872,7 @@ export default function Dashboard() {
     }
   };
 
-  // ARCHIVE FUNCTIONS
+  // Function para i-confirm ang archive
   const confirmArchive = (classData, event) => {
     event.stopPropagation();
     setClassToArchive(classData);
@@ -735,6 +880,7 @@ export default function Dashboard() {
     setShowMenuForClass(null);
   };
 
+  // Function para mag-archive ng class
   const archiveClass = async () => {
     if (!classToArchive) return;
     
@@ -758,12 +904,14 @@ export default function Dashboard() {
     }
   };
 
+  // Function para i-confirm ang restore
   const confirmRestore = (classData, event) => {
     event.stopPropagation();
     setClassToRestore(classData);
     setShowRestoreModal(true);
   };
 
+  // Function para i-restore ang class
   const restoreClass = async () => {
     if (!classToRestore) return;
     
@@ -783,7 +931,9 @@ export default function Dashboard() {
     }
   };
 
-  // Create class
+  // ===== CLASS CREATION AND JOINING =====
+
+  // Function para gumawa ng class
   const createClass = async (e) => {
     e.preventDefault();
     try {
@@ -798,7 +948,7 @@ export default function Dashboard() {
     }
   };
 
-  // Join class
+  // Function para sumali sa class
   const joinClass = async (e) => {
     e.preventDefault();
     try {
@@ -813,11 +963,11 @@ export default function Dashboard() {
     }
   };
 
-  // UPDATED: Select class and fetch details
+  // Function para pumili ng class
   const handleSelectClass = async (classData) => {
     console.log("🎯 Selecting class:", classData.name);
     setSelectedClass(classData);
-    setActiveTab("stream"); // Reset to stream when selecting class
+    setActiveTab("stream"); // I-reset sa stream kapag pumili ng class
     
     try {
       const examsRes = await api.get(`/exams/${classData._id}`);
@@ -826,13 +976,14 @@ export default function Dashboard() {
       const membersRes = await api.get(`/class/${classData._id}/members`);
       setStudents(membersRes.data || []);
       
-      // Fetch classwork immediately when class is selected
+      // I-fetch agad ang classwork kapag napili ang class
       fetchClasswork();
     } catch (error) {
       console.error("Failed to fetch class details:", error);
     }
   };
 
+  // Function para mag-logout
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userName");
@@ -840,97 +991,176 @@ export default function Dashboard() {
     window.location.href = "/login";
   };
 
-  // Helper function for random colors
+  // Helper function para sa random colors
   const getRandomColor = () => {
-    const colors = ['blue', 'green', 'yellow', 'red', 'purple', 'teal'];
+    const colors = ['blue', 'red', 'green'];
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
-  // ===== COMPLETELY FIXED ANNOUNCEMENT CARD COMPONENT =====
-  const AnnouncementCard = ({ announcement }) => {
-    // FIXED: Use user state instead of localStorage
-    const currentUserId = user._id;
-    const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
-    const canEditDelete = isAnnouncementCreator || isTeacher;
-    
-    console.log("🔍 Delete permission check:");
-    console.log("   Announcement Creator ID:", announcement.createdBy?._id);
-    console.log("   Current User ID:", currentUserId);
-    console.log("   Is Teacher:", isTeacher);
-    console.log("   Can Delete:", canEditDelete);
-    
-    // Local state for everything
-    const [localCommentInput, setLocalCommentInput] = useState("");
-    const [localEditContent, setLocalEditContent] = useState(announcement.content);
-    const [isEditing, setIsEditing] = useState(false);
-    const [isPostingComment, setIsPostingComment] = useState(false);
-    const [isSavingEdit, setIsSavingEdit] = useState(false);
-    
-    const textareaRef = useRef(null);
+ // ===== FIXED ANNOUNCEMENT CARD COMPONENT =====
+// ===== COMPLETELY FIXED ANNOUNCEMENT CARD COMPONENT WITH DEBUGGING =====
+const AnnouncementCard = ({ announcement }) => {
+  const currentUserId = user._id;
+  const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
+  const canEditDelete = isAnnouncementCreator || isTeacher;
+  
+  console.log("🎯 ANNOUNCEMENT CARD RENDERED:", {
+    announcementId: announcement._id,
+    currentUserId,
+    isAnnouncementCreator,
+    isTeacher,
+    canEditDelete,
+    announcementCreator: announcement.createdBy?._id,
+    userRole: selectedClass?.userRole
+  });
+  
+  // Local state
+  const [localCommentInput, setLocalCommentInput] = useState("");
+  const [localEditContent, setLocalEditContent] = useState(announcement.content);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-    // Auto-focus when editing starts
-    useEffect(() => {
-      if (isEditing && textareaRef.current) {
-        textareaRef.current.focus();
-        const length = textareaRef.current.value.length;
-        textareaRef.current.setSelectionRange(length, length);
-      }
-    }, [isEditing]);
+  const textareaRef = useRef(null);
+  const commentMenuRef = useRef(null);
 
-    // Edit functions
-    const startEditAnnouncement = () => {
-      setIsEditing(true);
-      setLocalEditContent(announcement.content);
-      setShowCommentMenu(null);
+  // Auto-focus when editing starts
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus();
+      const length = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(length, length);
+    }
+  }, [isEditing]);
+
+  // ===== FIXED EDIT FUNCTIONS =====
+  const startEditAnnouncement = () => {
+    console.log("🔄 STARTING EDIT - Announcement ID:", announcement._id);
+    console.log("📝 Current content:", announcement.content);
+    setIsEditing(true);
+    setLocalEditContent(announcement.content);
+    setShowCommentMenu(null);
+  };
+
+  const saveEditAnnouncement = async () => {
+  if (!localEditContent.trim()) {
+    console.log("❌ Empty content, not saving");
+    return;
+  }
+  
+  console.log("💾 SAVING EDIT - Button clicked!");
+  console.log("📦 Save Data:", {
+    announcementId: announcement._id,
+    newContent: localEditContent,
+    currentUserId,
+    canEditDelete
+  });
+  
+  setIsSavingEdit(true);
+  try {
+    const updateData = {
+      content: localEditContent.trim()
     };
+    
+    console.log("🚀 Calling updateAnnouncement API...");
+    
+    // ADD THIS DEBUG LINE TO CHECK IF API FUNCTION IS CALLED
+    const response = await updateAnnouncement(announcement._id, updateData);
+    console.log("✅ EDIT API RESPONSE RECEIVED:", response);
 
-    const cancelEditAnnouncement = () => {
-      setIsEditing(false);
-      setLocalEditContent(announcement.content);
-    };
-
-    const saveEditAnnouncement = async () => {
-      if (!localEditContent.trim()) return;
+    if (response.success) {
+      console.log("🔄 UPDATING ANNOUNCEMENTS STATE - Before update");
+      console.log("Current announcements count:", announcements.length);
       
-      setIsSavingEdit(true);
-      try {
-        const response = await updateAnnouncement(announcement._id, {
-          content: localEditContent.trim()
-        });
-
-        console.log("✅ Edit response:", response);
-
-        // Update announcement in list
-        setAnnouncements(prev => prev.map(ann => 
+      // Update the announcement in the list
+      setAnnouncements(prev => {
+        const updated = prev.map(ann => 
           ann._id === announcement._id 
-            ? { ...ann, content: localEditContent.trim() }
+            ? { 
+                ...ann, 
+                content: localEditContent.trim(),
+                updatedAt: new Date().toISOString()
+              }
             : ann
-        ));
+        );
+        console.log("🔄 After update - announcements:", updated);
+        return updated;
+      });
 
-        setIsEditing(false);
-        alert("Announcement updated successfully!");
-      } catch (error) {
-        console.error("❌ Failed to edit announcement:", error);
-        console.error("Error details:", error.response?.data);
-        alert("Failed to edit announcement: " + (error.response?.data?.message || error.message));
-      } finally {
-        setIsSavingEdit(false);
+      setIsEditing(false);
+      console.log("🎉 EDIT SUCCESSFUL - Editing mode closed");
+      alert("Announcement updated successfully!");
+    } else {
+      console.error("❌ EDIT FAILED - API returned false");
+      alert("Failed to update announcement: " + (response.message || "Unknown error"));
+    }
+  } catch (error) {
+    console.error("❌ EDIT ERROR:", error);
+    console.error("Error details:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    alert("Failed to edit announcement: " + (error.response?.data?.message || error.message));
+  } finally {
+    setIsSavingEdit(false);
+    console.log("🏁 Save process completed");
+  }
+};
+
+  const cancelEditAnnouncement = () => {
+    console.log("❌ Canceling edit");
+    setIsEditing(false);
+    setLocalEditContent(announcement.content);
+  };
+
+  // Handle edit textarea key press
+  const handleEditKeyPress = (e) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      saveEditAnnouncement();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditAnnouncement();
+    }
+  };
+
+  // ===== FIXED DELETE FUNCTION =====
+  const handleDeleteAnnouncement = async () => {
+    if (!window.confirm("Are you sure you want to delete this announcement?")) return;
+    
+    try {
+      console.log("🗑️ DELETING ANNOUNCEMENT:", announcement._id);
+      const response = await deleteAnnouncement(announcement._id);
+      console.log("✅ DELETE RESPONSE:", response);
+
+      if (response.success) {
+        // Remove announcement from list
+        setAnnouncements(prev => prev.filter(ann => ann._id !== announcement._id));
+        setShowCommentMenu(null);
+        alert("Announcement deleted successfully!");
+      } else {
+        throw new Error(response.message || "Failed to delete announcement");
       }
-    };
+    } catch (error) {
+      console.error("❌ DELETE ERROR:", error);
+      alert("Failed to delete announcement: " + (error.response?.data?.message || error.message));
+    }
+  };
 
-    // Comment submission
-    const handleCommentSubmit = async () => {
-      if (!localCommentInput.trim()) return;
-      
-      setIsPostingComment(true);
-      
-      try {
-        const response = await addCommentToAnnouncement(announcement._id, {
-          content: localCommentInput.trim()
-        });
+  // Comment submission
+  const handleCommentSubmit = async () => {
+    if (!localCommentInput.trim()) return;
+    
+    setIsPostingComment(true);
+    
+    try {
+      const response = await addCommentToAnnouncement(announcement._id, {
+        content: localCommentInput.trim()
+      });
 
-        console.log("✅ Comment response:", response);
-
+      if (response.success) {
         // Update announcements with new comment
         setAnnouncements(prev => prev.map(ann => 
           ann._id === announcement._id 
@@ -942,224 +1172,258 @@ export default function Dashboard() {
         ));
 
         setLocalCommentInput("");
-      } catch (error) {
-        console.error("Failed to add comment:", error);
-        alert(error.response?.data?.message || "Failed to add comment");
-      } finally {
-        setIsPostingComment(false);
+      } else {
+        throw new Error(response.message || "Failed to add comment");
       }
+    } catch (error) {
+      console.error("Failed to add comment:", error);
+      alert(error.response?.data?.message || "Failed to add comment");
+    } finally {
+      setIsPostingComment(false);
+    }
+  };
+
+  // Handle Enter key press for comments
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleCommentSubmit();
+    }
+  };
+
+  // Toggle comment menu
+  const toggleCommentMenu = (e) => {
+    e.stopPropagation();
+    console.log("📋 TOGGLING MENU for announcement:", announcement._id);
+    setShowCommentMenu(showCommentMenu === announcement._id ? null : announcement._id);
+  };
+
+  // Fixed CommentItem component
+  const CommentItem = ({ comment, announcement }) => {
+    const currentUserId = user._id;
+    const isCommentAuthor = comment.author?._id === currentUserId;
+    const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
+    const canDeleteComment = isCommentAuthor || isAnnouncementCreator || isTeacher;
+    
+    const [showDeleteMenu, setShowDeleteMenu] = useState(false);
+    const commentDeleteMenuRef = useRef(null);
+
+    const toggleDeleteMenu = (e) => {
+      e.stopPropagation();
+      setShowDeleteMenu(!showDeleteMenu);
     };
 
-    // Handle Enter key press for comments
-    const handleKeyPress = (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleCommentSubmit();
-      }
-    };
+    // Click outside handler for comment delete menu
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (commentDeleteMenuRef.current && !commentDeleteMenuRef.current.contains(event.target)) {
+          setShowDeleteMenu(false);
+        }
+      };
 
-    // Handle edit textarea key press
-    const handleEditKeyPress = (e) => {
-      if (e.key === 'Enter' && e.ctrlKey) {
-        e.preventDefault();
-        saveEditAnnouncement();
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        cancelEditAnnouncement();
-      }
-    };
-
-    // Comment Item Component with Delete Functionality
-    const CommentItem = ({ comment, announcement }) => {
-      const currentUserId = user._id;
-      const isCommentAuthor = comment.author?._id === currentUserId;
-      const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
-      const canDeleteComment = isCommentAuthor || isAnnouncementCreator || isTeacher;
-      
-      return (
-        <div className="comment-item">
-          <div className="comment-avatar">
-            <img 
-              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(comment.author?.name || 'User')}&background=34a853&color=fff`}
-              alt={comment.author?.name}
-            />
-          </div>
-          <div className="comment-content">
-            <div className="comment-header">
-              <div className="comment-author-info">
-                <span className="comment-author">{comment.author?.name || 'User'}</span>
-                <span className="comment-time">
-                  {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              
-              {/* Comment Delete Menu */}
-              {canDeleteComment && (
-                <div className="comment-actions" ref={commentDeleteMenuRef}>
-                  <button 
-                    className="comment-menu-btn"
-                    onClick={(e) => toggleCommentDeleteMenu(comment._id, e)}
-                  >
-                    <FaEllipsisV className="comment-menu-icon" />
-                  </button>
-                  
-                  {showCommentDeleteMenu === comment._id && (
-                    <div className="comment-menu-dropdown">
-                      <button 
-                        className="comment-menu-item delete"
-                        onClick={() => handleDeleteComment(announcement._id, comment._id)}
-                      >
-                        <FaTrash className="comment-menu-item-icon" />
-                        Delete Comment
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <p className="comment-text">{comment.content}</p>
-          </div>
-        </div>
-      );
-    };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     return (
-      <div key={announcement._id} className="announcement-card">
-        <div className="announcement-header">
-          <div className="announcement-avatar">
-            <img 
-              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(announcement.createdBy?.name || 'User')}&background=4285f4&color=fff`}
-              alt={announcement.createdBy?.name}
-            />
-          </div>
-          <div className="announcement-info">
-            <div className="announcement-author">
-              {announcement.createdBy?.name || 'Teacher'}
-              {isTeacher && <span className="teacher-badge">Teacher</span>}
-            </div>
-            <div className="announcement-time">
-              {new Date(announcement.createdAt).toLocaleString()}
-            </div>
-          </div>
-          
-          {/* FIXED: Announcement Menu (Teacher or announcement creator) */}
-          {canEditDelete && !isEditing && (
-            <div className="announcement-menu" ref={commentMenuRef}>
-              <button 
-                className="menu-btn"
-                onClick={(e) => toggleCommentMenu(announcement._id, e)}
-              >
-                <FaEllipsisV className="menu-icon" />
-              </button>
-              
-              {showCommentMenu === announcement._id && (
-                <div className="announcement-menu-dropdown">
-                  <button 
-                    className="menu-item"
-                    onClick={startEditAnnouncement}
-                  >
-                    <FaEdit className="menu-item-icon" />
-                    Edit
-                  </button>
-                  <button 
-                    className="menu-item delete"
-                    onClick={() => handleDeleteAnnouncement(announcement._id)}
-                  >
-                    <FaTrash className="menu-item-icon" />
-                    Delete
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+      <div className="comment-item">
+        <div className="comment-avatar">
+          <img 
+            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(comment.author?.name || 'User')}&background=34a853&color=fff`}
+            alt={comment.author?.name}
+          />
         </div>
-
-        {/* Announcement Content */}
-        <div className="announcement-content">
-          {isEditing ? (
-            <div className="edit-announcement">
-              <textarea
-                ref={textareaRef}
-                className="edit-announcement-textarea"
-                value={localEditContent}
-                onChange={(e) => setLocalEditContent(e.target.value)}
-                onKeyDown={handleEditKeyPress}
-                rows="3"
-                disabled={isSavingEdit}
-              />
-              <div className="edit-actions">
-                <button 
-                  className="cancel-edit-btn"
-                  onClick={cancelEditAnnouncement}
-                  disabled={isSavingEdit}
-                >
-                  Cancel
-                </button>
-                <button 
-                  className="save-edit-btn"
-                  onClick={saveEditAnnouncement}
-                  disabled={!localEditContent.trim() || isSavingEdit}
-                >
-                  {isSavingEdit ? "Saving..." : "Save"}
-                </button>
-              </div>
+        <div className="comment-content">
+          <div className="comment-header">
+            <div className="comment-author-info">
+              <span className="comment-author">{comment.author?.name || 'User'}</span>
+              <span className="comment-time">
+                {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
-          ) : (
-            <p>{announcement.content}</p>
-          )}
-        </div>
-
-        {/* Comments Section */}
-        {!isEditing && (
-          <div className="announcement-comments">
-            {/* Comments List */}
-            {announcement.comments && announcement.comments.length > 0 && (
-              <div className="comments-list">
-                {announcement.comments.map((comment) => (
-                  <CommentItem 
-                    key={comment._id} 
-                    comment={comment} 
-                    announcement={announcement}
-                  />
-                ))}
+            
+            {canDeleteComment && (
+              <div className="comment-actions" ref={commentDeleteMenuRef}>
+                <button 
+                  className="comment-menu-btn"
+                  onClick={toggleDeleteMenu}
+                >
+                  <FaEllipsisV className="comment-menu-icon" />
+                </button>
+                
+                {showDeleteMenu && (
+                  <div className="comment-menu-dropdown">
+                    <button 
+                      className="comment-menu-item delete"
+                      onClick={() => handleDeleteComment(announcement._id, comment._id)}
+                    >
+                      <FaTrash className="comment-menu-item-icon" />
+                      Delete Comment
+                    </button>
+                  </div>
+                )}
               </div>
             )}
-
-            {/* Add Comment Form */}
-            <div className="add-comment">
-              <div className="comment-avatar">
-                <img 
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=ea4335&color=fff`}
-                  alt={user.name}
-                />
-              </div>
-              <div className="comment-input-container">
-                <input
-                  type="text"
-                  className="comment-input"
-                  placeholder="Add class comment..."
-                  value={localCommentInput}
-                  onChange={(e) => setLocalCommentInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  disabled={isPostingComment}
-                />
-                <button 
-                  className="comment-submit-btn"
-                  onClick={handleCommentSubmit}
-                  disabled={!localCommentInput.trim() || isPostingComment}
-                >
-                  {isPostingComment ? "Posting..." : "Post"}
-                </button>
-              </div>
-            </div>
           </div>
-        )}
+          <p className="comment-text">{comment.content}</p>
+        </div>
       </div>
     );
   };
 
-  // CLASS CARD COMPONENT
+  return (
+    <div key={announcement._id} className="announcement-card">
+      <div className="announcement-header">
+        <div className="announcement-avatar">
+          <img 
+            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(announcement.createdBy?.name || 'User')}&background=4285f4&color=fff`}
+            alt={announcement.createdBy?.name}
+          />
+        </div>
+        <div className="announcement-info">
+          <div className="announcement-author">
+            {announcement.createdBy?.name || 'Teacher'}
+            {isTeacher && <span className="teacher-badge">Teacher</span>}
+          </div>
+          <div className="announcement-time">
+            {new Date(announcement.createdAt).toLocaleString()}
+            {announcement.updatedAt && announcement.updatedAt !== announcement.createdAt && (
+              <span className="edited-badge">(edited)</span>
+            )}
+          </div>
+        </div>
+        
+        {/* Announcement Menu (Teacher or announcement creator) */}
+        {canEditDelete && !isEditing && (
+          <div className="announcement-menu" ref={commentMenuRef}>
+            <button 
+              className="menu-btn"
+              onClick={toggleCommentMenu}
+            >
+              <FaEllipsisV className="menu-icon" />
+            </button>
+            
+            {showCommentMenu === announcement._id && (
+              <div className="announcement-menu-dropdown">
+                <button 
+                  className="menu-item"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log("✏️ EDIT BUTTON CLICKED");
+                    startEditAnnouncement();
+                  }}
+                >
+                  <FaEdit className="menu-item-icon" />
+                  Edit
+                </button>
+                <button 
+                  className="menu-item delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log("🗑️ DELETE BUTTON CLICKED");
+                    handleDeleteAnnouncement();
+                  }}
+                >
+                  <FaTrash className="menu-item-icon" />
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Announcement Content */}
+      <div className="announcement-content">
+        {isEditing ? (
+          <div className="edit-announcement">
+            <textarea
+              ref={textareaRef}
+              className="edit-announcement-textarea"
+              value={localEditContent}
+              onChange={(e) => setLocalEditContent(e.target.value)}
+              onKeyDown={handleEditKeyPress}
+              rows="3"
+              disabled={isSavingEdit}
+              placeholder="What would you like to announce?"
+            />
+            <div className="edit-actions">
+              <button 
+                className="cancel-edit-btn"
+                onClick={cancelEditAnnouncement}
+                disabled={isSavingEdit}
+              >
+                Cancel
+              </button>
+              <button 
+  className="save-edit-btn"
+  onClick={(e) => {
+    console.log("🖱️ SAVE BUTTON CLICKED!");
+    e.stopPropagation();
+    saveEditAnnouncement();
+  }}
+  disabled={!localEditContent.trim() || isSavingEdit}
+>
+  {isSavingEdit ? "Saving..." : "Save"}
+</button>
+            </div>
+          </div>
+        ) : (
+          <p className="announcement-text">{announcement.content}</p>
+        )}
+      </div>
+
+      {/* Comments Section */}
+      {!isEditing && (
+        <div className="announcement-comments">
+          {/* Comments List */}
+          {announcement.comments && announcement.comments.length > 0 && (
+            <div className="comments-list">
+              {announcement.comments.map((comment) => (
+                <CommentItem 
+                  key={comment._id} 
+                  comment={comment} 
+                  announcement={announcement}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Add Comment Form */}
+          <div className="add-comment">
+            <div className="comment-avatar">
+              <img 
+                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=ea4335&color=fff`}
+                alt={user.name}
+              />
+            </div>
+            <div className="comment-input-container">
+              <input
+                type="text"
+                className="comment-input"
+                placeholder="Add class comment..."
+                value={localCommentInput}
+                onChange={(e) => setLocalCommentInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                disabled={isPostingComment}
+              />
+              <button 
+                className="comment-submit-btn"
+                onClick={handleCommentSubmit}
+                disabled={!localCommentInput.trim() || isPostingComment}
+              >
+                {isPostingComment ? "Posting..." : "Post"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+  // ===== CLASS CARD COMPONENT =====
+  // Ito ay para sa pag-display ng individual class card
   const ClassCard = ({ classData }) => {
     const isTeacher = classData.userRole === "teacher";
     
@@ -1276,6 +1540,83 @@ export default function Dashboard() {
       </div>
     );
   };
+
+  // ===== MODAL COMPONENTS =====
+// ===== MODAL COMPONENTS =====
+
+// DEPLOY EXAM MODAL 🚀 ADD THIS MODAL
+const DeployExamModal = () => {
+  if (!showDeployModal || !examToDeploy) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="flex-shrink-0">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Deploy Exam</h3>
+            <p className="text-sm text-gray-600">Start exam session for students</p>
+          </div>
+        </div>
+        
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+          <p className="text-sm text-blue-800">
+            You are about to deploy: <strong>"{examToDeploy.title}"</strong>
+          </p>
+          <p className="text-xs text-blue-700 mt-1">
+            Students will be able to join the exam session with camera and microphone access required.
+          </p>
+        </div>
+
+        <div className="space-y-3 mb-4">
+          <div className="flex items-center text-sm text-gray-600">
+            <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Camera access required
+          </div>
+          <div className="flex items-center text-sm text-gray-600">
+            <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Microphone access required
+          </div>
+          <div className="flex items-center text-sm text-gray-600">
+            <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Real-time proctoring enabled
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={() => {
+              setShowDeployModal(false);
+              setExamToDeploy(null);
+            }}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmDeployExam}
+            disabled={deployingExam}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+          >
+            {deployingExam ? 'Deploying...' : 'Deploy Exam'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
   // UNENROLL CONFIRMATION MODAL
   const UnenrollModal = () => {
@@ -1514,7 +1855,8 @@ export default function Dashboard() {
     );
   }, [showAnnouncementModal, selectedClass, announcementContent, postingAnnouncement, handleAnnouncementInputChange, createAnnouncement]);
 
-  // GOOGLE CLASSROOM STYLE CALENDAR COMPONENT
+  // ===== CALENDAR COMPONENT =====
+  // Ito ay Google Classroom style calendar
   const GoogleClassroomCalendar = () => {
     const daysInMonth = getDaysInMonth(currentDate);
     const firstDayOfMonth = getFirstDayOfMonth(currentDate);
@@ -1684,7 +2026,9 @@ export default function Dashboard() {
     );
   };
 
-  // RENDER FUNCTIONS
+  // ===== RENDER FUNCTIONS =====
+
+  // Main content renderer
   const renderMainContent = () => {
     switch (activeSidebar) {
       case "home":
@@ -1700,7 +2044,7 @@ export default function Dashboard() {
     }
   };
 
-  // FIXED: Stream content with working announcements
+  // Stream content na may working announcements
   const renderStreamContent = () => {
     return (
       <div className="stream-content">
@@ -1776,7 +2120,7 @@ export default function Dashboard() {
     );
   };
 
-  // Classwork Tab with START QUIZ BUTTON FOR STUDENTS
+  // Classwork Tab na may START QUIZ BUTTON FOR STUDENTS
   const renderClassworkTab = () => {
     return (
       <div className="classwork-tab">
@@ -1845,7 +2189,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* Delete All Option - Only show if there are quizzes */}
+                    {/* Delete All Option - Ipakita lang kung may mga quizzes */}
                     {classwork.some(item => item.type === 'quiz') && (
                       <>
                         <div className="dropdown-divider"></div>
@@ -1922,19 +2266,38 @@ export default function Dashboard() {
                     
                     {/* TEACHER ACTIONS */}
                     {selectedClass?.userRole === "teacher" && item.type === 'quiz' && (
-                      <button 
-                        className="delete-quiz-btn"
-                        onClick={() => handleDeleteQuiz(item._id, item.title)}
-                        disabled={deletingQuiz === item._id}
-                        title="Delete this quiz"
-                      >
-                        {deletingQuiz === item._id ? (
-                          <div className="loading-spinner-small"></div>
-                        ) : (
-                          '🗑️'
-                        )}
-                      </button>
-                    )}
+  <div className="teacher-exam-actions">
+    {!item.isDeployed ? (
+      <button 
+        className="deploy-exam-btn"
+        onClick={() => navigate(`/teacher-exam/${item._id}`)}
+        title="Start exam session"
+      >
+        🚀 Start Session
+      </button>
+    ) : (
+      <button 
+        className="undeploy-exam-btn"
+        onClick={() => handleUndeployExam(item._id)}
+        title="Stop exam session"
+      >
+        ⏸️ Stop Session
+      </button>
+    )}
+    <button 
+      className="delete-quiz-btn"
+      onClick={() => handleDeleteQuiz(item._id, item.title)}
+      disabled={deletingQuiz === item._id}
+      title="Delete this quiz"
+    >
+      {deletingQuiz === item._id ? (
+        <div className="loading-spinner-small"></div>
+      ) : (
+        '🗑️'
+      )}
+    </button>
+  </div>
+)}
                   </div>
                   
                   {item.description && (
@@ -1956,20 +2319,35 @@ export default function Dashboard() {
                   </div>
 
                   {/* START QUIZ BUTTON FOR STUDENTS */}
-                  {selectedClass?.userRole === "student" && item.type === 'quiz' && (
-                    <div className="classwork-actions">
-                      <button 
-                        className="start-quiz-btn"
-                        onClick={() => handleStartQuiz(item._id, item.title)}
-                        title="Start this quiz"
-                      >
-                        🚀 Start Quiz
-                      </button>
-                      {!isQuizAvailableForStudent(item) && (
-                        <div className="quiz-info">
-                          <small>This quiz is not available yet</small>
-                        </div>
-                      )}
+                 {selectedClass?.userRole === "student" && item.type === 'quiz' && (
+  <div className="classwork-actions">
+    {isQuizAvailableForStudent(item) ? (
+      // Sa classwork section, palitan ang button ng:
+<button 
+  className="start-quiz-btn"
+  onClick={() => handleStartQuiz(item._id, item.title)}
+  disabled={quizLoading}
+  title="Start this quiz"
+>
+  {quizLoading ? 'Loading...' : '🚀 Start Quiz'}
+</button>
+    ) : (
+      <div className="quiz-info unavailable">
+        <small>This quiz is not available yet</small>
+      </div>
+    )} {/* Show quiz details */}
+    <div className="quiz-details">
+      {item.questions && (
+        <span>{item.questions.length} questions</span>
+      )}
+      {item.totalPoints > 0 && (
+        <span>{item.totalPoints} points</span>
+      )}
+      {item.dueDate && (
+        <span>Due: {new Date(item.dueDate).toLocaleDateString()}</span>
+      )}
+    </div>
+  
                     </div>
                   )}
 
@@ -1986,6 +2364,7 @@ export default function Dashboard() {
     );
   };
 
+  // Home content renderer
   const renderHomeContent = () => {
     if (selectedClass) {
       return (
@@ -2036,7 +2415,7 @@ export default function Dashboard() {
           {activeTab === "stream" && (
             <div className="stream-tab">
               <div className="class-banner-section">
-                <div className="class-banner" style={{backgroundImage: `url('https://scontent.fmnl17-5.fna.fbcdn.net/v/t39.30808-6/494203091_3994132537522695_7595594291222788294_n.jpg?_nc_cat=102&ccb=1-7&_nc_sid=cc71e4&_nc_ohc=SqxEwdvqLKQQ7kNvwFwMVp9&_nc_oc=AdmRHi39VExKIqZg_iuh6zkQ2z-w_kQBIDfvzN_J9rd_lYPcfy1WpR5M2dE3rkJN93o&_nc_zt=23&_nc_ht=scontent.fmnl17-5.fna&_nc_gid=yLrhV52ESP0XRMBSluIoMg&oh=00_Afh7lnNbvVnDgW1jwWRIqyNQW_SUUFmXjpXxJ9yZ7eb-Ug&oe=6911E7F0')`}}>
+                <div className="class-banner" style={{backgroundImage: `url('src/assets/earist.jpg')`}}>
                   <div className="banner-overlay"></div>
                 </div>
                 <div className="class-title-section">
@@ -2044,17 +2423,7 @@ export default function Dashboard() {
                   <div className="class-subtitle">{selectedClass.description || "Class"}</div>
                 </div>
                 <div className="class-actions">
-                  <button className="customize-btn">
-                    <svg className="customize-icon" focusable="false" width="18" height="18" viewBox="0 0 24 24">
-                      <path d="M20.41 4.94l-1.35-1.35c-.78-.78-2.05-.78-2.83 0L3 16.82V21h4.18L20.41 7.77c.79-.78.79-2.05 0-2.83zm-14 14.12L5 19v-1.36l9.82-9.82 1.41 1.41-9.82 9.83z"></path>
-                    </svg>
-                    Customize
-                  </button>
-                  <button className="info-btn" aria-label="View class information">
-                    <svg className="info-icon" focusable="false" width="24" height="24" viewBox="0 0 24 24">
-                      <path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"></path>
-                    </svg>
-                  </button>
+                
                 </div>
               </div>
 
@@ -2157,6 +2526,7 @@ export default function Dashboard() {
     );
   };
 
+  // Calendar content renderer
   const renderCalendarContent = () => (
     <div className="calendar-view">
       <div className="calendar-header">
@@ -2167,6 +2537,7 @@ export default function Dashboard() {
     </div>
   );
 
+  // Archived content renderer
   const renderArchivedContent = () => (
     <div className="archived-view">
       <div className="archived-header">
@@ -2220,6 +2591,7 @@ export default function Dashboard() {
     </div>
   );
 
+  // Settings content renderer
   const renderSettingsContent = () => (
     <div className="settings-view">
       <div className="settings-header">
@@ -2242,8 +2614,10 @@ export default function Dashboard() {
     </div>
   );
 
+  // ===== MAIN COMPONENT RENDER =====
   return (
     <div className="dashboard-wrapper">
+      {/* HEADER SECTION */}
       <header className="dashboard-header">
         <div className="header-left">
           <button 
@@ -2258,6 +2632,7 @@ export default function Dashboard() {
         </div>
 
         <div className="header-right">
+          {/* CREATE/JOIN DROPDOWN */}
           <div className="plus-btn-container" ref={createJoinDropdownRef}>
             <button 
               className="plus-btn"
@@ -2296,6 +2671,7 @@ export default function Dashboard() {
             )}
           </div>
 
+          {/* USER PROFILE DROPDOWN */}
           <div className="user-profile" ref={userDropdownRef}>
             <button 
               className="user-profile-btn"
@@ -2349,7 +2725,9 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* MAIN CONTENT SECTION */}
       <main className="dashboard-main">
+        {/* SIDEBAR NAVIGATION */}
         <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`} ref={sidebarRef}>
           <nav className="sidebar-nav">
             <button 
@@ -2373,6 +2751,7 @@ export default function Dashboard() {
             
             <hr className="sidebar-separator" />
             
+            {/* TEACHING CLASSES SECTION */}
             {userRole === "teacher" && (
               <>
                 {teachingClasses.length > 0 ? (
@@ -2433,6 +2812,7 @@ export default function Dashboard() {
               </>
             )}
             
+            {/* ENROLLED CLASSES SECTION */}
             {userRole === "student" && enrolledClasses.length > 0 && (
               <>
                 <div 
@@ -2519,6 +2899,7 @@ export default function Dashboard() {
           </nav>
         </aside>
 
+        {/* MAIN CONTENT AREA */}
         <div className={`main-content ${sidebarOpen ? '' : 'expanded'}`}>
           {renderMainContent()}
         </div>
@@ -2573,7 +2954,9 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* RENDER MODALS */}
       {AnnouncementModal()}
+       <DeployExamModal /> 
       <UnenrollModal />
       <ArchiveModal />
       <RestoreModal />

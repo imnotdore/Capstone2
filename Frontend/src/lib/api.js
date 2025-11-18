@@ -1,4 +1,4 @@
-// src/lib/api.js - COMPLETE FIXED VERSION WITH ANNOUNCEMENT FUNCTIONS
+// src/lib/api.js - COMPLETE FIXED VERSION
 import axios from "axios";
 
 const api = axios.create({
@@ -15,7 +15,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor for error handling
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -50,6 +50,38 @@ export const deployExam = async (examId) => {
   return response.data;
 };
 
+// ===== REAL FILE UPLOAD & PARSE =====
+export const uploadFileAndParse = async (formData) => {
+  try {
+    console.log('📁 REAL: Uploading file for parsing...');
+    
+    const response = await api.post('/exams/upload-parse', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    console.log('✅ File uploaded and parsed successfully:', response.data);
+    return response.data;
+    
+  } catch (error) {
+    console.error('❌ File upload failed:', error);
+    
+    if (error.response?.status === 413) {
+      throw new Error('File too large. Maximum size is 10MB.');
+    } else if (error.response?.status === 400) {
+      throw new Error(error.response.data?.message || 'Invalid file format.');
+    } else if (error.response?.status === 403) {
+      throw new Error('You are not authorized to upload files to this class.');
+    } else if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    } else {
+      throw new Error('Failed to process file. Please try again.');
+    }
+  }
+};
+
+
 export const getExams = async (classId) => {
   const response = await api.get(`/exams/${classId}`);
   return response.data;
@@ -62,13 +94,66 @@ export const getExamDetails = async (examId) => {
 
 // ===== STUDENT QUIZ FUNCTIONS =====
 export const getQuizForStudent = async (examId) => {
-  const response = await api.get(`/exams/take/${examId}`);
-  return response.data;
+  try {
+    console.log('🎯 Getting quiz for student, exam ID:', examId);
+    
+    const response = await api.get(`/exams/take/${examId}`);
+    console.log('✅ Student quiz response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Failed to get quiz for student:', error);
+    
+    // Better error handling
+    if (error.response?.status === 404) {
+      return {
+        success: false,
+        message: "Quiz not found. It may have been deleted or you don't have access."
+      };
+    } else if (error.response?.status === 403) {
+      return {
+        success: false,
+        message: error.response.data?.message || "You don't have permission to access this quiz."
+      };
+    } else if (error.response?.data?.message) {
+      return {
+        success: false,
+        message: error.response.data.message
+      };
+    } else {
+      return {
+        success: false,
+        message: "Network error. Please check your connection and try again."
+      };
+    }
+  }
 };
 
+
+// FIXED: Submit quiz answers function
 export const submitQuizAnswers = async (examId, answers) => {
-  const response = await api.post(`/exams/${examId}/submit`, { answers });
-  return response.data;
+  try {
+    console.log('📝 Submitting quiz answers for exam:', examId);
+    
+    const response = await api.post(`/exams/${examId}/submit`, { answers });
+    console.log('✅ Quiz submission response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Failed to submit quiz answers:', error);
+    
+    if (error.response?.data?.message) {
+      return {
+        success: false,
+        message: error.response.data.message
+      };
+    } else {
+      return {
+        success: false,
+        message: "Failed to submit answers. Please try again."
+      };
+    }
+  }
 };
 
 // ===== INDIVIDUAL QUIZ DELETE =====
@@ -130,9 +215,34 @@ export const getAnnouncement = async (announcementId) => {
   return response.data;
 };
 
+
+// FIXED: Update announcement function with detailed debugging
 export const updateAnnouncement = async (announcementId, updateData) => {
-  const response = await api.put(`/announcements/${announcementId}`, updateData);
-  return response.data;
+  try {
+    console.log("🚀 API: updateAnnouncement CALLED");
+    console.log("📦 Request Data:", {
+      announcementId,
+      updateData,
+      url: `/announcements/${announcementId}`
+    });
+
+    const token = localStorage.getItem("token");
+    console.log("🔑 Token exists:", !!token);
+
+    const response = await api.put(`/announcements/${announcementId}`, updateData);
+    
+    console.log("✅ API Response SUCCESS:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("❌ API Error updating announcement:", error);
+    console.error("📡 Error Details:", {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    throw error;
+  }
 };
 
 export const deleteAnnouncement = async (announcementId) => {
@@ -279,3 +389,34 @@ export const markAllNotificationsAsRead = async () => {
   const response = await api.put('/notifications/read-all');
   return response.data;
 };
+
+
+// src/lib/api.js - Idagdag ang mga sumusunod:
+export const startExamSession = async (examId) => {
+  try {
+    const response = await api.post(`/exams/${examId}/start`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const endExamSession = async (examId) => {
+  try {
+    const response = await api.post(`/exams/${examId}/end`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getExamSession = async (examId) => {
+  try {
+    const response = await api.get(`/exams/${examId}/session`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+// ==============UPLOAD FILE TO=================//
+

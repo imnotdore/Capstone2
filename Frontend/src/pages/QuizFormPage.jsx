@@ -1,7 +1,7 @@
-// frontend/src/pages/QuizFormPage.jsx - FULLY UPDATED WITH ANSWER KEY & POINTS
+// frontend/src/pages/QuizFormPage.jsx - UPDATED WITH FILE UPLOAD
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { createQuiz, updateQuiz, getQuizForEdit, deployExam } from '../lib/api';
+import { createQuiz, updateQuiz, getQuizForEdit, deployExam, uploadFileAndParse } from '../lib/api'; // ✅ ADDED uploadFileAndParse
 import './QuizFormPage.css';
 
 const QuizFormPage = () => {
@@ -16,9 +16,10 @@ const QuizFormPage = () => {
     description: 'Form description',
     questions: [],
     isQuiz: true,
-    totalPoints: 0 // ✅ ADDED: Track total points
+    totalPoints: 0
   });
   const [loading, setLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false); // ✅ ADDED: Separate loading for upload
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
@@ -27,7 +28,6 @@ const QuizFormPage = () => {
     }
   }, [examId, existingExamFromState]);
 
-  // ✅ ADDED: Calculate total points whenever questions change
   useEffect(() => {
     const total = quiz.questions.reduce((sum, question) => sum + (question.points || 1), 0);
     setQuiz(prev => ({ ...prev, totalPoints: total }));
@@ -54,16 +54,81 @@ const QuizFormPage = () => {
     }
   };
 
+  // ✅ ADDED: File upload handler
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword'
+    ];
+    
+    if (!validTypes.includes(file.type)) {
+      alert('Please upload a PDF or Word document (.pdf, .doc, .docx)');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB');
+      return;
+    }
+
+    try {
+      setUploadLoading(true);
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('classId', classId);
+
+      const response = await uploadFileAndParse(formData);
+      
+      if (response.success) {
+        const { questions, title, description } = response.data;
+        
+        // Merge uploaded questions with existing ones
+        const newQuestions = questions.map((q, index) => ({
+          ...q,
+          id: Date.now() + Math.random() + index, // Ensure unique IDs
+          order: quiz.questions.length + index,
+          points: q.points || 1,
+          correctAnswer: q.correctAnswer || null,
+          correctAnswers: q.correctAnswers || [],
+          answerKey: q.answerKey || ''
+        }));
+
+        setQuiz(prev => ({
+          ...prev,
+          title: title || prev.title,
+          description: description || prev.description,
+          questions: [...prev.questions, ...newQuestions]
+        }));
+
+        alert(`Successfully imported ${questions.length} questions from ${file.name}`);
+      }
+    } catch (error) {
+      console.error('File upload failed:', error);
+      alert('Failed to process file: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setUploadLoading(false);
+      // Reset file input
+      event.target.value = '';
+    }
+  };
+
   const addQuestion = () => {
     const newQuestion = {
       id: Date.now() + Math.random(),
       type: 'multiple-choice',
       title: 'Untitled Question',
       required: false,
-      points: 1, // ✅ Default points
+      points: 1,
       order: quiz.questions.length,
       options: ['Option 1'],
-      correctAnswer: null, // ✅ ADDED: Answer key fields
+      correctAnswer: null,
       correctAnswers: [],
       answerKey: ''
     };
@@ -105,7 +170,6 @@ const QuizFormPage = () => {
     }
   };
 
-  // ✅ UPDATED handleSaveQuiz with answer key data
   const handleSaveQuiz = async () => {
     try {
       setLoading(true);
@@ -119,7 +183,7 @@ const QuizFormPage = () => {
           title: quiz.title,
           description: quiz.description,
           questions: questionsForBackend,
-          totalPoints: quiz.totalPoints // ✅ ADDED: Send total points
+          totalPoints: quiz.totalPoints
         });
       } else {
         response = await createQuiz(classId, {
@@ -127,7 +191,7 @@ const QuizFormPage = () => {
           description: quiz.description,
           questions: questionsForBackend,
           isQuiz: true,
-          totalPoints: quiz.totalPoints // ✅ ADDED: Send total points
+          totalPoints: quiz.totalPoints
         });
       }
 
@@ -148,7 +212,6 @@ const QuizFormPage = () => {
     }
   };
 
-  // ✅ UPDATED Deploy quiz with answer key data
   const handleDeployQuiz = async () => {
     try {
       setLoading(true);
@@ -164,7 +227,7 @@ const QuizFormPage = () => {
           title: quiz.title,
           description: quiz.description,
           questions: questionsForBackend,
-          totalPoints: quiz.totalPoints // ✅ ADDED: Send total points
+          totalPoints: quiz.totalPoints
         });
         savedExamId = examIdToUpdate;
       } else {
@@ -173,7 +236,7 @@ const QuizFormPage = () => {
           description: quiz.description,
           questions: questionsForBackend,
           isQuiz: true,
-          totalPoints: quiz.totalPoints // ✅ ADDED: Send total points
+          totalPoints: quiz.totalPoints
         });
         savedExamId = response.data._id;
       }
@@ -255,9 +318,32 @@ const QuizFormPage = () => {
               onChange={(e) => setQuiz(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Form description"
             />
-            {/* ✅ ADDED: Total points display */}
             <div className="total-points-display">
               Total Points: <strong>{quiz.totalPoints}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* ✅ ADDED: File Upload Section */}
+        <div className="file-upload-section">
+          <div className="upload-card">
+            <div className="upload-icon">📄</div>
+            <h3>Import Questions from File</h3>
+            <p>Upload a PDF or Word document to automatically generate questions</p>
+            
+            <label className="file-upload-btn">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+                onChange={handleFileUpload}
+                disabled={uploadLoading}
+                style={{ display: 'none' }}
+              />
+              {uploadLoading ? 'Processing...' : 'Choose File (PDF/Word)'}
+            </label>
+            
+            <div className="upload-info">
+              <small>Supported formats: PDF, DOC, DOCX (Max 10MB)</small>
             </div>
           </div>
         </div>
@@ -278,7 +364,7 @@ const QuizFormPage = () => {
         <div className="add-question-section">
           <button className="add-question-btn" onClick={addQuestion}>
             <span className="add-icon">+</span>
-            Add question
+            Add question manually
           </button>
         </div>
 
@@ -310,6 +396,7 @@ const QuizFormPage = () => {
     </div>
   );
 };
+
 
 // ✅ UPDATED QuestionEditor Component with Answer Key & Points
 const QuestionEditor = ({ question, index, onUpdate, onDelete, onDuplicate }) => {

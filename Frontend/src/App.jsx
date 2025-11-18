@@ -1,4 +1,4 @@
-// src/App.jsx - UPDATED WITH STUDENT QUIZ ROUTE
+// src/App.jsx - FIXED ROUTES
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
@@ -10,7 +10,8 @@ import ExamRoomWrapper from "./pages/ExamRoomWrapper";
 import ExamFormView from "./pages/ExamFormView";
 import AuthSuccess from "./pages/AuthSuccess";
 import QuizFormPage from "./pages/QuizFormPage";
-import StudentQuiz from "./pages/StudentQuiz"; // NEW IMPORT
+import StudentQuizPage from "./pages/StudentQuizPage";
+import TeacherExamSession from "./pages/TeacherExamSession"; // ✅ ADD MISSING IMPORT
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -80,10 +81,17 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* ✅ NEW: STUDENT QUIZ TAKING ROUTE */}
+        {/* ✅ SINGLE STUDENT QUIZ ROUTE - NO DUPLICATES */}
         <Route path="/student-quiz/:examId" element={
           <ProtectedRoute>
-            <StudentQuiz />
+            <StudentQuizPage />
+          </ProtectedRoute>
+        } />
+
+        {/* ✅ TEACHER EXAM SESSION ROUTE - NOW IMPORTED */}
+        <Route path="/teacher-exam/:examId" element={
+          <ProtectedRoute requiredRole="teacher">
+            <TeacherExamSession />
           </ProtectedRoute>
         } />
 

@@ -13,8 +13,64 @@ CORS(app)
 # Load cascades
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-hand_path = os.path.join(cv2.data.haarcascades, 'haarcascade_hand.xml')
-hand_cascade = cv2.CascadeClassifier(hand_path) if os.path.exists(hand_path) else None
+
+# Enhanced eye detection for glasses
+def detect_eyes_with_glasses(face_roi_gray):
+    """Enhanced eye detection that works with glasses"""
+    eyes = []
+    
+    # Try different parameters for better detection
+    try:
+        # Standard eye detection
+        eyes = eye_cascade.detectMultiScale(
+            face_roi_gray, 
+            scaleFactor=1.1, 
+            minNeighbors=3, 
+            minSize=(15, 15)
+        )
+        
+        # If no eyes detected, try with different parameters for glasses
+        if len(eyes) == 0:
+            eyes = eye_cascade.detectMultiScale(
+                face_roi_gray,
+                scaleFactor=1.05,
+                minNeighbors=2,
+                minSize=(20, 20),
+                maxSize=(80, 80)
+            )
+            
+    except Exception as e:
+        print(f"Eye detection error: {e}")
+    
+    return eyes
+
+# Enhanced face detection for masks
+def detect_faces_with_masks(gray):
+    """Enhanced face detection that works with masks"""
+    faces = []
+    
+    try:
+        # Standard face detection
+        faces = face_cascade.detectMultiScale(
+            gray, 
+            scaleFactor=1.1, 
+            minNeighbors=5, 
+            minSize=(60, 60)
+        )
+        
+        # If no faces detected, try with different parameters
+        if len(faces) == 0:
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.05,
+                minNeighbors=3,
+                minSize=(50, 50)
+            )
+            
+    except Exception as e:
+        print(f"Face detection error: {e}")
+    
+    return faces
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -36,14 +92,15 @@ def detect_faces():
             return jsonify({'error': 'Could not decode image'}), 400
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(60, 60))
+        
+        # Enhanced face detection
+        faces = detect_faces_with_masks(gray)
 
         suspicious = []
         face_detected = len(faces) > 0
         eye_detected = False
-        hand_detected = False
         looking_away_count = 0
-        looking_back_count = 0
+        looking_forward_count = 0
 
         debug_img = img.copy()
 
@@ -52,54 +109,46 @@ def detect_faces():
                 # Draw face rectangle
                 cv2.rectangle(debug_img, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-                # Eye detection
+                # Enhanced eye detection for glasses
                 face_roi_gray = gray[y:y+h, x:x+w]
                 face_roi_gray = cv2.equalizeHist(face_roi_gray)
-                eyes = eye_cascade.detectMultiScale(
-                    face_roi_gray, scaleFactor=1.1, minNeighbors=3, minSize=(15, 15)
-                )
+                eyes = detect_eyes_with_glasses(face_roi_gray)
 
                 gaze_forward = False
-                if len(eyes) > 0:
+                if len(eyes) >= 1:  # Require at least one eye detected
                     eye_detected = True
+                    
                     # Draw eyes rectangles
                     for (ex, ey, ew, eh) in eyes:
                         cv2.rectangle(debug_img, (x+ex, y+ey), (x+ex+ew, y+ey+eh), (255, 0, 0), 2)
 
-                    # Simple horizontal gaze estimation
-                    eye_centers_x = [ex + ew/2 for (ex, ey, ew, eh) in eyes]
-                    avg_eye_center_x = sum(eye_centers_x) / len(eye_centers_x)
-                    face_center_x = w / 2
-                    deviation_ratio = abs(avg_eye_center_x - face_center_x) / (w / 2)
-                    if deviation_ratio <= 0.25:
+                    # Enhanced gaze estimation that works with single eye
+                    if len(eyes) >= 2:
+                        # Two eyes detected - normal gaze estimation
+                        eye_centers_x = [ex + ew/2 for (ex, ey, ew, eh) in eyes]
+                        avg_eye_center_x = sum(eye_centers_x) / len(eye_centers_x)
+                        face_center_x = w / 2
+                        deviation_ratio = abs(avg_eye_center_x - face_center_x) / (w / 2)
+                        gaze_forward = deviation_ratio <= 0.3
+                    else:
+                        # Single eye detected - assume forward gaze to reduce false positives
                         gaze_forward = True
 
-                # Update looking away/back counters
+                # Update looking away/forward counters
                 if gaze_forward:
-                    looking_back_count += 1
+                    looking_forward_count += 1
                 else:
                     looking_away_count += 1
 
-            # Suspicious messages
-            if not eye_detected:
-                suspicious.append("😑 Eyes possibly closed")
+            # Suspicious messages (reduced sensitivity)
+            if not eye_detected and len(faces) > 0:
+                suspicious.append("😑 Eyes not clearly visible")
             if looking_away_count > 0:
-                suspicious.append(f"👀 {looking_away_count} face(s) looking away from screen")
-            if looking_back_count > 0:
-                suspicious.append(f"✅ {looking_back_count} face(s) looking forward at screen")
+                suspicious.append(f"👀 Possible distraction detected")
             if len(faces) > 1:
                 suspicious.append("⚠️ Multiple faces detected")
         else:
-            suspicious.append("❌ No face detected")
-
-        # Hand detection
-        if hand_cascade:
-            hands = hand_cascade.detectMultiScale(gray, 1.1, 5, minSize=(60, 60))
-            if len(hands) > 0:
-                hand_detected = True
-                suspicious.append(f"🖐️ {len(hands)} hand(s) detected")
-                for (hx, hy, hw, hh) in hands:
-                    cv2.rectangle(debug_img, (hx, hy), (hx+hw, hy+hh), (0, 0, 255), 2)
+            suspicious.append("❌ Face not clearly visible")
 
         # Encode debug image
         _, buffer = cv2.imencode('.jpg', debug_img)
@@ -109,9 +158,8 @@ def detect_faces():
             'faceCount': len(faces),
             'faceDetected': face_detected,
             'eyeDetected': eye_detected,
-            'handDetected': hand_detected,
             'facesLookingAway': looking_away_count,
-            'facesLookingForward': looking_back_count,
+            'facesLookingForward': looking_forward_count,
             'suspiciousActivities': suspicious,
             'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
             'debugImage': f"data:image/jpeg;base64,{debug_image_b64}"
@@ -121,7 +169,7 @@ def detect_faces():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-
 if __name__ == '__main__':
-    print("🚀 Starting Exam Proctoring Server...")
+    print("🚀 Starting Enhanced Exam Proctoring Server...")
+    print("✅ Better detection for glasses and face masks")
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -234,7 +234,7 @@
 
 /* Options Container */
 .options-container {
-  space-y: 12px;
+  white-space-collapse: 12px;
 }
 
 .option-item {
@@ -666,3 +666,75 @@
     margin-top: 8px;
   }
 }
+
+/* frontend/src/pages/QuizFormPage.css - ADD THESE STYLES */
+
+/* File Upload Section */
+.file-upload-section {
+  margin: 2rem 0;
+  padding: 0 1rem;
+}
+
+.upload-card {
+  border: 2px dashed #ddd;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  background: #fafafa;
+  transition: all 0.3s ease;
+}
+
+.upload-card:hover {
+  border-color: #4285f4;
+  background: #f8f9ff;
+}
+
+.upload-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.upload-card h3 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+}
+
+.upload-card p {
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.file-upload-btn {
+  display: inline-block;
+  padding: 12px 24px;
+  background: #4285f4;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  font-weight: 500;
+}
+
+.file-upload-btn:hover {
+  background: #3367d6;
+}
+
+.file-upload-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.upload-info {
+  margin-top: 1rem;
+}
+
+.upload-info small {
+  color: #888;
+}
+
+/* Loading states */
+.upload-loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
