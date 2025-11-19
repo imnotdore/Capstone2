@@ -418,5 +418,93 @@ export const getExamSession = async (examId) => {
     throw error;
   }
 };
+
+// src/lib/api.js - ADD THESE FUNCTIONS
+
+// ✅ GET ACTIVE EXAM SESSIONS FOR TEACHER
+export const getTeacherActiveSessions = async () => {
+  try {
+    const response = await api.get('/exams/teacher/active-sessions');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to get active sessions:', error);
+    throw error;
+  }
+};
+
+// ✅ GET JOINED STUDENTS
+export const getJoinedStudents = async (examId) => {
+  try {
+    const response = await api.get(`/exams/${examId}/joined-students`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to get joined students:', error);
+    throw error;
+  }
+};
+
+// ✅ STUDENT JOIN EXAM
+// In your api.js - Update joinExamSession function
+export const joinExamSession = async (examId) => {
+  try {
+    const response = await api.post(`/exams/${examId}/join`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to join exam session:', error);
+    
+    // Handle specific errors
+    if (error.response?.status === 403) {
+      throw new Error(error.response.data.message || "Exam session is not active");
+    }
+    throw error;
+  }
+};
+
+// Get exam session status (for timer sync)
+export const getExamSessionStatus = async (examId) => {
+  try {
+    const response = await api.get(`/exams/${examId}/session-status`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Report proctoring alert to teacher
+export const reportProctoringAlert = async (examId, alertData) => {
+  try {
+    const response = await api.post(`/exams/${examId}/proctoring-alert`, alertData);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// src/lib/api.js - ADD THESE ENDPOINTS
+
+// Proctoring endpoints
+export const checkProctoringHealth = async () => {
+  try {
+    const response = await fetch('http://localhost:5000/health');
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const analyzeProctoringFrame = async (imageData) => {
+  try {
+    const response = await fetch('http://localhost:5000/detect-faces', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ image: imageData }),
+    });
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
 // ==============UPLOAD FILE TO=================//
 

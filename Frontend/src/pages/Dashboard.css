@@ -5564,3 +5564,148 @@ a:focus {
   background: #fed7d7;
   color: #742a2a;
 }
+/* Add to Dashboard.css */
+.teacher-exam-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.session-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.active-session, .inactive-session {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.start-session-btn, .view-session-btn {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.start-session-btn:hover {
+  background: #b91c1c;
+}
+
+.view-session-btn {
+  background: #059669;
+}
+
+.view-session-btn:hover {
+  background: #047857;
+}
+
+.quiz-availability {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.start-quiz-btn.camera-required {
+  background: #dc2626;
+  border: 2px solid #fecaca;
+}
+
+.start-quiz-btn.camera-required:hover {
+  background: #b91c1c;
+}
+
+.camera-badge {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+.session-info {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #dc2626;
+}
+
+.live-badge {
+  background: #dc2626;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* Add these styles to your Dashboard.css */
+.teacher-exam-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.start-session-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.start-session-btn:hover {
+  background: #c82333;
+}
+
+.active-session-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.view-session-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.end-session-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.quiz-availability .session-info {
+  margin-top: 8px;
+  color: #28a745;
+  font-size: 12px;
+}
+
+.quiz-info.waiting {
+  text-align: center;
+  color: #ffc107;
+}
+
+.quiz-info.waiting button:disabled {
+  background: #ffc107;
+  color: #212529;
+  cursor: not-allowed;
+}

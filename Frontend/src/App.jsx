@@ -1,4 +1,4 @@
-// src/App.jsx - FIXED ROUTES
+// src/App.jsx - FIXED ROUTES (COMPLETE VERSION)
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
@@ -11,7 +11,8 @@ import ExamFormView from "./pages/ExamFormView";
 import AuthSuccess from "./pages/AuthSuccess";
 import QuizFormPage from "./pages/QuizFormPage";
 import StudentQuizPage from "./pages/StudentQuizPage";
-import TeacherExamSession from "./pages/TeacherExamSession"; // ✅ ADD MISSING IMPORT
+import TeacherExamSession from "./pages/TeacherExamSession";
+import StudentExamSession from "./pages/StudentExamSession"; // ✅ ADD THIS IMPORT
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -92,6 +93,13 @@ function App() {
         <Route path="/teacher-exam/:examId" element={
           <ProtectedRoute requiredRole="teacher">
             <TeacherExamSession />
+          </ProtectedRoute>
+        } />
+
+        {/* ✅ STUDENT EXAM SESSION ROUTE - ADD THIS! 🚀 */}
+        <Route path="/student-exam/:examId" element={
+          <ProtectedRoute requiredRole="student">
+            <StudentExamSession />
           </ProtectedRoute>
         } />
 

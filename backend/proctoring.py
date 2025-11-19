@@ -1,175 +1,125 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import cv2
 import numpy as np
 import base64
-from flask_cors import CORS
-import time
-import os
-import traceback
+import mediapipe as mp
 
 app = Flask(__name__)
 CORS(app)
 
-# Load cascades
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+# MediaPipe Init
+mp_face_detection = mp.solutions.face_detection
+mp_face_mesh = mp.solutions.face_mesh
 
-# Enhanced eye detection for glasses
-def detect_eyes_with_glasses(face_roi_gray):
-    """Enhanced eye detection that works with glasses"""
-    eyes = []
-    
-    # Try different parameters for better detection
-    try:
-        # Standard eye detection
-        eyes = eye_cascade.detectMultiScale(
-            face_roi_gray, 
-            scaleFactor=1.1, 
-            minNeighbors=3, 
-            minSize=(15, 15)
-        )
-        
-        # If no eyes detected, try with different parameters for glasses
-        if len(eyes) == 0:
-            eyes = eye_cascade.detectMultiScale(
-                face_roi_gray,
-                scaleFactor=1.05,
-                minNeighbors=2,
-                minSize=(20, 20),
-                maxSize=(80, 80)
-            )
-            
-    except Exception as e:
-        print(f"Eye detection error: {e}")
-    
-    return eyes
+face_detector = mp_face_detection.FaceDetection(
+    model_selection=0,
+    min_detection_confidence=0.55
+)
 
-# Enhanced face detection for masks
-def detect_faces_with_masks(gray):
-    """Enhanced face detection that works with masks"""
-    faces = []
-    
-    try:
-        # Standard face detection
-        faces = face_cascade.detectMultiScale(
-            gray, 
-            scaleFactor=1.1, 
-            minNeighbors=5, 
-            minSize=(60, 60)
-        )
-        
-        # If no faces detected, try with different parameters
-        if len(faces) == 0:
-            faces = face_cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.05,
-                minNeighbors=3,
-                minSize=(50, 50)
-            )
-            
-    except Exception as e:
-        print(f"Face detection error: {e}")
-    
-    return faces
+face_mesh = mp_face_mesh.FaceMesh(
+    max_num_faces=3,
+    refine_landmarks=True,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({'status': 'OK', 'message': 'Proctoring server is running'})
+def decode_image(image_base64):
+    """Decode base64 → OpenCV image"""
+    image_data = image_base64.split(',')[1] if "," in image_base64 else image_base64
+    img_bytes = base64.b64decode(image_data)
+    img_np = np.frombuffer(img_bytes, np.uint8)
+    return cv2.imdecode(img_np, cv2.IMREAD_COLOR)
 
-@app.route('/detect-faces', methods=['POST'])
-def detect_faces():
+def get_gaze_direction(face_landmarks, w, h):
+    """Determine if looking left/right/up/down"""
+
+    left_eye = face_landmarks.landmark[33]
+    right_eye = face_landmarks.landmark[263]
+
+    eye_center_x = ((left_eye.x + right_eye.x) / 2) * w
+    eye_center_y = ((left_eye.y + right_eye.y) / 2) * h
+
+    gaze = "forward"
+
+    # Horizontal gaze
+    if eye_center_x < w * 0.35:
+        gaze = "looking left"
+    elif eye_center_x > w * 0.65:
+        gaze = "looking right"
+
+    # Vertical gaze
+    elif eye_center_y < h * 0.35:
+        gaze = "looking up"
+    elif eye_center_y > h * 0.65:
+        gaze = "looking down"
+
+    return gaze
+
+@app.route('/detect', methods=['POST'])
+def detect():
     try:
         data = request.json
-        if 'image' not in data:
-            return jsonify({'error': 'No image data provided'}), 400
-
-        # Decode base64 image
-        image_data = data['image'].split(',')[1] if ',' in data['image'] else data['image']
-        img_bytes = base64.b64decode(image_data)
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        img = decode_image(data['image'])
         if img is None:
-            return jsonify({'error': 'Could not decode image'}), 400
+            return jsonify({"error": "Invalid image"}), 400
 
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # Enhanced face detection
-        faces = detect_faces_with_masks(gray)
+        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        h, w, _ = img.shape
 
+        # FACE DETECTION
+        results = face_detector.process(rgb_img)
+        face_count = 0
+        face_detected = False
         suspicious = []
-        face_detected = len(faces) > 0
-        eye_detected = False
-        looking_away_count = 0
-        looking_forward_count = 0
+        gaze_direction = "unknown"
 
-        debug_img = img.copy()
+        if results.detections:
+            face_count = len(results.detections)
+            face_detected = True
 
-        if face_detected:
-            for (x, y, w, h) in faces:
-                # Draw face rectangle
-                cv2.rectangle(debug_img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            # Suspicious if more than 1 face
+            if face_count > 1:
+                suspicious.append("Multiple faces detected")
 
-                # Enhanced eye detection for glasses
-                face_roi_gray = gray[y:y+h, x:x+w]
-                face_roi_gray = cv2.equalizeHist(face_roi_gray)
-                eyes = detect_eyes_with_glasses(face_roi_gray)
+            # Draw first face only
+            detection = results.detections[0]
+            bbox = detection.location_data.relative_bounding_box
 
-                gaze_forward = False
-                if len(eyes) >= 1:  # Require at least one eye detected
-                    eye_detected = True
-                    
-                    # Draw eyes rectangles
-                    for (ex, ey, ew, eh) in eyes:
-                        cv2.rectangle(debug_img, (x+ex, y+ey), (x+ex+ew, y+ey+eh), (255, 0, 0), 2)
+            x1 = int(bbox.xmin * w)
+            y1 = int(bbox.ymin * h)
+            x2 = x1 + int(bbox.width * w)
+            y2 = y1 + int(bbox.height * h)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                    # Enhanced gaze estimation that works with single eye
-                    if len(eyes) >= 2:
-                        # Two eyes detected - normal gaze estimation
-                        eye_centers_x = [ex + ew/2 for (ex, ey, ew, eh) in eyes]
-                        avg_eye_center_x = sum(eye_centers_x) / len(eye_centers_x)
-                        face_center_x = w / 2
-                        deviation_ratio = abs(avg_eye_center_x - face_center_x) / (w / 2)
-                        gaze_forward = deviation_ratio <= 0.3
-                    else:
-                        # Single eye detected - assume forward gaze to reduce false positives
-                        gaze_forward = True
+            # GAZE ESTIMATION
+            mesh_results = face_mesh.process(rgb_img)
+            if mesh_results.multi_face_landmarks:
+                lm = mesh_results.multi_face_landmarks[0]
 
-                # Update looking away/forward counters
-                if gaze_forward:
-                    looking_forward_count += 1
-                else:
-                    looking_away_count += 1
+                gaze_direction = get_gaze_direction(lm, w, h)
 
-            # Suspicious messages (reduced sensitivity)
-            if not eye_detected and len(faces) > 0:
-                suspicious.append("😑 Eyes not clearly visible")
-            if looking_away_count > 0:
-                suspicious.append(f"👀 Possible distraction detected")
-            if len(faces) > 1:
-                suspicious.append("⚠️ Multiple faces detected")
+                if gaze_direction != "forward":
+                    suspicious.append(f"Gaze direction: {gaze_direction}")
+
         else:
-            suspicious.append("❌ Face not clearly visible")
+            suspicious.append("Face not visible")
 
         # Encode debug image
-        _, buffer = cv2.imencode('.jpg', debug_img)
-        debug_image_b64 = base64.b64encode(buffer).decode('utf-8')
+        _, buffer = cv2.imencode(".jpg", img)
+        debug_img = base64.b64encode(buffer).decode("utf-8")
 
         return jsonify({
-            'faceCount': len(faces),
-            'faceDetected': face_detected,
-            'eyeDetected': eye_detected,
-            'facesLookingAway': looking_away_count,
-            'facesLookingForward': looking_forward_count,
-            'suspiciousActivities': suspicious,
-            'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
-            'debugImage': f"data:image/jpeg;base64,{debug_image_b64}"
+            "faceDetected": face_detected,
+            "faceCount": face_count,
+            "gaze": gaze_direction,
+            "suspiciousActivities": suspicious,
+            "debugImage": f"data:image/jpeg;base64,{debug_img}"
         })
 
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-if __name__ == '__main__':
-    print("🚀 Starting Enhanced Exam Proctoring Server...")
-    print("✅ Better detection for glasses and face masks")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    print("Proctoring Server Running (Faces + Gaze + Multi-face)...")
+    app.run(host="0.0.0.0", port=5000, debug=True)

@@ -7,6 +7,21 @@ const examSchema = new mongoose.Schema({
   classId: { type: mongoose.Schema.Types.ObjectId, ref: "Class", required: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   
+  // ✅ LIVE EXAM SESSION FIELDS
+  isActive: { type: Boolean, default: false }, // Active session
+  startedAt: { type: Date }, // When session started
+  endedAt: { type: Date }, // When session ended
+  timeLimit: { type: Number, default: 60 }, // Exam duration in minutes
+  
+  // ✅ JOINED STUDENTS TRACKING
+  joinedStudents: [{
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    joinedAt: { type: Date, default: Date.now },
+    status: { type: String, enum: ["connected", "disconnected"], default: "connected" },
+    cameraEnabled: { type: Boolean, default: true },
+    microphoneEnabled: { type: Boolean, default: true }
+  }],
+
   // Quiz/Exam specific fields
   isQuiz: { type: Boolean, default: false },
   isDeployed: { type: Boolean, default: false },

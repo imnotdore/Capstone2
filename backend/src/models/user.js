@@ -21,7 +21,7 @@ const UserSchema = new mongoose.Schema({
   // NEW: Role selection fields
   role: { 
     type: String, 
-    enum: ['student', 'teacher'], 
+    enum: ['student', 'teacher',], 
     default: null 
   },
   hasSelectedRole: { type: Boolean, default: false },

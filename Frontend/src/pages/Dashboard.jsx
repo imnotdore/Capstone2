@@ -9,7 +9,8 @@ import api, {
   updateAnnouncement, 
   deleteAnnouncement, 
   addCommentToAnnouncement, 
-  deleteCommentFromAnnouncement 
+  deleteCommentFromAnnouncement,
+   joinExamSession
 } from "../lib/api";
 import "./Dashboard.css";
 
@@ -114,67 +115,150 @@ const [deployedExams, setDeployedExams] = useState([]);
 
   // ===== QUIZ FUNCTIONS =====
 
-  // Function para simulan ang quiz bilang student
-// Sa taas ng component, idagdag ang loading state:
-
-// Tapos palitan ang handleStartQuiz ng:
+// FIXED: Student starting quiz with camera/mic requirement
+// FIXED: Student starting quiz - PROPER ROUTING
+// Sa Dashboard.jsx - SIMPLIFIED NAVIGATION
 const handleStartQuiz = async (examId, examTitle) => {
   try {
-    console.log("🎯 Student starting quiz:", { examId, examTitle });
-    
-    if (!examId) {
-      alert("Quiz ID is missing. Please try again.");
-      return;
-    }
-
-    // Show loading state
     setQuizLoading(true);
     
-    // First check if quiz is accessible
-    const accessCheck = await getQuizForStudent(examId);
+    // Check session status
+    const sessionCheck = await api.get(`/exams/${examId}/session-status`);
+    const isActiveSession = sessionCheck.success && sessionCheck.data.isActive;
     
-    if (accessCheck.success) {
-      console.log("✅ Quiz access granted, navigating to quiz page");
-      
-      // Navigate to the student quiz page
-      navigate(`/student-quiz/${examId}`, { 
-        state: { 
-          examTitle: examTitle,
-          classId: selectedClass?._id,
-          className: selectedClass?.name
-        }
-      });
-    } else {
-      console.error("❌ Quiz access denied:", accessCheck.message);
-      alert(`❌ ${accessCheck.message || "Quiz not available"}`);
-    }
+    // Always navigate to StudentQuizPage, just pass different props
+    navigate(`/student-quiz/${examId}`, {
+      state: {
+        examTitle,
+        classId: selectedClass?._id,
+        className: selectedClass?.name,
+        requiresCamera: isActiveSession, // ✅ TRUE if active session
+        isExamSession: isActiveSession   // ✅ TRUE if active session
+      }
+    });
+    
   } catch (error) {
-    console.error("❌ Failed to start quiz:", error);
+    console.error("Failed to start quiz:", error);
     alert("❌ Failed to start quiz. Please try again.");
   } finally {
     setQuizLoading(false);
   }
 };
+
+
+// Add these functions to your Dashboard component
+
+// Start exam session
+// Start exam session - UPDATED
+const handleStartExamSession = async (exam) => {
+  try {
+    console.log("🚀 Starting exam session for:", exam._id);
+    
+    const response = await api.post(`/exams/${exam._id}/start-session`);
+    
+    if (response.data.success) {
+      console.log("✅ Session started successfully");
+      
+      // Update the exam in classwork
+      setClasswork(prev => prev.map(item => 
+        item._id === exam._id 
+          ? { 
+              ...item, 
+              isActive: true, 
+              isDeployed: true,
+              startedAt: new Date()
+            }
+          : item
+      ));
+      
+      alert('✅ Live exam session started! Students can now join.');
+      
+      // Navigate to teacher exam session page
+      navigate(`/teacher-exam/${exam._id}`);
+    } else {
+      alert('Failed to start session: ' + response.data.message);
+    }
+  } catch (error) {
+    console.error('❌ Failed to start exam session:', error);
+    
+    // Better error message
+    let errorMessage = 'Failed to start exam session';
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    alert('❌ ' + errorMessage);
+  }
+};
+
+// End exam session - UPDATED
+const handleEndExamSession = async (examId) => {
+  if (!window.confirm('Are you sure you want to end the live session? Students will be disconnected.')) {
+    return;
+  }
+  
+  try {
+    console.log("🛑 Ending exam session for:", examId);
+    
+    const response = await api.post(`/exams/${examId}/end-session`);
+    
+    if (response.data.success) {
+      console.log("✅ Session ended successfully");
+      
+      // Update the exam in classwork
+      setClasswork(prev => prev.map(item => 
+        item._id === examId 
+          ? { 
+              ...item, 
+              isActive: false,
+              endedAt: new Date()
+            }
+          : item
+      ));
+      
+      alert('✅ Exam session ended!');
+    } else {
+      alert('Failed to end session: ' + response.data.message);
+    }
+  } catch (error) {
+    console.error('❌ Failed to end exam session:', error);
+    
+    let errorMessage = 'Failed to end exam session';
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    alert('❌ ' + errorMessage);
+  }
+};
+
+// FIXED: Better quiz availability check for students
 // FIXED: Better quiz availability check for students
 const isQuizAvailableForStudent = (item) => {
   if (!item) return false;
   
+  console.log("📊 Checking quiz availability:", {
+    title: item.title,
+    isPublished: item.isPublished,
+    isDeployed: item.isDeployed,
+    isActive: item.isActive,
+    isQuiz: item.isQuiz,
+    type: item.type,
+    hasQuestions: item.questions?.length > 0
+  });
+  
   // Multiple conditions for quiz availability
   const isAvailable = 
     item.isPublished || 
-    item.isDeployed ||  // 🚀 ADD THIS - Check if exam is deployed
+    item.isDeployed ||
+    item.isActive || // 🚀 ADD THIS - Active session
     item.isQuiz ||
     item.type === 'quiz' ||
     (item.questions && item.questions.length > 0);
-  
-  console.log(`📊 Quiz "${item.title}" availability:`, {
-    isPublished: item.isPublished,
-    isDeployed: item.isDeployed, // 🚀 ADD THIS
-    isQuiz: item.isQuiz,
-    type: item.type,
-    hasQuestions: item.questions?.length > 0,
-    finalAvailability: isAvailable
-  });
   
   return isAvailable;
 };
@@ -2265,36 +2349,63 @@ const DeployExamModal = () => {
                     </div>
                     
                     {/* TEACHER ACTIONS */}
-                    {selectedClass?.userRole === "teacher" && item.type === 'quiz' && (
+{selectedClass?.userRole === "teacher" && item.type === 'quiz' && (
   <div className="teacher-exam-actions">
-    {!item.isDeployed ? (
-      <button 
-        className="deploy-exam-btn"
-        onClick={() => navigate(`/teacher-exam/${item._id}`)}
-        title="Start exam session"
-      >
-        🚀 Start Session
-      </button>
+    {!item.isActive ? (
+      <div className="session-controls">
+        <button 
+          className="start-session-btn"
+          onClick={() => handleStartExamSession(item)}
+          title="Start live exam session"
+        >
+          📹 Start Live Session
+        </button>
+        
+        {/* Regular deploy button for non-live access */}
+        {!item.isDeployed ? (
+          <button 
+            className="deploy-exam-btn"
+            onClick={() => handleDeployExam(item)}
+            title="Deploy exam for students"
+          >
+            🚀 Deploy Exam
+          </button>
+        ) : (
+          <button 
+            className="undeploy-exam-btn"
+            onClick={() => handleUndeployExam(item._id)}
+            title="Undeploy exam"
+          >
+            ⏸️ Stop Deployment
+          </button>
+        )}
+      </div>
     ) : (
-      <button 
-        className="undeploy-exam-btn"
-        onClick={() => handleUndeployExam(item._id)}
-        title="Stop exam session"
-      >
-        ⏸️ Stop Session
-      </button>
+      <div className="active-session-controls">
+        <button 
+          className="view-session-btn"
+          onClick={() => navigate(`/teacher-exam/${item._id}`)}
+          title="Manage active session"
+        >
+          🔴 Live Session Active
+        </button>
+        <button 
+          className="end-session-btn"
+          onClick={() => handleEndExamSession(item._id)}
+          title="End exam session"
+        >
+          ⏹️ End Session
+        </button>
+      </div>
     )}
+    
     <button 
       className="delete-quiz-btn"
       onClick={() => handleDeleteQuiz(item._id, item.title)}
       disabled={deletingQuiz === item._id}
       title="Delete this quiz"
     >
-      {deletingQuiz === item._id ? (
-        <div className="loading-spinner-small"></div>
-      ) : (
-        '🗑️'
-      )}
+      {deletingQuiz === item._id ? '🗑️ Deleting...' : '🗑️'}
     </button>
   </div>
 )}
@@ -2319,23 +2430,71 @@ const DeployExamModal = () => {
                   </div>
 
                   {/* START QUIZ BUTTON FOR STUDENTS */}
-                 {selectedClass?.userRole === "student" && item.type === 'quiz' && (
+               {/* START QUIZ BUTTON FOR STUDENTS - UPDATED */}
+{selectedClass?.userRole === "student" && item.type === 'quiz' && (
   <div className="classwork-actions">
-    {isQuizAvailableForStudent(item) ? (
-      // Sa classwork section, palitan ang button ng:
-<button 
-  className="start-quiz-btn"
-  onClick={() => handleStartQuiz(item._id, item.title)}
-  disabled={quizLoading}
-  title="Start this quiz"
->
-  {quizLoading ? 'Loading...' : '🚀 Start Quiz'}
-</button>
-    ) : (
-      <div className="quiz-info unavailable">
-        <small>This quiz is not available yet</small>
+    {item.isActive ? (
+      // Session is active - student can join
+      <div className="quiz-availability">
+        <button 
+          className="start-quiz-btn camera-required"
+          onClick={async () => {
+            try {
+              setQuizLoading(true);
+              
+              // Join the active exam session
+              const joinResponse = await joinExamSession(item._id);
+              if (joinResponse.success) {
+                navigate(`/student-quiz/${item._id}`, {
+                  state: {
+                    examTitle: item.title,
+                    classId: selectedClass?._id,
+                    className: selectedClass?.name,
+                    requiresCamera: true,
+                    isExamSession: true
+                  }
+                });
+              }
+            } catch (error) {
+              console.error("Failed to join exam session:", error);
+              alert("❌ Failed to join exam session. Please try again.");
+            } finally {
+              setQuizLoading(false);
+            }
+          }}
+          disabled={quizLoading}
+          title="Join live exam session (Camera & Microphone required)"
+        >
+          {quizLoading ? 'Joining...' : (
+            <>
+              📹 Join Live Exam
+              <span className="camera-badge">📷🎤</span>
+            </>
+          )}
+        </button>
+        
+        <div className="session-info">
+          <small>✅ Live session active • 📷🎤 Camera & Mic required</small>
+        </div>
       </div>
-    )} {/* Show quiz details */}
+    ) : item.isPublished || item.isDeployed ? (
+      // Exam is deployed but session not active
+      <div className="quiz-info waiting">
+        <button className="start-quiz-btn" disabled>
+          ⏳ Waiting for Teacher
+        </button>
+        <small>Teacher needs to start the live session</small>
+      </div>
+    ) : (
+      // Exam not available
+      <div className="quiz-info unavailable">
+        <small>This exam is not available yet</small>
+      </div>
+    )}
+
+  
+    
+    {/* Quiz details */}
     <div className="quiz-details">
       {item.questions && (
         <span>{item.questions.length} questions</span>
@@ -2346,10 +2505,12 @@ const DeployExamModal = () => {
       {item.dueDate && (
         <span>Due: {new Date(item.dueDate).toLocaleDateString()}</span>
       )}
+      {item.isActive && (
+        <span className="live-badge">🔴 LIVE</span>
+      )}
     </div>
-  
-                    </div>
-                  )}
+  </div>
+)}
 
                   <div className="classwork-footer">
                     <span>Created by {item.createdBy?.name || 'Teacher'}</span>
