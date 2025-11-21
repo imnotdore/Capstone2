@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { FaPlus, FaEdit, FaEye, FaRocket, FaTrash } from "react-icons/fa";
 import { getClassDetails, getClassMembers, getClasswork, getClassAnnouncements, createAnnouncement, getQuizForStudent } from "../lib/api";
+import PeopleTab from "../components/PeopleTab"; // ADDED - PeopleTab import
 import "./ClassDetails.css";
 
 export default function ClassDetails() {
@@ -578,6 +579,16 @@ export default function ClassDetails() {
         </section>
       )}
 
+      {/* PEOPLE TAB - UPDATED WITH PEOPLE TAB COMPONENT */}
+      {activeTab === "students" && (
+        <section className="section">
+          <div className="section-header">
+            <h2>People</h2>
+          </div>
+          <PeopleTab classId={id} />
+        </section>
+      )}
+
       {/* CREATE CLASSWORK MODAL */}
       {showCreateClassworkModal && (
         <div className="modal-overlay">
@@ -692,4 +703,4 @@ export default function ClassDetails() {
       )}
     </div>
   );
-}
+} 

@@ -1,7 +1,7 @@
-// src/components/Dashboard.jsx - COMPLETE FIXED VERSION
+// src/components/Dashboard.jsx - COMPLETE FIXED VERSION WITH PEOPLE TAB
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEllipsisV, FaChevronDown } from "react-icons/fa";
+import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEllipsisV, FaChevronDown, FaEnvelope, FaUserMinus, FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 import api, { 
   deleteAllQuizzes, 
   deleteQuiz, 
@@ -16,89 +16,97 @@ import "./Dashboard.css";
 
 export default function Dashboard() {
   // ===== ROUTING HOOKS =====
-  const navigate = useNavigate(); // Para sa pag-navigate sa ibang pages
-  const location = useLocation(); // Para makuha ang current URL location
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // ===== USER AT CLASS STATES =====
-  const [user, setUser] = useState({ name: "Loading...", email: "", _id: "" }); // User data
-  const [classes, setClasses] = useState([]); // Listahan ng mga classes
-  const [selectedClass, setSelectedClass] = useState(null); // Currently selected class
-  const [activeSidebar, setActiveSidebar] = useState("home"); // Active sidebar item
-  const [activeTab, setActiveTab] = useState("stream"); // Active tab sa class view
+  const [user, setUser] = useState({ name: "Loading...", email: "", _id: "" });
+  const [classes, setClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [activeSidebar, setActiveSidebar] = useState("home");
+  const [activeTab, setActiveTab] = useState("stream");
 
   // ===== MODAL STATES =====
-  const [showCreateModal, setShowCreateModal] = useState(false); // Modal para gumawa ng class
-  const [showJoinModal, setShowJoinModal] = useState(false); // Modal para sumali sa class
-  const [className, setClassName] = useState(""); // Pangalan ng bagong class
-  const [joinCode, setJoinCode] = useState(""); // Code para sumali sa class
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [className, setClassName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
 
-  // ===== EXAM DEPLOYMENT STATES ===== 🚀 ADD THIS SECTION
-const [showDeployModal, setShowDeployModal] = useState(false);
-const [examToDeploy, setExamToDeploy] = useState(null);
-const [deployingExam, setDeployingExam] = useState(false);
-const [deployedExams, setDeployedExams] = useState([]);
+  // ===== EXAM DEPLOYMENT STATES =====
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [examToDeploy, setExamToDeploy] = useState(null);
+  const [deployingExam, setDeployingExam] = useState(false);
+  const [deployedExams, setDeployedExams] = useState([]);
 
   // ===== CLASS DETAILS STATES =====
-  const [exams, setExams] = useState([]); // Listahan ng exams
-  const [students, setStudents] = useState([]); // Listahan ng students
+  const [exams, setExams] = useState([]);
+  const [students, setStudents] = useState([]);
 
   // ===== DROPDOWN STATES =====
-  const [showUserDropdown, setShowUserDropdown] = useState(false); // User profile dropdown
-  const [showCreateJoinDropdown, setShowCreateJoinDropdown] = useState(false); // Create/Join dropdown
-  const [sidebarOpen, setSidebarOpen] = useState(true); // Sidebar visibility
-  const [quizLoading, setQuizLoading] = useState(false); // Add this line
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showCreateJoinDropdown, setShowCreateJoinDropdown] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [quizLoading, setQuizLoading] = useState(false);
+
   // ===== ANNOUNCEMENT STATES =====
-  const [announcements, setAnnouncements] = useState([]); // Listahan ng announcements
-  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false); // Loading state para sa announcements
-  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false); // Modal para gumawa ng announcement
-  const [announcementContent, setAnnouncementContent] = useState(""); // Content ng announcement
-  const [postingAnnouncement, setPostingAnnouncement] = useState(false); // Loading state para sa pag-post ng announcement
+  const [announcements, setAnnouncements] = useState([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [announcementContent, setAnnouncementContent] = useState("");
+  const [postingAnnouncement, setPostingAnnouncement] = useState(false);
 
   // ===== COMMENT STATES =====
-  const [postingComments, setPostingComments] = useState({}); // Loading states para sa comments
-  const [showCommentMenu, setShowCommentMenu] = useState(null); // Menu para sa announcement actions
-  const [showCommentDeleteMenu, setShowCommentDeleteMenu] = useState(null); // Menu para sa comment deletion
+  const [postingComments, setPostingComments] = useState({});
+  const [showCommentMenu, setShowCommentMenu] = useState(null);
+  const [showCommentDeleteMenu, setShowCommentDeleteMenu] = useState(null);
 
   // ===== CLASSWORK STATES =====
-  const [classwork, setClasswork] = useState([]); // Listahan ng classwork (assignments, quizzes, etc.)
+  const [classwork, setClasswork] = useState([]);
 
   // ===== QUIZ MANAGEMENT STATES =====
-  const [deletingAll, setDeletingAll] = useState(false); // Loading state para sa delete all quizzes
-  const [deletingQuiz, setDeletingQuiz] = useState(null); // Loading state para sa individual quiz deletion
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [deletingQuiz, setDeletingQuiz] = useState(null);
 
   // ===== CLASS MANAGEMENT STATES =====
-  const [showMenuForClass, setShowMenuForClass] = useState(null); // Menu para sa class actions
-  const [showUnenrollModal, setShowUnenrollModal] = useState(false); // Modal para mag-unenroll
-  const [classToUnenroll, setClassToUnenroll] = useState(null); // Class na ie-unenroll
+  const [showMenuForClass, setShowMenuForClass] = useState(null);
+  const [showUnenrollModal, setShowUnenrollModal] = useState(false);
+  const [classToUnenroll, setClassToUnenroll] = useState(null);
 
   // ===== ARCHIVE STATES =====
-  const [archivedClasses, setArchivedClasses] = useState([]); // Listahan ng archived classes
-  const [showArchiveModal, setShowArchiveModal] = useState(false); // Modal para mag-archive
-  const [classToArchive, setClassToArchive] = useState(null); // Class na ie-archive
-  const [showRestoreModal, setShowRestoreModal] = useState(false); // Modal para i-restore
-  const [classToRestore, setClassToRestore] = useState(null); // Class na ie-restore
+  const [archivedClasses, setArchivedClasses] = useState([]);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [classToArchive, setClassToArchive] = useState(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [classToRestore, setClassToRestore] = useState(null);
 
   // ===== CALENDAR STATES =====
-  const [currentDate, setCurrentDate] = useState(new Date()); // Current month sa calendar
-  const [selectedDate, setSelectedDate] = useState(null); // Selected date sa calendar
-  const [calendarEvents, setCalendarEvents] = useState([]); // Listahan ng calendar events
-  const [selectedClassFilter, setSelectedClassFilter] = useState("all"); // Filter para sa calendar
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [selectedClassFilter, setSelectedClassFilter] = useState("all");
 
   // ===== USER ROLE STATE =====
-  const [userRole, setUserRole] = useState(""); // Role ng user (teacher/student)
+  const [userRole, setUserRole] = useState("");
 
   // ===== SIDEBAR DROPDOWN STATES =====
-  const [enrolledDropdownOpen, setEnrolledDropdownOpen] = useState(false); // Dropdown para sa enrolled classes
-  const [teachingDropdownOpen, setTeachingDropdownOpen] = useState(false); // Dropdown para sa teaching classes
+  const [enrolledDropdownOpen, setEnrolledDropdownOpen] = useState(false);
+  const [teachingDropdownOpen, setTeachingDropdownOpen] = useState(false);
 
   // ===== REVIEW COUNT STATE =====
-  const [itemsToReview, setItemsToReview] = useState(0); // Bilang ng items na kailangan i-review
+  const [itemsToReview, setItemsToReview] = useState(0);
 
   // ===== CREATE DROPDOWN STATE =====
-  const [showCreateDropdown, setShowCreateDropdown] = useState(false); // Dropdown para sa create options
+  const [showCreateDropdown, setShowCreateDropdown] = useState(false);
+
+  // ===== PEOPLE TAB STATES =====
+  const [classPeople, setClassPeople] = useState({ teachers: [], students: [] });
+  const [loadingPeople, setLoadingPeople] = useState(false);
+  const [activeActions, setActiveActions] = useState(null);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [emailData, setEmailData] = useState({ subject: '', message: '' });
 
   // ===== REFS FOR CLICK OUTSIDE DETECTION =====
-  // Ang mga refs na ito ay para madetect kung nag-click ang user sa labas ng dropdown para ito ay isara
   const userDropdownRef = useRef(null);
   const createJoinDropdownRef = useRef(null);
   const sidebarRef = useRef(null);
@@ -108,162 +116,280 @@ const [deployedExams, setDeployedExams] = useState([]);
   const createDropdownRef = useRef(null);
 
   // ===== SEPARATE CLASSES BY ROLE =====
-  // Hinihiwalay ang mga classes base sa role ng user
   const teachingClasses = classes.filter(classData => classData.userRole === "teacher" || classData.isTeacher);
   const enrolledClasses = classes.filter(classData => classData.userRole === "student" || !classData.isTeacher);
   const allClasses = [...classes];
 
-  // ===== QUIZ FUNCTIONS =====
-
-// FIXED: Student starting quiz with camera/mic requirement
-// FIXED: Student starting quiz - PROPER ROUTING
-// Sa Dashboard.jsx - SIMPLIFIED NAVIGATION
-const handleStartQuiz = async (examId, examTitle) => {
-  try {
-    setQuizLoading(true);
+  // ===== PEOPLE TAB FUNCTIONS =====
+  const fetchClassPeople = async () => {
+    if (!selectedClass) return;
     
-    // Check session status
-    const sessionCheck = await api.get(`/exams/${examId}/session-status`);
-    const isActiveSession = sessionCheck.success && sessionCheck.data.isActive;
-    
-    // Always navigate to StudentQuizPage, just pass different props
-    navigate(`/student-quiz/${examId}`, {
-      state: {
-        examTitle,
-        classId: selectedClass?._id,
-        className: selectedClass?.name,
-        requiresCamera: isActiveSession, // ✅ TRUE if active session
-        isExamSession: isActiveSession   // ✅ TRUE if active session
+    setLoadingPeople(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/api/student-management/${selectedClass._id}/students`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setClassPeople(result.data);
+      } else {
+        console.error('Failed to fetch people data:', result.message);
       }
+    } catch (err) {
+      console.error('Error fetching people data:', err);
+    } finally {
+      setLoadingPeople(false);
+    }
+  };
+
+  const handleRemoveStudent = async (studentId, studentName) => {
+    if (!window.confirm(`Are you sure you want to remove ${studentName} from this class?`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/api/student-management/${selectedClass._id}/students/${studentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('Student removed successfully');
+        fetchClassPeople(); // Refresh data
+      } else {
+        alert('Failed to remove student: ' + result.message);
+      }
+    } catch (err) {
+      alert('Failed to remove student');
+      console.error('Error removing student:', err);
+    }
+  };
+
+  const handleToggleMute = async (studentId, studentName, isCurrentlyMuted) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/api/student-management/${selectedClass._id}/students/${studentId}/mute`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`Student ${isCurrentlyMuted ? 'unmuted' : 'muted'} successfully`);
+        fetchClassPeople(); // Refresh data
+      } else {
+        alert('Failed to update student: ' + result.message);
+      }
+    } catch (err) {
+      alert('Failed to update student');
+      console.error('Error toggling mute:', err);
+    }
+  };
+
+  const toggleActions = (personId) => {
+    setActiveActions(activeActions === personId ? null : personId);
+  };
+
+  const toggleStudentSelection = (studentId) => {
+    setSelectedStudents(prev => 
+      prev.includes(studentId) 
+        ? prev.filter(id => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
+
+  const selectAllStudents = () => {
+    if (selectedStudents.length === classPeople.students.length) {
+      setSelectedStudents([]);
+    } else {
+      setSelectedStudents(classPeople.students.map(student => student._id));
+    }
+  };
+
+  const handleEmailStudents = async () => {
+    if (!emailData.subject.trim() || !emailData.message.trim()) {
+      alert('Please enter both subject and message');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/api/student-management/${selectedClass._id}/email-students`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          studentIds: selectedStudents,
+          subject: emailData.subject,
+          message: emailData.message
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`Email prepared for ${result.data.recipients} students`);
+        setShowEmailModal(false);
+        setSelectedStudents([]);
+        setEmailData({ subject: '', message: '' });
+      } else {
+        alert('Failed to send emails: ' + result.message);
+      }
+    } catch (err) {
+      alert('Failed to send emails');
+      console.error('Error sending emails:', err);
+    }
+  };
+
+  // ===== QUIZ FUNCTIONS =====
+  const handleStartQuiz = async (examId, examTitle) => {
+    try {
+      setQuizLoading(true);
+      
+      const sessionCheck = await api.get(`/exams/${examId}/session-status`);
+      const isActiveSession = sessionCheck.success && sessionCheck.data.isActive;
+      
+      navigate(`/student-quiz/${examId}`, {
+        state: {
+          examTitle,
+          classId: selectedClass?._id,
+          className: selectedClass?.name,
+          requiresCamera: isActiveSession,
+          isExamSession: isActiveSession
+        }
+      });
+      
+    } catch (error) {
+      console.error("Failed to start quiz:", error);
+      alert("❌ Failed to start quiz. Please try again.");
+    } finally {
+      setQuizLoading(false);
+    }
+  };
+
+  const handleStartExamSession = async (exam) => {
+    try {
+      console.log("🚀 Starting exam session for:", exam._id);
+      
+      const response = await api.post(`/exams/${exam._id}/start-session`);
+      
+      if (response.data.success) {
+        console.log("✅ Session started successfully");
+        
+        setClasswork(prev => prev.map(item => 
+          item._id === exam._id 
+            ? { 
+                ...item, 
+                isActive: true, 
+                isDeployed: true,
+                startedAt: new Date()
+              }
+            : item
+        ));
+        
+        alert('✅ Live exam session started! Students can now join.');
+        
+        navigate(`/teacher-exam/${exam._id}`);
+      } else {
+        alert('Failed to start session: ' + response.data.message);
+      }
+    } catch (error) {
+      console.error('❌ Failed to start exam session:', error);
+      
+      let errorMessage = 'Failed to start exam session';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert('❌ ' + errorMessage);
+    }
+  };
+
+  const handleEndExamSession = async (examId) => {
+    if (!window.confirm('Are you sure you want to end the live session? Students will be disconnected.')) {
+      return;
+    }
+    
+    try {
+      console.log("🛑 Ending exam session for:", examId);
+      
+      const response = await api.post(`/exams/${examId}/end-session`);
+      
+      if (response.data.success) {
+        console.log("✅ Session ended successfully");
+        
+        setClasswork(prev => prev.map(item => 
+          item._id === examId 
+            ? { 
+                ...item, 
+                isActive: false,
+                endedAt: new Date()
+              }
+            : item
+        ));
+        
+        alert('✅ Exam session ended!');
+      } else {
+        alert('Failed to end session: ' + response.data.message);
+      }
+    } catch (error) {
+      console.error('❌ Failed to end exam session:', error);
+      
+      let errorMessage = 'Failed to end exam session';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert('❌ ' + errorMessage);
+    }
+  };
+
+  const isQuizAvailableForStudent = (item) => {
+    if (!item) return false;
+    
+    console.log("📊 Checking quiz availability:", {
+      title: item.title,
+      isPublished: item.isPublished,
+      isDeployed: item.isDeployed,
+      isActive: item.isActive,
+      isQuiz: item.isQuiz,
+      type: item.type,
+      hasQuestions: item.questions?.length > 0
     });
     
-  } catch (error) {
-    console.error("Failed to start quiz:", error);
-    alert("❌ Failed to start quiz. Please try again.");
-  } finally {
-    setQuizLoading(false);
-  }
-};
+    const isAvailable = 
+      item.isPublished || 
+      item.isDeployed ||
+      item.isActive ||
+      item.isQuiz ||
+      item.type === 'quiz' ||
+      (item.questions && item.questions.length > 0);
+    
+    return isAvailable;
+  };
 
-
-// Add these functions to your Dashboard component
-
-// Start exam session
-// Start exam session - UPDATED
-const handleStartExamSession = async (exam) => {
-  try {
-    console.log("🚀 Starting exam session for:", exam._id);
-    
-    const response = await api.post(`/exams/${exam._id}/start-session`);
-    
-    if (response.data.success) {
-      console.log("✅ Session started successfully");
-      
-      // Update the exam in classwork
-      setClasswork(prev => prev.map(item => 
-        item._id === exam._id 
-          ? { 
-              ...item, 
-              isActive: true, 
-              isDeployed: true,
-              startedAt: new Date()
-            }
-          : item
-      ));
-      
-      alert('✅ Live exam session started! Students can now join.');
-      
-      // Navigate to teacher exam session page
-      navigate(`/teacher-exam/${exam._id}`);
-    } else {
-      alert('Failed to start session: ' + response.data.message);
-    }
-  } catch (error) {
-    console.error('❌ Failed to start exam session:', error);
-    
-    // Better error message
-    let errorMessage = 'Failed to start exam session';
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    alert('❌ ' + errorMessage);
-  }
-};
-
-// End exam session - UPDATED
-const handleEndExamSession = async (examId) => {
-  if (!window.confirm('Are you sure you want to end the live session? Students will be disconnected.')) {
-    return;
-  }
-  
-  try {
-    console.log("🛑 Ending exam session for:", examId);
-    
-    const response = await api.post(`/exams/${examId}/end-session`);
-    
-    if (response.data.success) {
-      console.log("✅ Session ended successfully");
-      
-      // Update the exam in classwork
-      setClasswork(prev => prev.map(item => 
-        item._id === examId 
-          ? { 
-              ...item, 
-              isActive: false,
-              endedAt: new Date()
-            }
-          : item
-      ));
-      
-      alert('✅ Exam session ended!');
-    } else {
-      alert('Failed to end session: ' + response.data.message);
-    }
-  } catch (error) {
-    console.error('❌ Failed to end exam session:', error);
-    
-    let errorMessage = 'Failed to end exam session';
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    alert('❌ ' + errorMessage);
-  }
-};
-
-// FIXED: Better quiz availability check for students
-// FIXED: Better quiz availability check for students
-const isQuizAvailableForStudent = (item) => {
-  if (!item) return false;
-  
-  console.log("📊 Checking quiz availability:", {
-    title: item.title,
-    isPublished: item.isPublished,
-    isDeployed: item.isDeployed,
-    isActive: item.isActive,
-    isQuiz: item.isQuiz,
-    type: item.type,
-    hasQuestions: item.questions?.length > 0
-  });
-  
-  // Multiple conditions for quiz availability
-  const isAvailable = 
-    item.isPublished || 
-    item.isDeployed ||
-    item.isActive || // 🚀 ADD THIS - Active session
-    item.isQuiz ||
-    item.type === 'quiz' ||
-    (item.questions && item.questions.length > 0);
-  
-  return isAvailable;
-};
-
-  // Function para mag-delete ng individual quiz
   const handleDeleteQuiz = async (quizId, quizTitle) => {
     if (!window.confirm(`Are you sure you want to delete "${quizTitle}"? This action cannot be undone.`)) {
       return;
@@ -275,8 +401,6 @@ const isQuizAvailableForStudent = (item) => {
       
       if (response.success) {
         alert(`✅ "${quizTitle}" deleted successfully!`);
-        
-        // I-refresh ang classwork data
         fetchClasswork();
       }
     } catch (error) {
@@ -287,82 +411,73 @@ const isQuizAvailableForStudent = (item) => {
     }
   };
 
+  const handleDeployExam = async (exam) => {
+    setExamToDeploy(exam);
+    setShowDeployModal(true);
+  };
 
-  // ===== EXAM DEPLOYMENT FUNCTIONS ===== 🚀 ADD THIS SECTION
-const handleDeployExam = async (exam) => {
-  setExamToDeploy(exam);
-  setShowDeployModal(true);
-};
-
-const confirmDeployExam = async () => {
-  if (!examToDeploy) return;
-  
-  setDeployingExam(true);
-  try {
-    const response = await api.post(`/exams/${examToDeploy._id}/deploy`, {
-      isDeployed: true,
-      deploymentTime: new Date().toISOString()
-    });
+  const confirmDeployExam = async () => {
+    if (!examToDeploy) return;
     
-    if (response.success) {
-      // Update the exam in classwork
-      setClasswork(prev => prev.map(item => 
-        item._id === examToDeploy._id 
-          ? { ...item, isDeployed: true, deploymentTime: new Date().toISOString() }
-          : item
-      ));
-      
-      // Add to deployed exams
-      setDeployedExams(prev => [...prev, {
-        ...examToDeploy,
+    setDeployingExam(true);
+    try {
+      const response = await api.post(`/exams/${examToDeploy._id}/deploy`, {
         isDeployed: true,
         deploymentTime: new Date().toISOString()
-      }]);
+      });
       
-      setShowDeployModal(false);
-      setExamToDeploy(null);
-      alert('✅ Exam deployed successfully! Students can now join the exam session.');
+      if (response.success) {
+        setClasswork(prev => prev.map(item => 
+          item._id === examToDeploy._id 
+            ? { ...item, isDeployed: true, deploymentTime: new Date().toISOString() }
+            : item
+        ));
+        
+        setDeployedExams(prev => [...prev, {
+          ...examToDeploy,
+          isDeployed: true,
+          deploymentTime: new Date().toISOString()
+        }]);
+        
+        setShowDeployModal(false);
+        setExamToDeploy(null);
+        alert('✅ Exam deployed successfully! Students can now join the exam session.');
+      }
+    } catch (error) {
+      console.error('Failed to deploy exam:', error);
+      alert('Failed to deploy exam: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setDeployingExam(false);
     }
-  } catch (error) {
-    console.error('Failed to deploy exam:', error);
-    alert('Failed to deploy exam: ' + (error.response?.data?.message || error.message));
-  } finally {
-    setDeployingExam(false);
-  }
-};
+  };
 
-const handleUndeployExam = async (examId) => {
-  if (!window.confirm('Are you sure you want to undeploy this exam? Students will no longer be able to join.')) {
-    return;
-  }
-  
-  try {
-    const response = await api.post(`/exams/${examId}/deploy`, {
-      isDeployed: false
-    });
+  const handleUndeployExam = async (examId) => {
+    if (!window.confirm('Are you sure you want to undeploy this exam? Students will no longer be able to join.')) {
+      return;
+    }
     
-    if (response.success) {
-      // Update the exam in classwork
-      setClasswork(prev => prev.map(item => 
-        item._id === examId 
-          ? { ...item, isDeployed: false }
-          : item
-      ));
+    try {
+      const response = await api.post(`/exams/${examId}/deploy`, {
+        isDeployed: false
+      });
       
-      // Remove from deployed exams
-      setDeployedExams(prev => prev.filter(exam => exam._id !== examId));
-      
-      alert('✅ Exam undeployed successfully!');
+      if (response.success) {
+        setClasswork(prev => prev.map(item => 
+          item._id === examId 
+            ? { ...item, isDeployed: false }
+            : item
+        ));
+        
+        setDeployedExams(prev => prev.filter(exam => exam._id !== examId));
+        
+        alert('✅ Exam undeployed successfully!');
+      }
+    } catch (error) {
+      console.error('Failed to undeploy exam:', error);
+      alert('Failed to undeploy exam: ' + (error.response?.data?.message || error.message));
     }
-  } catch (error) {
-    console.error('Failed to undeploy exam:', error);
-    alert('Failed to undeploy exam: ' + (error.response?.data?.message || error.message));
-  }
-};
+  };
 
-
-
-  // Function para mag-delete ng lahat ng quizzes
   const handleDeleteAllQuizzes = async () => {
     if (!selectedClass) return;
     
@@ -378,8 +493,6 @@ const handleUndeployExam = async (examId) => {
       
       if (response.success) {
         alert(`✅ ${response.message}`);
-        
-        // I-refresh ang classwork data
         fetchClasswork();
       }
     } catch (error) {
@@ -391,9 +504,7 @@ const handleUndeployExam = async (examId) => {
   };
 
   // ===== EFFECT FOR HANDLING REDIRECT STATE =====
-  // Ito ay para ma-handle ang redirect galing sa form creation
   useEffect(() => {
-    // I-handle ang redirect state galing sa form creation
     if (location.state) {
       const { selectedClassId, activeTab, showClasswork, refreshClasswork } = location.state;
       
@@ -410,13 +521,11 @@ const handleUndeployExam = async (examId) => {
             console.log("📁 Setting active tab:", activeTab);
           }
           
-          // Kung kailangan ipakita ang classwork specifically
           if (showClasswork) {
             setActiveTab('classwork');
             console.log("🎯 Forcing classwork tab");
           }
           
-          // I-refresh ang classwork data kung kailangan
           if (refreshClasswork && activeTab === 'classwork') {
             fetchClasswork();
             console.log("🔄 Refreshing classwork data");
@@ -424,14 +533,11 @@ const handleUndeployExam = async (examId) => {
         }
       }
       
-      // I-clear ang state para maiwasan ang re-trigger sa refresh
       window.history.replaceState({}, document.title);
     }
   }, [location.state, classes]);
 
   // ===== ANNOUNCEMENT FUNCTIONS =====
-
-  // Function para mag-delete ng announcement
   const handleDeleteAnnouncement = async (announcementId) => {
     if (!window.confirm("Are you sure you want to delete this announcement?")) return;
     
@@ -442,7 +548,6 @@ const handleUndeployExam = async (examId) => {
       console.log("✅ Delete response:", response);
       
       if (response.success) {
-        // Alisin ang announcement sa listahan
         setAnnouncements(prev => prev.filter(announcement => announcement._id !== announcementId));
         setShowCommentMenu(null);
         alert("Announcement deleted successfully!");
@@ -457,7 +562,6 @@ const handleUndeployExam = async (examId) => {
     }
   };
 
-  // Function para mag-delete ng comment
   const handleDeleteComment = async (announcementId, commentId) => {
     if (!window.confirm("Are you sure you want to delete this comment?")) return;
     
@@ -468,7 +572,6 @@ const handleUndeployExam = async (examId) => {
       console.log("✅ Delete comment response:", response);
       
       if (response.success) {
-        // Alisin ang comment sa announcement
         setAnnouncements(prev => prev.map(announcement => 
           announcement._id === announcementId 
             ? {
@@ -490,22 +593,18 @@ const handleUndeployExam = async (examId) => {
     }
   };
 
-  // Function para i-toggle ang comment menu
   const toggleCommentMenu = (announcementId, event) => {
-    event.stopPropagation(); // Pigilan ang event propagation
+    event.stopPropagation();
     setShowCommentMenu(showCommentMenu === announcementId ? null : announcementId);
   };
 
-  // Function para i-toggle ang comment delete menu
   const toggleCommentDeleteMenu = (commentId, event) => {
-    event.stopPropagation(); // Pigilan ang event propagation
+    event.stopPropagation();
     setShowCommentDeleteMenu(showCommentDeleteMenu === commentId ? null : commentId);
   };
 
-  // I-check kung teacher ang user para sa selected class
   const isTeacher = selectedClass?.userRole === "teacher";
 
-  // I-check kung pwedeng mag-delete ng comment (teacher or comment author)
   const canDeleteComment = (comment, announcement) => {
     if (!user._id) return false;
     
@@ -517,8 +616,7 @@ const handleUndeployExam = async (examId) => {
   };
 
   // ===== CLICK OUTSIDE HANDLER =====
-  // Ito ay para madetect kung nag-click ang user sa labas ng dropdown at isara ito
-   useEffect(() => {
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (commentDeleteMenuRef.current && !commentDeleteMenuRef.current.contains(event.target)) {
         setShowDeleteMenu(false);
@@ -546,36 +644,24 @@ const handleUndeployExam = async (examId) => {
   }, []);
 
   // ===== DATA FETCHING FUNCTIONS =====
-
-  // Function para kunin ang archived classes
   const fetchArchivedClasses = async () => {
     try {
       console.log("📦 Fetching archived classes...");
-     // const res = await api.get('/class/archived');
-     // console.log("✅ Archived classes response:", res.data);
-     //setArchivedClasses(res.data.data || []);
     } catch (error) {
       console.error("❌ Failed to fetch archived classes:", error);
-     // setArchivedClasses([]); 
     }
   };
 
-  // Function para kunin ang review count
   const fetchReviewCount = async () => {
     if (userRole === 'teacher') {
       try {
         console.log("📊 Fetching review count...");
-      //  const res = await api.get('/class/items-to-review');
-      //  console.log("✅ Review count response:", res.data);
-      //  setItemsToReview(res.data.count || 0);
       } catch (error) {
         console.error('❌ Failed to fetch review count:', error);
-      //  setItemsToReview(0);
       }
     }
   };
 
-  // Function para kunin ang announcements
   const fetchAnnouncements = async () => {
     if (!selectedClass) return;
     
@@ -593,7 +679,6 @@ const handleUndeployExam = async (examId) => {
       setAnnouncements(announcementsWithComments);
     } catch (error) {
       console.error("❌ Failed to fetch announcements:", error);
-      // Huwag mag-set ng empty array kapag error, keep existing announcements
       if (announcements.length === 0) {
         setAnnouncements([]);
       }
@@ -603,7 +688,6 @@ const handleUndeployExam = async (examId) => {
   };
 
   // ===== MAIN DATA FETCHING EFFECT =====
-  // Ito ang pangunahing effect para kunin ang user data at classes
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -694,6 +778,13 @@ const handleUndeployExam = async (examId) => {
     }
   }, [selectedClass, activeTab]);
 
+  // Effect para i-fetch ang people data kapag nagbago ang selected class o active tab
+  useEffect(() => {
+    if (selectedClass && activeTab === 'people') {
+      fetchClassPeople();
+    }
+  }, [selectedClass, activeTab]);
+
   // Effect para i-generate ang calendar events kapag nagbago ang classes
   useEffect(() => {
     generateCalendarEvents();
@@ -771,46 +862,42 @@ const handleUndeployExam = async (examId) => {
   };
 
   // ===== CREATE DROPDOWN HANDLER =====
-// ===== CREATE DROPDOWN HANDLER =====
-const handleCreateOption = (option) => {
-  console.log("Selected:", option);
-  setShowCreateDropdown(false);
-  
-  switch(option) {
-    case 'assignment':
-      alert('Create Assignment clicked');
-      break;
-    case 'quiz':
-      // I-navigate sa quiz creation page
-      if (selectedClass) {
-        navigate(`/class/${selectedClass._id}/quiz/new`);
-      } else {
-        alert('Please select a class first');
-      }
-      break;
-    case 'question':
-      alert('Create Question clicked');
-      break;
-    case 'material':
-      alert('Create Material clicked');
-      break;
-    case 'reuse':
-      alert('Reuse Post clicked');
-      break;
-    case 'topic':
-      alert('Create Topic clicked');
-      break;
-    case 'delete-all':
-      handleDeleteAllQuizzes();
-      break;
-    default:
-      break;
-  }
-};
+  const handleCreateOption = (option) => {
+    console.log("Selected:", option);
+    setShowCreateDropdown(false);
+    
+    switch(option) {
+      case 'assignment':
+        alert('Create Assignment clicked');
+        break;
+      case 'quiz':
+        if (selectedClass) {
+          navigate(`/class/${selectedClass._id}/quiz/new`);
+        } else {
+          alert('Please select a class first');
+        }
+        break;
+      case 'question':
+        alert('Create Question clicked');
+        break;
+      case 'material':
+        alert('Create Material clicked');
+        break;
+      case 'reuse':
+        alert('Reuse Post clicked');
+        break;
+      case 'topic':
+        alert('Create Topic clicked');
+        break;
+      case 'delete-all':
+        handleDeleteAllQuizzes();
+        break;
+      default:
+        break;
+    }
+  };
 
   // ===== CALENDAR FUNCTIONS =====
-
-  // Function para makuha ang class color
   const getClassColor = (classId) => {
     const colors = [
       '#4285f4', '#34a853', '#fbbc04', '#ea4335', '#a142f4', 
@@ -820,7 +907,6 @@ const handleCreateOption = (option) => {
     return colors[index];
   };
 
-  // Function para i-generate ang calendar events
   const generateCalendarEvents = () => {
     const events = [];
     
@@ -918,14 +1004,11 @@ const handleCreateOption = (option) => {
   };
 
   // ===== CLASS MANAGEMENT FUNCTIONS =====
-
-  // Function para i-toggle ang class menu
   const toggleMenu = (classId, event) => {
     event.stopPropagation();
     setShowMenuForClass(showMenuForClass === classId ? null : classId);
   };
 
-  // Function para i-confirm ang unenroll
   const confirmUnenroll = (classData, event) => {
     event.stopPropagation();
     setClassToUnenroll(classData);
@@ -933,7 +1016,6 @@ const handleCreateOption = (option) => {
     setShowMenuForClass(null);
   };
 
-  // Function para mag-unenroll sa class
   const unenrollFromClass = async () => {
     if (!classToUnenroll) return;
     
@@ -956,7 +1038,6 @@ const handleCreateOption = (option) => {
     }
   };
 
-  // Function para i-confirm ang archive
   const confirmArchive = (classData, event) => {
     event.stopPropagation();
     setClassToArchive(classData);
@@ -964,7 +1045,6 @@ const handleCreateOption = (option) => {
     setShowMenuForClass(null);
   };
 
-  // Function para mag-archive ng class
   const archiveClass = async () => {
     if (!classToArchive) return;
     
@@ -988,14 +1068,12 @@ const handleCreateOption = (option) => {
     }
   };
 
-  // Function para i-confirm ang restore
   const confirmRestore = (classData, event) => {
     event.stopPropagation();
     setClassToRestore(classData);
     setShowRestoreModal(true);
   };
 
-  // Function para i-restore ang class
   const restoreClass = async () => {
     if (!classToRestore) return;
     
@@ -1016,8 +1094,6 @@ const handleCreateOption = (option) => {
   };
 
   // ===== CLASS CREATION AND JOINING =====
-
-  // Function para gumawa ng class
   const createClass = async (e) => {
     e.preventDefault();
     try {
@@ -1032,7 +1108,6 @@ const handleCreateOption = (option) => {
     }
   };
 
-  // Function para sumali sa class
   const joinClass = async (e) => {
     e.preventDefault();
     try {
@@ -1047,11 +1122,10 @@ const handleCreateOption = (option) => {
     }
   };
 
-  // Function para pumili ng class
   const handleSelectClass = async (classData) => {
     console.log("🎯 Selecting class:", classData.name);
     setSelectedClass(classData);
-    setActiveTab("stream"); // I-reset sa stream kapag pumili ng class
+    setActiveTab("stream");
     
     try {
       const examsRes = await api.get(`/exams/${classData._id}`);
@@ -1060,14 +1134,12 @@ const handleCreateOption = (option) => {
       const membersRes = await api.get(`/class/${classData._id}/members`);
       setStudents(membersRes.data || []);
       
-      // I-fetch agad ang classwork kapag napili ang class
       fetchClasswork();
     } catch (error) {
       console.error("Failed to fetch class details:", error);
     }
   };
 
-  // Function para mag-logout
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userName");
@@ -1075,371 +1147,352 @@ const handleCreateOption = (option) => {
     window.location.href = "/login";
   };
 
-  // Helper function para sa random colors
   const getRandomColor = () => {
     const colors = ['blue', 'red', 'green'];
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
- // ===== FIXED ANNOUNCEMENT CARD COMPONENT =====
-// ===== COMPLETELY FIXED ANNOUNCEMENT CARD COMPONENT WITH DEBUGGING =====
-const AnnouncementCard = ({ announcement }) => {
-  const currentUserId = user._id;
-  const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
-  const canEditDelete = isAnnouncementCreator || isTeacher;
-  
-  console.log("🎯 ANNOUNCEMENT CARD RENDERED:", {
-    announcementId: announcement._id,
-    currentUserId,
-    isAnnouncementCreator,
-    isTeacher,
-    canEditDelete,
-    announcementCreator: announcement.createdBy?._id,
-    userRole: selectedClass?.userRole
-  });
-  
-  // Local state
-  const [localCommentInput, setLocalCommentInput] = useState("");
-  const [localEditContent, setLocalEditContent] = useState(announcement.content);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isPostingComment, setIsPostingComment] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-
-  const textareaRef = useRef(null);
-  const commentMenuRef = useRef(null);
-
-  // Auto-focus when editing starts
-  useEffect(() => {
-    if (isEditing && textareaRef.current) {
-      textareaRef.current.focus();
-      const length = textareaRef.current.value.length;
-      textareaRef.current.setSelectionRange(length, length);
-    }
-  }, [isEditing]);
-
-  // ===== FIXED EDIT FUNCTIONS =====
-  const startEditAnnouncement = () => {
-    console.log("🔄 STARTING EDIT - Announcement ID:", announcement._id);
-    console.log("📝 Current content:", announcement.content);
-    setIsEditing(true);
-    setLocalEditContent(announcement.content);
-    setShowCommentMenu(null);
-  };
-
-  const saveEditAnnouncement = async () => {
-  if (!localEditContent.trim()) {
-    console.log("❌ Empty content, not saving");
-    return;
-  }
-  
-  console.log("💾 SAVING EDIT - Button clicked!");
-  console.log("📦 Save Data:", {
-    announcementId: announcement._id,
-    newContent: localEditContent,
-    currentUserId,
-    canEditDelete
-  });
-  
-  setIsSavingEdit(true);
-  try {
-    const updateData = {
-      content: localEditContent.trim()
-    };
-    
-    console.log("🚀 Calling updateAnnouncement API...");
-    
-    // ADD THIS DEBUG LINE TO CHECK IF API FUNCTION IS CALLED
-    const response = await updateAnnouncement(announcement._id, updateData);
-    console.log("✅ EDIT API RESPONSE RECEIVED:", response);
-
-    if (response.success) {
-      console.log("🔄 UPDATING ANNOUNCEMENTS STATE - Before update");
-      console.log("Current announcements count:", announcements.length);
-      
-      // Update the announcement in the list
-      setAnnouncements(prev => {
-        const updated = prev.map(ann => 
-          ann._id === announcement._id 
-            ? { 
-                ...ann, 
-                content: localEditContent.trim(),
-                updatedAt: new Date().toISOString()
-              }
-            : ann
-        );
-        console.log("🔄 After update - announcements:", updated);
-        return updated;
-      });
-
-      setIsEditing(false);
-      console.log("🎉 EDIT SUCCESSFUL - Editing mode closed");
-      alert("Announcement updated successfully!");
-    } else {
-      console.error("❌ EDIT FAILED - API returned false");
-      alert("Failed to update announcement: " + (response.message || "Unknown error"));
-    }
-  } catch (error) {
-    console.error("❌ EDIT ERROR:", error);
-    console.error("Error details:", {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
-    alert("Failed to edit announcement: " + (error.response?.data?.message || error.message));
-  } finally {
-    setIsSavingEdit(false);
-    console.log("🏁 Save process completed");
-  }
-};
-
-  const cancelEditAnnouncement = () => {
-    console.log("❌ Canceling edit");
-    setIsEditing(false);
-    setLocalEditContent(announcement.content);
-  };
-
-  // Handle edit textarea key press
-  const handleEditKeyPress = (e) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
-      e.preventDefault();
-      saveEditAnnouncement();
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      cancelEditAnnouncement();
-    }
-  };
-
-  // ===== FIXED DELETE FUNCTION =====
-  const handleDeleteAnnouncement = async () => {
-    if (!window.confirm("Are you sure you want to delete this announcement?")) return;
-    
-    try {
-      console.log("🗑️ DELETING ANNOUNCEMENT:", announcement._id);
-      const response = await deleteAnnouncement(announcement._id);
-      console.log("✅ DELETE RESPONSE:", response);
-
-      if (response.success) {
-        // Remove announcement from list
-        setAnnouncements(prev => prev.filter(ann => ann._id !== announcement._id));
-        setShowCommentMenu(null);
-        alert("Announcement deleted successfully!");
-      } else {
-        throw new Error(response.message || "Failed to delete announcement");
-      }
-    } catch (error) {
-      console.error("❌ DELETE ERROR:", error);
-      alert("Failed to delete announcement: " + (error.response?.data?.message || error.message));
-    }
-  };
-
-  // Comment submission
-  const handleCommentSubmit = async () => {
-    if (!localCommentInput.trim()) return;
-    
-    setIsPostingComment(true);
-    
-    try {
-      const response = await addCommentToAnnouncement(announcement._id, {
-        content: localCommentInput.trim()
-      });
-
-      if (response.success) {
-        // Update announcements with new comment
-        setAnnouncements(prev => prev.map(ann => 
-          ann._id === announcement._id 
-            ? { 
-                ...ann, 
-                comments: [...(ann.comments || []), response.data] 
-              }
-            : ann
-        ));
-
-        setLocalCommentInput("");
-      } else {
-        throw new Error(response.message || "Failed to add comment");
-      }
-    } catch (error) {
-      console.error("Failed to add comment:", error);
-      alert(error.response?.data?.message || "Failed to add comment");
-    } finally {
-      setIsPostingComment(false);
-    }
-  };
-
-  // Handle Enter key press for comments
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleCommentSubmit();
-    }
-  };
-
-  // Toggle comment menu
-  const toggleCommentMenu = (e) => {
-    e.stopPropagation();
-    console.log("📋 TOGGLING MENU for announcement:", announcement._id);
-    setShowCommentMenu(showCommentMenu === announcement._id ? null : announcement._id);
-  };
-
-  // Fixed CommentItem component
-  const CommentItem = ({ comment, announcement }) => {
+  // ===== FIXED ANNOUNCEMENT CARD COMPONENT =====
+  const AnnouncementCard = ({ announcement }) => {
     const currentUserId = user._id;
-    const isCommentAuthor = comment.author?._id === currentUserId;
     const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
-    const canDeleteComment = isCommentAuthor || isAnnouncementCreator || isTeacher;
+    const canEditDelete = isAnnouncementCreator || isTeacher;
     
-    const [showDeleteMenu, setShowDeleteMenu] = useState(false);
-    const commentDeleteMenuRef = useRef(null);
+    console.log("🎯 ANNOUNCEMENT CARD RENDERED:", {
+      announcementId: announcement._id,
+      currentUserId,
+      isAnnouncementCreator,
+      isTeacher,
+      canEditDelete,
+      announcementCreator: announcement.createdBy?._id,
+      userRole: selectedClass?.userRole
+    });
+    
+    const [localCommentInput, setLocalCommentInput] = useState("");
+    const [localEditContent, setLocalEditContent] = useState(announcement.content);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isPostingComment, setIsPostingComment] = useState(false);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-    const toggleDeleteMenu = (e) => {
-      e.stopPropagation();
-      setShowDeleteMenu(!showDeleteMenu);
+    const textareaRef = useRef(null);
+    const commentMenuRef = useRef(null);
+
+    useEffect(() => {
+      if (isEditing && textareaRef.current) {
+        textareaRef.current.focus();
+        const length = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(length, length);
+      }
+    }, [isEditing]);
+
+    const startEditAnnouncement = () => {
+      console.log("🔄 STARTING EDIT - Announcement ID:", announcement._id);
+      console.log("📝 Current content:", announcement.content);
+      setIsEditing(true);
+      setLocalEditContent(announcement.content);
+      setShowCommentMenu(null);
     };
 
-    // Click outside handler for comment delete menu
-    useEffect(() => {
-      const handleClickOutside = (event) => {
-        if (commentDeleteMenuRef.current && !commentDeleteMenuRef.current.contains(event.target)) {
-          setShowDeleteMenu(false);
+    const saveEditAnnouncement = async () => {
+    if (!localEditContent.trim()) {
+      console.log("❌ Empty content, not saving");
+      return;
+    }
+    
+    console.log("💾 SAVING EDIT - Button clicked!");
+    console.log("📦 Save Data:", {
+      announcementId: announcement._id,
+      newContent: localEditContent,
+      currentUserId,
+      canEditDelete
+    });
+    
+    setIsSavingEdit(true);
+    try {
+      const updateData = {
+        content: localEditContent.trim()
+      };
+      
+      console.log("🚀 Calling updateAnnouncement API...");
+      const response = await updateAnnouncement(announcement._id, updateData);
+      console.log("✅ EDIT API RESPONSE RECEIVED:", response);
+
+      if (response.success) {
+        console.log("🔄 UPDATING ANNOUNCEMENTS STATE - Before update");
+        console.log("Current announcements count:", announcements.length);
+        
+        setAnnouncements(prev => {
+          const updated = prev.map(ann => 
+            ann._id === announcement._id 
+              ? { 
+                  ...ann, 
+                  content: localEditContent.trim(),
+                  updatedAt: new Date().toISOString()
+                }
+              : ann
+          );
+          console.log("🔄 After update - announcements:", updated);
+          return updated;
+        });
+
+        setIsEditing(false);
+        console.log("🎉 EDIT SUCCESSFUL - Editing mode closed");
+        alert("Announcement updated successfully!");
+      } else {
+        console.error("❌ EDIT FAILED - API returned false");
+        alert("Failed to update announcement: " + (response.message || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("❌ EDIT ERROR:", error);
+      console.error("Error details:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      alert("Failed to edit announcement: " + (error.response?.data?.message || error.message));
+    } finally {
+      setIsSavingEdit(false);
+      console.log("🏁 Save process completed");
+    }
+  };
+
+    const cancelEditAnnouncement = () => {
+      console.log("❌ Canceling edit");
+      setIsEditing(false);
+      setLocalEditContent(announcement.content);
+    };
+
+    const handleEditKeyPress = (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        saveEditAnnouncement();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEditAnnouncement();
+      }
+    };
+
+    const handleDeleteAnnouncement = async () => {
+      if (!window.confirm("Are you sure you want to delete this announcement?")) return;
+      
+      try {
+        console.log("🗑️ DELETING ANNOUNCEMENT:", announcement._id);
+        const response = await deleteAnnouncement(announcement._id);
+        console.log("✅ DELETE RESPONSE:", response);
+
+        if (response.success) {
+          setAnnouncements(prev => prev.filter(ann => ann._id !== announcement._id));
+          setShowCommentMenu(null);
+          alert("Announcement deleted successfully!");
+        } else {
+          throw new Error(response.message || "Failed to delete announcement");
         }
+      } catch (error) {
+        console.error("❌ DELETE ERROR:", error);
+        alert("Failed to delete announcement: " + (error.response?.data?.message || error.message));
+      }
+    };
+
+    const handleCommentSubmit = async () => {
+      if (!localCommentInput.trim()) return;
+      
+      setIsPostingComment(true);
+      
+      try {
+        const response = await addCommentToAnnouncement(announcement._id, {
+          content: localCommentInput.trim()
+        });
+
+        if (response.success) {
+          setAnnouncements(prev => prev.map(ann => 
+            ann._id === announcement._id 
+              ? { 
+                  ...ann, 
+                  comments: [...(ann.comments || []), response.data] 
+                }
+              : ann
+          ));
+
+          setLocalCommentInput("");
+        } else {
+          throw new Error(response.message || "Failed to add comment");
+        }
+      } catch (error) {
+        console.error("Failed to add comment:", error);
+        alert(error.response?.data?.message || "Failed to add comment");
+      } finally {
+        setIsPostingComment(false);
+      }
+    };
+
+    const handleKeyPress = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleCommentSubmit();
+      }
+    };
+
+    const toggleCommentMenu = (e) => {
+      e.stopPropagation();
+      console.log("📋 TOGGLING MENU for announcement:", announcement._id);
+      setShowCommentMenu(showCommentMenu === announcement._id ? null : announcement._id);
+    };
+
+    const CommentItem = ({ comment, announcement }) => {
+      const currentUserId = user._id;
+      const isCommentAuthor = comment.author?._id === currentUserId;
+      const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
+      const canDeleteComment = isCommentAuthor || isAnnouncementCreator || isTeacher;
+      
+      const [showDeleteMenu, setShowDeleteMenu] = useState(false);
+      const commentDeleteMenuRef = useRef(null);
+
+      const toggleDeleteMenu = (e) => {
+        e.stopPropagation();
+        setShowDeleteMenu(!showDeleteMenu);
       };
 
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+      useEffect(() => {
+        const handleClickOutside = (event) => {
+          if (commentDeleteMenuRef.current && !commentDeleteMenuRef.current.contains(event.target)) {
+            setShowDeleteMenu(false);
+          }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+      }, []);
+
+      return (
+        <div className="comment-item">
+          <div className="comment-avatar">
+            <img 
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(comment.author?.name || 'User')}&background=34a853&color=fff`}
+              alt={comment.author?.name}
+            />
+          </div>
+          <div className="comment-content">
+            <div className="comment-header">
+              <div className="comment-author-info">
+                <span className="comment-author">{comment.author?.name || 'User'}</span>
+                <span className="comment-time">
+                  {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              
+              {canDeleteComment && (
+                <div className="comment-actions" ref={commentDeleteMenuRef}>
+                  <button 
+                    className="comment-menu-btn"
+                    onClick={toggleDeleteMenu}
+                  >
+                    <FaEllipsisV className="comment-menu-icon" />
+                  </button>
+                  
+                  {showDeleteMenu && (
+                    <div className="comment-menu-dropdown">
+                      <button 
+                        className="comment-menu-item delete"
+                        onClick={() => handleDeleteComment(announcement._id, comment._id)}
+                      >
+                        <FaTrash className="comment-menu-item-icon" />
+                        Delete Comment
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <p className="comment-text">{comment.content}</p>
+          </div>
+        </div>
+      );
+    };
 
     return (
-      <div className="comment-item">
-        <div className="comment-avatar">
-          <img 
-            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(comment.author?.name || 'User')}&background=34a853&color=fff`}
-            alt={comment.author?.name}
-          />
-        </div>
-        <div className="comment-content">
-          <div className="comment-header">
-            <div className="comment-author-info">
-              <span className="comment-author">{comment.author?.name || 'User'}</span>
-              <span className="comment-time">
-                {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-            
-            {canDeleteComment && (
-              <div className="comment-actions" ref={commentDeleteMenuRef}>
-                <button 
-                  className="comment-menu-btn"
-                  onClick={toggleDeleteMenu}
-                >
-                  <FaEllipsisV className="comment-menu-icon" />
-                </button>
-                
-                {showDeleteMenu && (
-                  <div className="comment-menu-dropdown">
-                    <button 
-                      className="comment-menu-item delete"
-                      onClick={() => handleDeleteComment(announcement._id, comment._id)}
-                    >
-                      <FaTrash className="comment-menu-item-icon" />
-                      Delete Comment
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <p className="comment-text">{comment.content}</p>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div key={announcement._id} className="announcement-card">
-      <div className="announcement-header">
-        <div className="announcement-avatar">
-          <img 
-            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(announcement.createdBy?.name || 'User')}&background=4285f4&color=fff`}
-            alt={announcement.createdBy?.name}
-          />
-        </div>
-        <div className="announcement-info">
-          <div className="announcement-author">
-            {announcement.createdBy?.name || 'Teacher'}
-            {isTeacher && <span className="teacher-badge">Teacher</span>}
-          </div>
-          <div className="announcement-time">
-            {new Date(announcement.createdAt).toLocaleString()}
-            {announcement.updatedAt && announcement.updatedAt !== announcement.createdAt && (
-              <span className="edited-badge">(edited)</span>
-            )}
-          </div>
-        </div>
-        
-        {/* Announcement Menu (Teacher or announcement creator) */}
-        {canEditDelete && !isEditing && (
-          <div className="announcement-menu" ref={commentMenuRef}>
-            <button 
-              className="menu-btn"
-              onClick={toggleCommentMenu}
-            >
-              <FaEllipsisV className="menu-icon" />
-            </button>
-            
-            {showCommentMenu === announcement._id && (
-              <div className="announcement-menu-dropdown">
-                <button 
-                  className="menu-item"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    console.log("✏️ EDIT BUTTON CLICKED");
-                    startEditAnnouncement();
-                  }}
-                >
-                  <FaEdit className="menu-item-icon" />
-                  Edit
-                </button>
-                <button 
-                  className="menu-item delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    console.log("🗑️ DELETE BUTTON CLICKED");
-                    handleDeleteAnnouncement();
-                  }}
-                >
-                  <FaTrash className="menu-item-icon" />
-                  Delete
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Announcement Content */}
-      <div className="announcement-content">
-        {isEditing ? (
-          <div className="edit-announcement">
-            <textarea
-              ref={textareaRef}
-              className="edit-announcement-textarea"
-              value={localEditContent}
-              onChange={(e) => setLocalEditContent(e.target.value)}
-              onKeyDown={handleEditKeyPress}
-              rows="3"
-              disabled={isSavingEdit}
-              placeholder="What would you like to announce?"
+      <div key={announcement._id} className="announcement-card">
+        <div className="announcement-header">
+          <div className="announcement-avatar">
+            <img 
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(announcement.createdBy?.name || 'User')}&background=4285f4&color=fff`}
+              alt={announcement.createdBy?.name}
             />
-            <div className="edit-actions">
+          </div>
+          <div className="announcement-info">
+            <div className="announcement-author">
+              {announcement.createdBy?.name || 'Teacher'}
+              {isTeacher && <span className="teacher-badge">Teacher</span>}
+            </div>
+            <div className="announcement-time">
+              {new Date(announcement.createdAt).toLocaleString()}
+              {announcement.updatedAt && announcement.updatedAt !== announcement.createdAt && (
+                <span className="edited-badge">(edited)</span>
+              )}
+            </div>
+          </div>
+          
+          {canEditDelete && !isEditing && (
+            <div className="announcement-menu" ref={commentMenuRef}>
               <button 
-                className="cancel-edit-btn"
-                onClick={cancelEditAnnouncement}
-                disabled={isSavingEdit}
+                className="menu-btn"
+                onClick={toggleCommentMenu}
               >
-                Cancel
+                <FaEllipsisV className="menu-icon" />
               </button>
-              <button 
+              
+              {showCommentMenu === announcement._id && (
+                <div className="announcement-menu-dropdown">
+                  <button 
+                    className="menu-item"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log("✏️ EDIT BUTTON CLICKED");
+                      startEditAnnouncement();
+                    }}
+                  >
+                    <FaEdit className="menu-item-icon" />
+                    Edit
+                  </button>
+                  <button 
+                    className="menu-item delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log("🗑️ DELETE BUTTON CLICKED");
+                      handleDeleteAnnouncement();
+                    }}
+                  >
+                    <FaTrash className="menu-item-icon" />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="announcement-content">
+          {isEditing ? (
+            <div className="edit-announcement">
+              <textarea
+                ref={textareaRef}
+                className="edit-announcement-textarea"
+                value={localEditContent}
+                onChange={(e) => setLocalEditContent(e.target.value)}
+                onKeyDown={handleEditKeyPress}
+                rows="3"
+                disabled={isSavingEdit}
+                placeholder="What would you like to announce?"
+              />
+              <div className="edit-actions">
+                <button 
+                  className="cancel-edit-btn"
+                  onClick={cancelEditAnnouncement}
+                  disabled={isSavingEdit}
+                >
+                  Cancel
+                </button>
+                <button 
   className="save-edit-btn"
   onClick={(e) => {
     console.log("🖱️ SAVE BUTTON CLICKED!");
@@ -1450,64 +1503,60 @@ const AnnouncementCard = ({ announcement }) => {
 >
   {isSavingEdit ? "Saving..." : "Save"}
 </button>
+              </div>
+            </div>
+          ) : (
+            <p className="announcement-text">{announcement.content}</p>
+          )}
+        </div>
+
+        {!isEditing && (
+          <div className="announcement-comments">
+            {announcement.comments && announcement.comments.length > 0 && (
+              <div className="comments-list">
+                {announcement.comments.map((comment) => (
+                  <CommentItem 
+                    key={comment._id} 
+                    comment={comment} 
+                    announcement={announcement}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="add-comment">
+              <div className="comment-avatar">
+                <img 
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=ea4335&color=fff`}
+                  alt={user.name}
+                />
+              </div>
+              <div className="comment-input-container">
+                <input
+                  type="text"
+                  className="comment-input"
+                  placeholder="Add class comment..."
+                  value={localCommentInput}
+                  onChange={(e) => setLocalCommentInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={isPostingComment}
+                />
+                <button 
+                  className="comment-submit-btn"
+                  onClick={handleCommentSubmit}
+                  disabled={!localCommentInput.trim() || isPostingComment}
+                >
+                  {isPostingComment ? "Posting..." : "Post"}
+                </button>
+              </div>
             </div>
           </div>
-        ) : (
-          <p className="announcement-text">{announcement.content}</p>
         )}
       </div>
-
-      {/* Comments Section */}
-      {!isEditing && (
-        <div className="announcement-comments">
-          {/* Comments List */}
-          {announcement.comments && announcement.comments.length > 0 && (
-            <div className="comments-list">
-              {announcement.comments.map((comment) => (
-                <CommentItem 
-                  key={comment._id} 
-                  comment={comment} 
-                  announcement={announcement}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Add Comment Form */}
-          <div className="add-comment">
-            <div className="comment-avatar">
-              <img 
-                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=ea4335&color=fff`}
-                alt={user.name}
-              />
-            </div>
-            <div className="comment-input-container">
-              <input
-                type="text"
-                className="comment-input"
-                placeholder="Add class comment..."
-                value={localCommentInput}
-                onChange={(e) => setLocalCommentInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                disabled={isPostingComment}
-              />
-              <button 
-                className="comment-submit-btn"
-                onClick={handleCommentSubmit}
-                disabled={!localCommentInput.trim() || isPostingComment}
-              >
-                {isPostingComment ? "Posting..." : "Post"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+    );
+  };
 
   // ===== CLASS CARD COMPONENT =====
-  // Ito ay para sa pag-display ng individual class card
   const ClassCard = ({ classData }) => {
     const isTeacher = classData.userRole === "teacher";
     
@@ -1517,7 +1566,6 @@ const AnnouncementCard = ({ announcement }) => {
         className="class-card bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 border border-gray-200 cursor-pointer relative overflow-visible"
         onClick={() => handleSelectClass(classData)}
       >
-        {/* Menu Button */}
         <div className="absolute top-3 right-3 z-50">
           <button 
             className="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-md border border-gray-200"
@@ -1528,11 +1576,9 @@ const AnnouncementCard = ({ announcement }) => {
             </svg>
           </button>
           
-          {/* Dropdown Menu */}
           {showMenuForClass === classData._id && (
             <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
               {isTeacher ? (
-                // TEACHER MENU OPTIONS
                 <>
                   <button
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition-colors"
@@ -1570,7 +1616,6 @@ const AnnouncementCard = ({ announcement }) => {
                   </button>
                 </>
               ) : (
-                // STUDENT MENU OPTIONS
                 <button
                   className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition-colors"
                   onClick={(e) => confirmUnenroll(classData, e)}
@@ -1585,7 +1630,6 @@ const AnnouncementCard = ({ announcement }) => {
           )}
         </div>
 
-        {/* Class Card Content */}
         <div className="p-4">
           <div className="flex justify-between items-start mb-3">
             <h3 className="font-semibold text-lg text-gray-800 truncate flex-1 pr-12">{classData.name}</h3>
@@ -1625,82 +1669,268 @@ const AnnouncementCard = ({ announcement }) => {
     );
   };
 
-  // ===== MODAL COMPONENTS =====
-// ===== MODAL COMPONENTS =====
+  // ===== PEOPLE TAB RENDERER =====
+  const renderPeopleTab = () => {
+    if (loadingPeople) {
+      return <div className="loading">Loading people...</div>;
+    }
 
-// DEPLOY EXAM MODAL 🚀 ADD THIS MODAL
-const DeployExamModal = () => {
-  if (!showDeployModal || !examToDeploy) return null;
+    return (
+      <div className="people-tab">
+        <div className="people-header">
+          <h3>People</h3>
+          {isTeacher && classPeople.students.length > 0 && (
+            <button 
+              className="email-students-btn"
+              onClick={() => setShowEmailModal(true)}
+            >
+              <FaEnvelope className="btn-icon" />
+              Email Students
+            </button>
+          )}
+        </div>
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="flex-shrink-0">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+        {/* Teachers Section */}
+        <div className="people-section">
+          <h4 className="section-title">Teachers</h4>
+          <div className="people-list">
+            {classPeople.teachers.map(teacher => (
+              <div key={teacher._id} className="person-card teacher-card">
+                <div className="person-avatar">
+                  {teacher.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="person-info">
+                  <div className="person-name">{teacher.name}</div>
+                  <div className="person-email">{teacher.email}</div>
+                  <div className="person-role teacher-role">Teacher</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Students Section */}
+        <div className="people-section">
+          <div className="section-header">
+            <h4 className="section-title">Students ({classPeople.students.length})</h4>
+          </div>
+
+          {classPeople.students.length > 0 ? (
+            <div className="students-container">
+              {/* Bulk Selection Header */}
+              {isTeacher && (
+                <div className="bulk-selection-header">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={selectedStudents.length === classPeople.students.length}
+                      onChange={selectAllStudents}
+                    />
+                    Select All
+                  </label>
+                  <span className="selected-count">
+                    {selectedStudents.length} selected
+                  </span>
+                </div>
+              )}
+
+              {/* Students List */}
+              <div className="people-list">
+                {classPeople.students.map(student => (
+                  <div key={student._id} className="person-card student-card">
+                    {isTeacher && (
+                      <div className="student-select">
+                        <input
+                          type="checkbox"
+                          checked={selectedStudents.includes(student._id)}
+                          onChange={() => toggleStudentSelection(student._id)}
+                        />
+                      </div>
+                    )}
+                    <div className="person-avatar">
+                      {student.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="person-info">
+                      <div className="person-name">
+                        {student.name}
+                        {student.isMuted && <span className="muted-badge">Muted</span>}
+                      </div>
+                      <div className="person-email">{student.email}</div>
+                      <div className="person-meta">
+                        Joined {new Date(student.joinedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    {isTeacher && (
+                      <div className="person-actions">
+                        <button 
+                          className="actions-toggle"
+                          onClick={() => toggleActions(student._id)}
+                        >
+                          <FaEllipsisV />
+                        </button>
+                        
+                        {activeActions === student._id && (
+                          <div className="actions-dropdown">
+                            <button 
+                              className="action-item"
+                              onClick={() => handleToggleMute(student._id, student.name, student.isMuted)}
+                            >
+                              {student.isMuted ? <FaVolumeUp /> : <FaVolumeMute />}
+                              {student.isMuted ? 'Unmute' : 'Mute'} Student
+                            </button>
+                            <button 
+                              className="action-item remove"
+                              onClick={() => handleRemoveStudent(student._id, student.name)}
+                            >
+                              <FaUserMinus />
+                              Remove from Class
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">👥</div>
+              <h4>No Students Yet</h4>
+              <p>Students will appear here once they join your class using the class code.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Email Modal */}
+        {showEmailModal && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Email Students</h3>
+                <button 
+                  className="close-btn"
+                  onClick={() => setShowEmailModal(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="modal-body">
+                <p>Sending to {selectedStudents.length} selected students</p>
+                <div className="form-group">
+                  <label>Subject</label>
+                  <input
+                    type="text"
+                    placeholder="Enter email subject"
+                    value={emailData.subject}
+                    onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Message</label>
+                  <textarea
+                    placeholder="Enter your message"
+                    rows="6"
+                    value={emailData.message}
+                    onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button 
+                  className="btn-secondary"
+                  onClick={() => setShowEmailModal(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn-primary"
+                  onClick={handleEmailStudents}
+                  disabled={!emailData.subject.trim() || !emailData.message.trim()}
+                >
+                  Send Email
+                </button>
+              </div>
             </div>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Deploy Exam</h3>
-            <p className="text-sm text-gray-600">Start exam session for students</p>
-          </div>
-        </div>
-        
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
-          <p className="text-sm text-blue-800">
-            You are about to deploy: <strong>"{examToDeploy.title}"</strong>
-          </p>
-          <p className="text-xs text-blue-700 mt-1">
-            Students will be able to join the exam session with camera and microphone access required.
-          </p>
-        </div>
+        )}
+      </div>
+    );
+  };
 
-        <div className="space-y-3 mb-4">
-          <div className="flex items-center text-sm text-gray-600">
-            <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Camera access required
-          </div>
-          <div className="flex items-center text-sm text-gray-600">
-            <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Microphone access required
-          </div>
-          <div className="flex items-center text-sm text-gray-600">
-            <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Real-time proctoring enabled
-          </div>
-        </div>
+  // ===== MODAL COMPONENTS =====
+  const DeployExamModal = () => {
+    if (!showDeployModal || !examToDeploy) return null;
 
-        <div className="flex justify-end space-x-3">
-          <button
-            onClick={() => {
-              setShowDeployModal(false);
-              setExamToDeploy(null);
-            }}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={confirmDeployExam}
-            disabled={deployingExam}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
-          >
-            {deployingExam ? 'Deploying...' : 'Deploy Exam'}
-          </button>
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Deploy Exam</h3>
+              <p className="text-sm text-gray-600">Start exam session for students</p>
+            </div>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+            <p className="text-sm text-blue-800">
+              You are about to deploy: <strong>"{examToDeploy.title}"</strong>
+            </p>
+            <p className="text-xs text-blue-700 mt-1">
+              Students will be able to join the exam session with camera and microphone access required.
+            </p>
+          </div>
+
+          <div className="space-y-3 mb-4">
+            <div className="flex items-center text-sm text-gray-600">
+              <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Camera access required
+            </div>
+            <div className="flex items-center text-sm text-gray-600">
+              <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Microphone access required
+            </div>
+            <div className="flex items-center text-sm text-gray-600">
+              <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Real-time proctoring enabled
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => {
+                setShowDeployModal(false);
+                setExamToDeploy(null);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDeployExam}
+              disabled={deployingExam}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+            >
+              {deployingExam ? 'Deploying...' : 'Deploy Exam'}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   // UNENROLL CONFIRMATION MODAL
   const UnenrollModal = () => {
@@ -1940,7 +2170,6 @@ const DeployExamModal = () => {
   }, [showAnnouncementModal, selectedClass, announcementContent, postingAnnouncement, handleAnnouncementInputChange, createAnnouncement]);
 
   // ===== CALENDAR COMPONENT =====
-  // Ito ay Google Classroom style calendar
   const GoogleClassroomCalendar = () => {
     const daysInMonth = getDaysInMonth(currentDate);
     const firstDayOfMonth = getFirstDayOfMonth(currentDate);
@@ -2273,7 +2502,6 @@ const DeployExamModal = () => {
                       </div>
                     </div>
 
-                    {/* Delete All Option - Ipakita lang kung may mga quizzes */}
                     {classwork.some(item => item.type === 'quiz') && (
                       <>
                         <div className="dropdown-divider"></div>
@@ -2361,7 +2589,6 @@ const DeployExamModal = () => {
           📹 Start Live Session
         </button>
         
-        {/* Regular deploy button for non-live access */}
         {!item.isDeployed ? (
           <button 
             className="deploy-exam-btn"
@@ -2430,11 +2657,9 @@ const DeployExamModal = () => {
                   </div>
 
                   {/* START QUIZ BUTTON FOR STUDENTS */}
-               {/* START QUIZ BUTTON FOR STUDENTS - UPDATED */}
 {selectedClass?.userRole === "student" && item.type === 'quiz' && (
   <div className="classwork-actions">
     {item.isActive ? (
-      // Session is active - student can join
       <div className="quiz-availability">
         <button 
           className="start-quiz-btn camera-required"
@@ -2442,7 +2667,6 @@ const DeployExamModal = () => {
             try {
               setQuizLoading(true);
               
-              // Join the active exam session
               const joinResponse = await joinExamSession(item._id);
               if (joinResponse.success) {
                 navigate(`/student-quiz/${item._id}`, {
@@ -2478,7 +2702,6 @@ const DeployExamModal = () => {
         </div>
       </div>
     ) : item.isPublished || item.isDeployed ? (
-      // Exam is deployed but session not active
       <div className="quiz-info waiting">
         <button className="start-quiz-btn" disabled>
           ⏳ Waiting for Teacher
@@ -2486,15 +2709,11 @@ const DeployExamModal = () => {
         <small>Teacher needs to start the live session</small>
       </div>
     ) : (
-      // Exam not available
       <div className="quiz-info unavailable">
         <small>This exam is not available yet</small>
       </div>
     )}
 
-  
-    
-    {/* Quiz details */}
     <div className="quiz-details">
       {item.questions && (
         <span>{item.questions.length} questions</span>
@@ -2636,13 +2855,7 @@ const DeployExamModal = () => {
 
           {activeTab === "classwork" && renderClassworkTab()}
 
-          {activeTab === "people" && (
-            <div className="people-tab">
-              <div className="people-header">
-                <h3>People</h3>
-              </div>
-            </div>
-          )}
+          {activeTab === "people" && renderPeopleTab()}
 
           {activeTab === "grades" && (
             <div className="grades-tab">

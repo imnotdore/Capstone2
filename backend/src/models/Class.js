@@ -1,4 +1,4 @@
-// models/Class.js - UPDATED WITH CLASSWORK
+// backend/src/models/Class.js - UPDATED WITH MUTE FIELD
 const mongoose = require("mongoose");
 
 const classSchema = new mongoose.Schema({
@@ -8,11 +8,12 @@ const classSchema = new mongoose.Schema({
   members: [{ 
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     role: { type: String, enum: ["teacher", "student"], default: "student" },
-    joinedAt: { type: Date, default: Date.now }
+    joinedAt: { type: Date, default: Date.now },
+    isMuted: { type: Boolean, default: false } // ✅ ADD THIS LINE
   }],
   exams: [{ type: mongoose.Schema.Types.ObjectId, ref: "Exam", unique: true }],
-  classwork: [{ type: mongoose.Schema.Types.ObjectId, ref: "Assignment" }], // ✅ NEW
-  topics: [{ type: String }], // ✅ NEW
+  classwork: [{ type: mongoose.Schema.Types.ObjectId, ref: "Assignment" }],
+  topics: [{ type: String }],
   isArchived: { type: Boolean, default: false },
   archivedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },

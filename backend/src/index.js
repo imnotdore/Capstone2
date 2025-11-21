@@ -20,6 +20,7 @@ const examRoutes = require("./routes/examRoutes");
 const authRoutes = require("./routes/auth");
 const classworkRoutes = require("./routes/classwork"); // UPDATED - single file
 const announcementRoutes = require("./routes/announcements");
+const studentManagementRoutes = require("./routes/studentManagement"); // ✅ FIXED PATH
 
 const app = express();
 const server = http.createServer(app);
@@ -65,15 +66,17 @@ app.use("/api/class", classRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/classwork", classworkRoutes); // Single classwork routes file
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/student-management", studentManagementRoutes); // ADDED - student management routes
 
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Server is running with Classwork Create system",
+    message: "Server is running with Classwork Create system & Student Management",
     googleAuth: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     classworkCreateEnabled: true,
     announcementsEnabled: true,
+    studentManagementEnabled: true,
     timestamp: new Date().toISOString()
   });
 });
@@ -173,6 +176,7 @@ mongoose
       console.log(`✅ Exam Routes: /api/exams`);
       console.log(`✅ Classwork Routes: /api/classwork (with CREATE endpoint)`);
       console.log(`✅ Announcement Routes: /api/announcements`);
+      console.log(`✅ Student Management Routes: /api/student-management`); // ADDED
     });
   })
   .catch((err) => console.error("❌ DB connection error:", err));

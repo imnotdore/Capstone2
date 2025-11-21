@@ -29,6 +29,27 @@ api.interceptors.response.use(
 
 export default api;
 
+// ===== STUDENT MANAGEMENT API FUNCTIONS =====
+export const getClassPeople = async (classId) => {
+  const response = await api.get(`/student-management/${classId}/students`);
+  return response.data;
+};
+
+export const removeStudentFromClass = async (classId, studentId) => {
+  const response = await api.delete(`/student-management/${classId}/students/${studentId}`);
+  return response.data;
+};
+
+export const toggleStudentMute = async (classId, studentId) => {
+  const response = await api.patch(`/student-management/${classId}/students/${studentId}/mute`);
+  return response.data;
+};
+
+export const emailStudents = async (classId, emailData) => {
+  const response = await api.post(`/student-management/${classId}/email-students`, emailData);
+  return response.data;
+};
+
 // ===== QUIZ/EXAM FUNCTIONS =====
 export const createQuiz = async (classId, quizData) => {
   const response = await api.post(`/exams/create/${classId}`, quizData);
@@ -507,4 +528,3 @@ export const analyzeProctoringFrame = async (imageData) => {
   }
 };
 // ==============UPLOAD FILE TO=================//
-
