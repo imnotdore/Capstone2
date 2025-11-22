@@ -5709,3 +5709,197 @@ a:focus {
   color: #212529;
   cursor: not-allowed;
 }
+/* People Tab - Fix Dropdown Positioning */
+.people-tab {
+  position: relative;
+}
+
+.person-actions {
+  position: relative;
+  z-index: 1000;
+}
+
+.actions-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 1001;
+  margin-top: 4px;
+}
+
+.actions-dropdown .action-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #333;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.actions-dropdown .action-item:last-child {
+  border-bottom: none;
+}
+
+.actions-dropdown .action-item:hover {
+  background-color: #f8f9fa;
+}
+
+.actions-dropdown .action-item.remove {
+  color: #d93025;
+}
+
+.actions-dropdown .action-item.remove:hover {
+  background-color: #fce8e6;
+}
+
+/* Ensure the student card container doesn't clip the dropdown */
+.student-card {
+  position: relative;
+  overflow: visible !important;
+}
+
+.people-list {
+  overflow: visible !important;
+}
+
+.students-container {
+  overflow: visible !important;
+}
+
+/* Fix z-index for other dropdowns as well */
+.announcement-menu-dropdown,
+.create-dropdown-menu,
+.user-dropdown,
+.create-join-dropdown {
+  z-index: 1001;
+  position: absolute;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+/* Fix for People Tab Dropdown Z-Index Issues */
+.people-tab {
+  position: relative;
+  z-index: 1;
+}
+
+.person-actions-container {
+  position: relative;
+  display: inline-block;
+}
+
+.actions-dropdown {
+  position: absolute !important;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  z-index: 9999 !important;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  margin-top: 4px;
+}
+
+.actions-dropdown::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-left: 1px solid #e0e0e0;
+  border-top: 1px solid #e0e0e0;
+  transform: rotate(45deg);
+  z-index: 10000;
+}
+
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s;
+  z-index: 10001;
+  position: relative;
+}
+
+.action-item:hover {
+  background-color: #f5f5f5;
+}
+
+.action-item.remove {
+  color: #d93025;
+}
+
+.action-item.remove:hover {
+  background-color: #fce8e6;
+}
+
+/* Ensure proper stacking context */
+.dashboard-wrapper {
+  position: relative;
+  z-index: 1;
+}
+
+.main-content {
+  position: relative;
+  z-index: 1;
+}
+
+.people-section {
+  position: relative;
+  z-index: 2;
+}
+
+.student-card {
+  position: relative;
+  z-index: 1;
+}
+
+/* Fix modal z-index */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000 !important;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  z-index: 10001;
+  transform: translateZ(0);
+}

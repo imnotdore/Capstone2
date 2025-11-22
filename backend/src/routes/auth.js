@@ -140,6 +140,34 @@ const checkRegisteredEmail = async (req, res, next) => {
 };
 
 // ========================
+// ✅ NOTIFICATION PREFERENCES ENDPOINT
+// ========================
+
+router.put('/notification-preferences', auth, async (req, res) => {
+  try {
+    const { notificationPreferences } = req.body;
+    
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { notificationPreferences },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Notification preferences updated successfully',
+      data: user
+    });
+  } catch (error) {
+    console.error('Update notification preferences error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update notification preferences'
+    });
+  }
+});
+
+// ========================
 // ✅ ROLE SELECTION ENDPOINTS
 // ========================
 

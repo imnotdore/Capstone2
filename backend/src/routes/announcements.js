@@ -94,6 +94,14 @@ router.post('/', auth, async (req, res) => {
 
     console.log("✅ ANNOUNCEMENT CREATED:", announcement._id);
 
+    // After saving the announcement in POST / route
+    const notificationService = require('../services/notificationService');
+    await notificationService.notifyClassAboutAnnouncement(
+      classId, 
+      announcement, 
+      req.user.id
+    );
+
     res.status(201).json({
       success: true,
       data: announcement,
@@ -300,6 +308,15 @@ router.post('/:id/comments', auth, async (req, res) => {
     await announcement.populate('comments.author', 'name email');
 
     const addedComment = announcement.comments[announcement.comments.length - 1];
+
+    // After adding comment in POST /:id/comments route
+    const notificationService = require('../services/notificationService');
+    await notificationService.notifyAboutComment(
+      announcement.classId,
+      announcement,
+      addedComment,
+      req.user
+    );
 
     res.status(201).json({
       success: true,

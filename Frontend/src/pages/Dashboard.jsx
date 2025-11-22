@@ -1,7 +1,7 @@
-// src/components/Dashboard.jsx - COMPLETE FIXED VERSION WITH PEOPLE TAB
+// src/components/Dashboard.jsx - COMPLETE FIXED VERSION WITH SETTINGS
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEllipsisV, FaChevronDown, FaEnvelope, FaUserMinus, FaVolumeMute, FaVolumeUp } from "react-icons/fa";
+import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEllipsisV, FaChevronDown, FaEnvelope, FaUserMinus, FaVolumeMute, FaVolumeUp, FaSave, FaTimes, FaBell, FaBellSlash } from "react-icons/fa";
 import api, { 
   deleteAllQuizzes, 
   deleteQuiz, 
@@ -13,6 +13,9 @@ import api, {
    joinExamSession
 } from "../lib/api";
 import "./Dashboard.css";
+
+// In Frontend/src/pages/Dashboard.jsx - Add to header-right section
+import NotificationBell from '../components/NotificationBell';
 
 export default function Dashboard() {
   // ===== ROUTING HOOKS =====
@@ -31,6 +34,17 @@ export default function Dashboard() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [className, setClassName] = useState("");
   const [joinCode, setJoinCode] = useState("");
+
+  // ===== SETTINGS MODAL STATES =====
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsData, setSettingsData] = useState({
+    name: "",
+    email: "",
+    profilePicture: "",
+    notifications: true,
+    emailNotifications: true
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // ===== EXAM DEPLOYMENT STATES =====
   const [showDeployModal, setShowDeployModal] = useState(false);
@@ -114,11 +128,69 @@ export default function Dashboard() {
   const commentMenuRef = useRef(null);
   const commentDeleteMenuRef = useRef(null);
   const createDropdownRef = useRef(null);
+  const actionsDropdownRef = useRef(null);
+  const settingsModalRef = useRef(null);
 
   // ===== SEPARATE CLASSES BY ROLE =====
   const teachingClasses = classes.filter(classData => classData.userRole === "teacher" || classData.isTeacher);
   const enrolledClasses = classes.filter(classData => classData.userRole === "student" || !classData.isTeacher);
   const allClasses = [...classes];
+
+  // ===== SETTINGS FUNCTIONS =====
+  const handleManageSettings = () => {
+    setSettingsData({
+      name: user.name,
+      email: user.email,
+      profilePicture: user.profilePicture || '',
+      notifications: true,
+      emailNotifications: true
+    });
+    setShowSettingsModal(true);
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      // Update user profile
+      const response = await api.put("/auth/profile", {
+        name: settingsData.name,
+        email: settingsData.email,
+        profilePicture: settingsData.profilePicture
+      });
+      
+      if (response.data.success) {
+        setUser(prev => ({ ...prev, ...settingsData }));
+        alert("✅ Settings updated successfully!");
+        setShowSettingsModal(false);
+      } else {
+        throw new Error(response.data.message || "Failed to update settings");
+      }
+    } catch (error) {
+      console.error("Failed to update settings:", error);
+      alert("❌ Failed to update settings: " + (error.response?.data?.message || error.message));
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleSettingsInputChange = (field, value) => {
+    setSettingsData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleProfilePictureUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Create a temporary URL for the uploaded image
+      const imageUrl = URL.createObjectURL(file);
+      setSettingsData(prev => ({
+        ...prev,
+        profilePicture: imageUrl
+      }));
+    }
+  };
 
   // ===== PEOPLE TAB FUNCTIONS =====
   const fetchClassPeople = async () => {
@@ -202,9 +274,14 @@ export default function Dashboard() {
     }
   };
 
-  const toggleActions = (personId) => {
+  // FIXED: Toggle actions with proper event handling
+  const toggleActions = useCallback((personId, event) => {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
     setActiveActions(activeActions === personId ? null : personId);
-  };
+  }, [activeActions]);
 
   const toggleStudentSelection = (studentId) => {
     setSelectedStudents(prev => 
@@ -636,6 +713,16 @@ export default function Dashboard() {
 
       if (createDropdownRef.current && !createDropdownRef.current.contains(event.target)) {
         setShowCreateDropdown(false);
+      }
+
+      // FIXED: Add click outside handler for actions dropdown
+      if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(event.target)) {
+        setActiveActions(null);
+      }
+
+      // Settings modal click outside handler
+      if (settingsModalRef.current && !settingsModalRef.current.contains(event.target)) {
+        setShowSettingsModal(false);
       }
     };
 
@@ -1150,6 +1237,170 @@ export default function Dashboard() {
   const getRandomColor = () => {
     const colors = ['blue', 'red', 'green'];
     return colors[Math.floor(Math.random() * colors.length)];
+  };
+
+  // ===== SETTINGS MODAL COMPONENT =====
+  const SettingsModal = () => {
+    if (!showSettingsModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" ref={settingsModalRef}>
+          <div className="flex justify-between items-center p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
+            <button 
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              onClick={() => setShowSettingsModal(false)}
+            >
+              <FaTimes className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6">
+            {/* Profile Section */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Profile Information</h3>
+              
+              {/* Profile Picture */}
+              <div className="flex items-center space-x-6 mb-6">
+                <div className="relative">
+                  <img 
+                    src={settingsData.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(settingsData.name)}&background=203a43&color=fff`}
+                    alt="Profile"
+                    className="w-20 h-20 rounded-full border-2 border-gray-300"
+                  />
+                  <label htmlFor="profile-picture" className="absolute bottom-0 right-0 bg-blue-600 text-white p-1 rounded-full cursor-pointer hover:bg-blue-700 transition-colors">
+                    <FaEdit className="w-3 h-3" />
+                    <input
+                      id="profile-picture"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleProfilePictureUpload}
+                    />
+                  </label>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Click the edit icon to change your profile picture</p>
+                </div>
+              </div>
+
+              {/* Name and Email */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsData.name}
+                    onChange={(e) => handleSettingsInputChange('name', e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter your full name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={settingsData.email}
+                    onChange={(e) => handleSettingsInputChange('email', e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter your email"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Notification Settings */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Notification Preferences</h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <FaBell className="w-5 h-5 text-gray-600" />
+                    <div>
+                      <p className="font-medium text-gray-900">Push Notifications</p>
+                      <p className="text-sm text-gray-600">Receive browser notifications</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsData.notifications}
+                      onChange={(e) => handleSettingsInputChange('notifications', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <FaEnvelope className="w-5 h-5 text-gray-600" />
+                    <div>
+                      <p className="font-medium text-gray-900">Email Notifications</p>
+                      <p className="text-sm text-gray-600">Receive email updates</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsData.emailNotifications}
+                      onChange={(e) => handleSettingsInputChange('emailNotifications', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Account Settings */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Settings</h3>
+              
+              <div className="space-y-3">
+                <button className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <p className="font-medium text-gray-900">Change Password</p>
+                  <p className="text-sm text-gray-600">Update your password regularly</p>
+                </button>
+                
+                <button className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <p className="font-medium text-gray-900">Privacy Settings</p>
+                  <p className="text-sm text-gray-600">Manage your privacy preferences</p>
+                </button>
+                
+                <button className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <p className="font-medium text-gray-900">Connected Accounts</p>
+                  <p className="text-sm text-gray-600">Manage linked social accounts</p>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+            <button
+              onClick={() => setShowSettingsModal(false)}
+              className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveSettings}
+              disabled={savingSettings || !settingsData.name.trim() || !settingsData.email.trim()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+            >
+              <FaSave className="w-4 h-4" />
+              <span>{savingSettings ? "Saving..." : "Save Changes"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // ===== FIXED ANNOUNCEMENT CARD COMPONENT =====
@@ -1670,193 +1921,201 @@ export default function Dashboard() {
   };
 
   // ===== PEOPLE TAB RENDERER =====
-  const renderPeopleTab = () => {
-    if (loadingPeople) {
-      return <div className="loading">Loading people...</div>;
-    }
+const renderPeopleTab = () => {
+  if (loadingPeople) {
+    return <div className="loading">Loading people...</div>;
+  }
 
-    return (
-      <div className="people-tab">
-        <div className="people-header">
-          <h3>People</h3>
-          {isTeacher && classPeople.students.length > 0 && (
-            <button 
-              className="email-students-btn"
-              onClick={() => setShowEmailModal(true)}
-            >
-              <FaEnvelope className="btn-icon" />
-              Email Students
-            </button>
-          )}
-        </div>
+  return (
+    <div className="people-tab">
+      <div className="people-header">
+        <h3>People</h3>
+        {isTeacher && classPeople.students.length > 0 && (
+          <button 
+            className="email-students-btn"
+            onClick={() => setShowEmailModal(true)}
+          >
+            <FaEnvelope className="btn-icon" />
+            Email Students
+          </button>
+        )}
+      </div>
 
-        {/* Teachers Section */}
-        <div className="people-section">
-          <h4 className="section-title">Teachers</h4>
-          <div className="people-list">
-            {classPeople.teachers.map(teacher => (
-              <div key={teacher._id} className="person-card teacher-card">
-                <div className="person-avatar">
-                  {teacher.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="person-info">
-                  <div className="person-name">{teacher.name}</div>
-                  <div className="person-email">{teacher.email}</div>
-                  <div className="person-role teacher-role">Teacher</div>
-                </div>
+      {/* Teachers Section */}
+      <div className="people-section">
+        <h4 className="section-title">Teachers</h4>
+        <div className="people-list">
+          {classPeople.teachers.map(teacher => (
+            <div key={teacher._id} className="person-card teacher-card">
+              <div className="person-avatar">
+                {teacher.name.charAt(0).toUpperCase()}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Students Section */}
-        <div className="people-section">
-          <div className="section-header">
-            <h4 className="section-title">Students ({classPeople.students.length})</h4>
-          </div>
-
-          {classPeople.students.length > 0 ? (
-            <div className="students-container">
-              {/* Bulk Selection Header */}
-              {isTeacher && (
-                <div className="bulk-selection-header">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={selectedStudents.length === classPeople.students.length}
-                      onChange={selectAllStudents}
-                    />
-                    Select All
-                  </label>
-                  <span className="selected-count">
-                    {selectedStudents.length} selected
-                  </span>
-                </div>
-              )}
-
-              {/* Students List */}
-              <div className="people-list">
-                {classPeople.students.map(student => (
-                  <div key={student._id} className="person-card student-card">
-                    {isTeacher && (
-                      <div className="student-select">
-                        <input
-                          type="checkbox"
-                          checked={selectedStudents.includes(student._id)}
-                          onChange={() => toggleStudentSelection(student._id)}
-                        />
-                      </div>
-                    )}
-                    <div className="person-avatar">
-                      {student.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="person-info">
-                      <div className="person-name">
-                        {student.name}
-                        {student.isMuted && <span className="muted-badge">Muted</span>}
-                      </div>
-                      <div className="person-email">{student.email}</div>
-                      <div className="person-meta">
-                        Joined {new Date(student.joinedAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                    {isTeacher && (
-                      <div className="person-actions">
-                        <button 
-                          className="actions-toggle"
-                          onClick={() => toggleActions(student._id)}
-                        >
-                          <FaEllipsisV />
-                        </button>
-                        
-                        {activeActions === student._id && (
-                          <div className="actions-dropdown">
-                            <button 
-                              className="action-item"
-                              onClick={() => handleToggleMute(student._id, student.name, student.isMuted)}
-                            >
-                              {student.isMuted ? <FaVolumeUp /> : <FaVolumeMute />}
-                              {student.isMuted ? 'Unmute' : 'Mute'} Student
-                            </button>
-                            <button 
-                              className="action-item remove"
-                              onClick={() => handleRemoveStudent(student._id, student.name)}
-                            >
-                              <FaUserMinus />
-                              Remove from Class
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="person-info">
+                <div className="person-name">{teacher.name}</div>
+                <div className="person-email">{teacher.email}</div>
+                <div className="person-role teacher-role">Teacher</div>
               </div>
             </div>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-icon">👥</div>
-              <h4>No Students Yet</h4>
-              <p>Students will appear here once they join your class using the class code.</p>
-            </div>
-          )}
+          ))}
+        </div>
+      </div>
+
+      {/* Students Section */}
+      <div className="people-section">
+        <div className="section-header">
+          <h4 className="section-title">Students ({classPeople.students.length})</h4>
         </div>
 
-        {/* Email Modal */}
-        {showEmailModal && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h3>Email Students</h3>
-                <button 
-                  className="close-btn"
-                  onClick={() => setShowEmailModal(false)}
-                >
-                  ×
-                </button>
-              </div>
-              <div className="modal-body">
-                <p>Sending to {selectedStudents.length} selected students</p>
-                <div className="form-group">
-                  <label>Subject</label>
+        {classPeople.students.length > 0 ? (
+          <div className="students-container">
+            {/* Bulk Selection Header */}
+            {isTeacher && (
+              <div className="bulk-selection-header">
+                <label className="checkbox-label">
                   <input
-                    type="text"
-                    placeholder="Enter email subject"
-                    value={emailData.subject}
-                    onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                    type="checkbox"
+                    checked={selectedStudents.length === classPeople.students.length}
+                    onChange={selectAllStudents}
                   />
-                </div>
-                <div className="form-group">
-                  <label>Message</label>
-                  <textarea
-                    placeholder="Enter your message"
-                    rows="6"
-                    value={emailData.message}
-                    onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
-                  />
-                </div>
+                  Select All
+                </label>
+                <span className="selected-count">
+                  {selectedStudents.length} selected
+                </span>
               </div>
-              <div className="modal-actions">
-                <button 
-                  className="btn-secondary"
-                  onClick={() => setShowEmailModal(false)}
-                >
-                  Cancel
-                </button>
-                <button 
-                  className="btn-primary"
-                  onClick={handleEmailStudents}
-                  disabled={!emailData.subject.trim() || !emailData.message.trim()}
-                >
-                  Send Email
-                </button>
-              </div>
+            )}
+
+            {/* Students List */}
+            <div className="people-list">
+              {classPeople.students.map(student => (
+                <div key={student._id} className="person-card student-card">
+                  {isTeacher && (
+                    <div className="student-select">
+                      <input
+                        type="checkbox"
+                        checked={selectedStudents.includes(student._id)}
+                        onChange={() => toggleStudentSelection(student._id)}
+                      />
+                    </div>
+                  )}
+                  <div className="person-avatar">
+                    {student.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="person-info">
+                    <div className="person-name">
+                      {student.name}
+                      {student.isMuted && <span className="muted-badge">Muted</span>}
+                    </div>
+                    <div className="person-email">{student.email}</div>
+                    <div className="person-meta">
+                      Joined {new Date(student.joinedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {isTeacher && (
+                    <div className="person-actions-container" ref={actionsDropdownRef}>
+                      <button 
+                        className="actions-toggle"
+                        onClick={(e) => toggleActions(student._id, e)}
+                      >
+                        <FaEllipsisV />
+                      </button>
+                      
+                      {activeActions === student._id && (
+                        <div className="actions-dropdown">
+                          <button 
+                            className="action-item"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleMute(student._id, student.name, student.isMuted);
+                              setActiveActions(null);
+                            }}
+                          >
+                            {student.isMuted ? <FaVolumeUp /> : <FaVolumeMute />}
+                            {student.isMuted ? 'Unmute' : 'Mute'} Student
+                          </button>
+                          <button 
+                            className="action-item remove"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveStudent(student._id, student.name);
+                              setActiveActions(null);
+                            }}
+                          >
+                            <FaUserMinus />
+                            Remove from Class
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-icon">👥</div>
+            <h4>No Students Yet</h4>
+            <p>Students will appear here once they join your class using the class code.</p>
           </div>
         )}
       </div>
-    );
-  };
+
+      {/* Email Modal */}
+      {showEmailModal && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>Email Students</h3>
+              <button 
+                className="close-btn"
+                onClick={() => setShowEmailModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>Sending to {selectedStudents.length} selected students</p>
+              <div className="form-group">
+                <label>Subject</label>
+                <input
+                  type="text"
+                  placeholder="Enter email subject"
+                  value={emailData.subject}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label>Message</label>
+                <textarea
+                  placeholder="Enter your message"
+                  rows="6"
+                  value={emailData.message}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button 
+                className="btn-secondary"
+                onClick={() => setShowEmailModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={handleEmailStudents}
+                disabled={!emailData.subject.trim() || !emailData.message.trim()}
+              >
+                Send Email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
   // ===== MODAL COMPONENTS =====
   const DeployExamModal = () => {
@@ -2965,7 +3224,7 @@ export default function Dashboard() {
     </div>
   );
 
-  // Settings content renderer
+  // Settings content renderer - UPDATED WITH WORKING MANAGE BUTTON
   const renderSettingsContent = () => (
     <div className="settings-view">
       <div className="settings-header">
@@ -2981,7 +3240,68 @@ export default function Dashboard() {
               <h4>Profile Information</h4>
               <p>Update your name, email, and profile picture</p>
             </div>
-            <button className="settings-btn">Manage</button>
+            <button 
+              className="settings-btn"
+              onClick={handleManageSettings}
+            >
+              Manage
+            </button>
+          </div>
+          
+          <div className="settings-item">
+            <div className="settings-item-content">
+              <h4>Notification Preferences</h4>
+              <p>Control how and when you receive notifications</p>
+            </div>
+            <button 
+              className="settings-btn"
+              onClick={handleManageSettings}
+            >
+              Manage
+            </button>
+          </div>
+          
+          <div className="settings-item">
+            <div className="settings-item-content">
+              <h4>Privacy & Security</h4>
+              <p>Manage your privacy settings and security options</p>
+            </div>
+            <button 
+              className="settings-btn"
+              onClick={handleManageSettings}
+            >
+              Manage
+            </button>
+          </div>
+        </div>
+        
+        <div className="settings-section">
+          <h3>Application Settings</h3>
+          <p className="settings-description">Customize your application experience</p>
+          <div className="settings-item">
+            <div className="settings-item-content">
+              <h4>Theme & Appearance</h4>
+              <p>Change the look and feel of the application</p>
+            </div>
+            <button 
+              className="settings-btn"
+              onClick={handleManageSettings}
+            >
+              Manage
+            </button>
+          </div>
+          
+          <div className="settings-item">
+            <div className="settings-item-content">
+              <h4>Language & Region</h4>
+              <p>Set your preferred language and regional settings</p>
+            </div>
+            <button 
+              className="settings-btn"
+              onClick={handleManageSettings}
+            >
+              Manage
+            </button>
           </div>
         </div>
       </div>
@@ -3006,6 +3326,9 @@ export default function Dashboard() {
         </div>
 
         <div className="header-right">
+          {/* In the header-right div, add: */}
+          <NotificationBell />
+          
           {/* CREATE/JOIN DROPDOWN */}
           <div className="plus-btn-container" ref={createJoinDropdownRef}>
             <button 
@@ -3067,6 +3390,18 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <ul className="user-dropdown-menu">
+                  <li className="user-dropdown-item">
+                    <button 
+                      className="user-dropdown-link"
+                      onClick={() => {
+                        setShowSettingsModal(true);
+                        setShowUserDropdown(false);
+                      }}
+                    >
+                      <FaCog className="user-dropdown-icon" />
+                      Settings
+                    </button>
+                  </li>
                   <li className="user-dropdown-item">
                     <a 
                       href="https://myaccount.google.com/"
@@ -3330,10 +3665,11 @@ export default function Dashboard() {
 
       {/* RENDER MODALS */}
       {AnnouncementModal()}
-       <DeployExamModal /> 
+      <DeployExamModal />
       <UnenrollModal />
       <ArchiveModal />
       <RestoreModal />
+      <SettingsModal />
     </div>
   );
 }

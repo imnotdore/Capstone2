@@ -18,9 +18,13 @@ require("./config/passport");
 const classRoutes = require("./routes/classes");
 const examRoutes = require("./routes/examRoutes");
 const authRoutes = require("./routes/auth");
-const classworkRoutes = require("./routes/classwork"); // UPDATED - single file
+const classworkRoutes = require("./routes/classwork");
 const announcementRoutes = require("./routes/announcements");
-const studentManagementRoutes = require("./routes/studentManagement"); // ✅ FIXED PATH
+const studentManagementRoutes = require("./routes/studentManagement");
+const notificationRoutes = require("./routes/notifications");
+
+// Import Email Service for verification
+const EmailService = require("./services/emailService");
 
 const app = express();
 const server = http.createServer(app);
@@ -42,7 +46,8 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || "http://localhost:5173", 
   credentials: true 
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/public", express.static(path.join(__dirname, "public")));
@@ -64,9 +69,10 @@ app.use((req, res, next) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/class", classRoutes);
 app.use("/api/exams", examRoutes);
-app.use("/api/classwork", classworkRoutes); // Single classwork routes file
+app.use("/api/classwork", classworkRoutes);
 app.use("/api/announcements", announcementRoutes);
-app.use("/api/student-management", studentManagementRoutes); // ADDED - student management routes
+app.use("/api/student-management", studentManagementRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
@@ -74,9 +80,11 @@ app.get("/api/health", (req, res) => {
     status: "OK", 
     message: "Server is running with Classwork Create system & Student Management",
     googleAuth: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    emailService: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS),
     classworkCreateEnabled: true,
     announcementsEnabled: true,
     studentManagementEnabled: true,
+    notificationsEnabled: true,
     timestamp: new Date().toISOString()
   });
 });
@@ -162,21 +170,46 @@ app.use((req, res) => {
 });
 
 // ===== MONGODB & START SERVER =====
-mongoose
-  .connect(process.env.MONGO_URL)
-  .then(() => {
+const startServer = async () => {
+  try {
+    // Connect to MongoDB
+    await mongoose.connect(process.env.MONGO_URL);
     console.log("✅ MongoDB connected");
+
+    // Verify email service configuration (non-blocking)
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      EmailService.verifyTransporter().then(isReady => {
+        if (isReady) {
+          console.log('✅ Email service is ready');
+        } else {
+          console.log('⚠️ Email service configuration issues - emails may not send');
+        }
+      }).catch(err => {
+        console.log('⚠️ Email service verification failed:', err.message);
+      });
+    } else {
+      console.log('⚠️ Email credentials not configured - email notifications disabled');
+    }
+
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => {
       console.log(`✅ Server running at http://localhost:${PORT}`);
       console.log(`✅ Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? 'ENABLED' : 'DISABLED'}`);
+      console.log(`✅ Email Service: ${process.env.EMAIL_USER ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
       console.log(`✅ All routes under: /api`);
       console.log(`✅ Auth Routes: /api/auth`);
       console.log(`✅ Class Routes: /api/class`);
       console.log(`✅ Exam Routes: /api/exams`);
-      console.log(`✅ Classwork Routes: /api/classwork (with CREATE endpoint)`);
+      console.log(`✅ Classwork Routes: /api/classwork`);
       console.log(`✅ Announcement Routes: /api/announcements`);
-      console.log(`✅ Student Management Routes: /api/student-management`); // ADDED
+      console.log(`✅ Student Management Routes: /api/student-management`);
+      console.log(`✅ Notification Routes: /api/notifications`);
     });
-  })
-  .catch((err) => console.error("❌ DB connection error:", err));
+  } catch (err) {
+    console.error("❌ Server startup error:", err);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer();

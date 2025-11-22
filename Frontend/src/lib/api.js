@@ -29,6 +29,44 @@ api.interceptors.response.use(
 
 export default api;
 
+// ===== NOTIFICATION FUNCTIONS =====
+export const getNotifications = async (page = 1, limit = 20) => {
+  const response = await api.get(`/notifications?page=${page}&limit=${limit}`);
+  return response.data;
+};
+
+export const markNotificationAsRead = async (notificationId) => {
+  const response = await api.put(`/notifications/${notificationId}/read`);
+  return response.data;
+};
+
+export const markAllNotificationsAsRead = async () => {
+  const response = await api.put('/notifications/read-all');
+  return response.data;
+};
+
+export const deleteNotification = async (notificationId) => {
+  const response = await api.delete(`/notifications/${notificationId}`);
+  return response.data;
+};
+
+export const clearAllNotifications = async () => {
+  const response = await api.delete('/notifications');
+  return response.data;
+};
+
+export const getUnreadCount = async () => {
+  const response = await api.get('/notifications/unread-count');
+  return response.data;
+};
+
+export const updateNotificationPreferences = async (preferences) => {
+  const response = await api.put('/auth/notification-preferences', {
+    notificationPreferences: preferences
+  });
+  return response.data;
+};
+
 // ===== STUDENT MANAGEMENT API FUNCTIONS =====
 export const getClassPeople = async (classId) => {
   const response = await api.get(`/student-management/${classId}/students`);
@@ -102,7 +140,6 @@ export const uploadFileAndParse = async (formData) => {
   }
 };
 
-
 export const getExams = async (classId) => {
   const response = await api.get(`/exams/${classId}`);
   return response.data;
@@ -149,7 +186,6 @@ export const getQuizForStudent = async (examId) => {
     }
   }
 };
-
 
 // FIXED: Submit quiz answers function
 export const submitQuizAnswers = async (examId, answers) => {
@@ -235,7 +271,6 @@ export const getAnnouncement = async (announcementId) => {
   const response = await api.get(`/announcements/${announcementId}`);
   return response.data;
 };
-
 
 // FIXED: Update announcement function with detailed debugging
 export const updateAnnouncement = async (announcementId, updateData) => {
@@ -395,24 +430,7 @@ export const getExamAnalytics = async (examId) => {
   return response.data;
 };
 
-// ===== NOTIFICATION FUNCTIONS =====
-export const getNotifications = async () => {
-  const response = await api.get('/notifications');
-  return response.data;
-};
-
-export const markNotificationAsRead = async (notificationId) => {
-  const response = await api.put(`/notifications/${notificationId}/read`);
-  return response.data;
-};
-
-export const markAllNotificationsAsRead = async () => {
-  const response = await api.put('/notifications/read-all');
-  return response.data;
-};
-
-
-// src/lib/api.js - Idagdag ang mga sumusunod:
+// ===== EXAM SESSION FUNCTIONS =====
 export const startExamSession = async (examId) => {
   try {
     const response = await api.post(`/exams/${examId}/start`);
@@ -440,8 +458,6 @@ export const getExamSession = async (examId) => {
   }
 };
 
-// src/lib/api.js - ADD THESE FUNCTIONS
-
 // ✅ GET ACTIVE EXAM SESSIONS FOR TEACHER
 export const getTeacherActiveSessions = async () => {
   try {
@@ -465,7 +481,6 @@ export const getJoinedStudents = async (examId) => {
 };
 
 // ✅ STUDENT JOIN EXAM
-// In your api.js - Update joinExamSession function
 export const joinExamSession = async (examId) => {
   try {
     const response = await api.post(`/exams/${examId}/join`);
@@ -501,8 +516,6 @@ export const reportProctoringAlert = async (examId, alertData) => {
   }
 };
 
-// src/lib/api.js - ADD THESE ENDPOINTS
-
 // Proctoring endpoints
 export const checkProctoringHealth = async () => {
   try {
@@ -527,4 +540,3 @@ export const analyzeProctoringFrame = async (imageData) => {
     throw error;
   }
 };
-// ==============UPLOAD FILE TO=================//

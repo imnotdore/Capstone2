@@ -1,0 +1,277 @@
+.notification-settings {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.settings-header {
+  margin-bottom: 32px;
+}
+
+.settings-header h1 {
+  font-size: 32px;
+  font-weight: 400;
+  color: #202124;
+  margin: 0 0 8px;
+}
+
+.settings-header p {
+  color: #5f6368;
+  margin: 0;
+  font-size: 16px;
+}
+
+.message {
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 24px;
+  font-weight: 500;
+}
+
+.message.success {
+  background: #e6f4ea;
+  color: #137333;
+  border: 1px solid #a8dab5;
+}
+
+.message.error {
+  background: #fce8e6;
+  color: #c5221f;
+  border: 1px solid #f5b4ab;
+}
+
+.settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-section {
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.section-header:hover {
+  background: #f8f9fa;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-title h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: #202124;
+}
+
+.section-icon {
+  color: #5f6368;
+  font-size: 18px;
+}
+
+.section-toggle {
+  color: #5f6368;
+}
+
+.section-content {
+  padding: 0 24px 24px;
+}
+
+.global-toggle {
+  margin-bottom: 24px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 12px 0;
+}
+
+.toggle-label span:first-child {
+  font-weight: 500;
+  color: #202124;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: #ccc;
+  border-radius: 34px;
+  transition: background-color 0.2s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s;
+}
+
+input[type="checkbox"] {
+  display: none;
+}
+
+input[type="checkbox"]:checked + .toggle-slider {
+  background: #1a73e8;
+}
+
+input[type="checkbox"]:checked + .toggle-slider::before {
+  transform: translateX(16px);
+}
+
+.toggle-description {
+  color: #5f6368;
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.bulk-btn {
+  background: #f1f3f4;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #5f6368;
+}
+
+.bulk-btn:hover {
+  background: #e8eaed;
+}
+
+.option-group {
+  margin-bottom: 24px;
+}
+
+.option-group h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #202124;
+}
+
+.option-item {
+  padding: 8px 0;
+}
+
+.option-item label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  color: #202124;
+}
+
+.option-item input[type="checkbox"] {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+}
+
+.section-description {
+  color: #5f6368;
+  margin: 0 0 20px;
+  font-size: 14px;
+}
+
+.classes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.class-notification-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+}
+
+.class-info h4 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #202124;
+}
+
+.class-code {
+  color: #5f6368;
+  font-size: 14px;
+}
+
+.mute-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.mute-label {
+  font-size: 14px;
+  color: #5f6368;
+}
+
+.settings-actions {
+  margin-top: 32px;
+  text-align: right;
+}
+
+.save-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.2s;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #1669d6;
+}
+
+.save-btn:disabled {
+  background: #f1f3f4;
+  color: #9aa0a6;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  font-size: 14px;
+}

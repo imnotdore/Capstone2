@@ -13,6 +13,8 @@ import QuizFormPage from "./pages/QuizFormPage";
 import StudentQuizPage from "./pages/StudentQuizPage";
 import TeacherExamSession from "./pages/TeacherExamSession";
 import StudentExamSession from "./pages/StudentExamSession"; // ✅ ADD THIS IMPORT
+import NotificationSettings from './pages/NotificationSettings';
+import NotificationsPage from './pages/NotificationsPage';
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -100,6 +102,19 @@ function App() {
         <Route path="/student-exam/:examId" element={
           <ProtectedRoute requiredRole="student">
             <StudentExamSession />
+          </ProtectedRoute>
+        } />
+
+        {/* ✅ NOTIFICATION ROUTES - ADDED */}
+        <Route path="/notification-settings" element={
+          <ProtectedRoute>
+            <NotificationSettings />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/notifications" element={
+          <ProtectedRoute>
+            <NotificationsPage />
           </ProtectedRoute>
         } />
 

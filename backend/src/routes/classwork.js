@@ -86,6 +86,14 @@ router.post("/create", authMiddleware, checkTeacherAccess, async (req, res) => {
     // Populate createdBy
     await savedClasswork.populate("createdBy", "name email");
 
+    // ✅ Send notifications to class about the new assignment
+    const notificationService = require('../services/notificationService');
+    await notificationService.notifyClassAboutAssignment(
+      classId,
+      savedClasswork,
+      req.user.id
+    );
+
     console.log("✅ Classwork created successfully:", savedClasswork._id);
 
     res.json({
