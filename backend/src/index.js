@@ -1,4 +1,4 @@
-// server.js - UPDATED WITHOUT MISSING IMPORT
+// server.js - COMPLETE FIXED VERSION
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -7,24 +7,13 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
 const path = require("path");
+const jwt = require("jsonwebtoken");
 
 // ✅ LOAD ENV FIRST
 dotenv.config();
 
-// ✅ THEN IMPORT PASSPORT CONFIG
+// ✅ ADD BACK PASSPORT CONFIGURATION
 require("./config/passport");
-
-// Routes
-const classRoutes = require("./routes/classes");
-const examRoutes = require("./routes/examRoutes");
-const authRoutes = require("./routes/auth");
-const classworkRoutes = require("./routes/classwork");
-const announcementRoutes = require("./routes/announcements");
-const studentManagementRoutes = require("./routes/studentManagement");
-const notificationRoutes = require("./routes/notifications");
-
-// Import Email Service for verification
-const EmailService = require("./services/emailService");
 
 const app = express();
 const server = http.createServer(app);
@@ -33,13 +22,57 @@ const server = http.createServer(app);
 const passport = require("passport");
 app.use(passport.initialize());
 
-// ===== SOCKET.IO SETUP =====
+// ===== SOCKET.IO SETUP WITH PROPER CORS =====
+// ✅ IMPROVED: server.js socket configuration
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://localhost:3000"
+    ], // ✅ Multiple origins
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Authorization", "Content-Type", "X-Requested-With"]
   },
+  connectTimeout: 10000,
+  pingTimeout: 60000, 
+  pingInterval: 25000,
+  transports: ['websocket', 'polling'], // ✅ Both
+  allowEIO3: true // ✅ Backward compatibility
 });
+
+// ✅ IMPROVED: Socket authentication with better error handling
+io.use((socket, next) => {
+  try {
+    console.log('🔐 Socket auth attempt from:', socket.handshake.address);
+    
+    const token = socket.handshake.auth.token;
+    
+    if (!token) {
+      console.log('❌ No token provided');
+      return next(new Error('Authentication error: No token provided'));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // ✅ ADD: Token expiration check
+    if (decoded.exp && Date.now() >= decoded.exp * 1000) {
+      console.log('❌ Token expired');
+      return next(new Error('Authentication error: Token expired'));
+    }
+    
+    socket.userId = decoded.id;
+    socket.userName = decoded.name;
+    console.log('✅ Socket authenticated for user:', socket.userName);
+    next();
+    
+  } catch (err) {
+    console.log('❌ Socket auth failed:', err.message);
+    return next(new Error('Authentication error: ' + err.message));
+  }
+});
+
 
 // ===== MIDDLEWARES =====
 app.use(cors({ 
@@ -50,160 +83,228 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/public", express.static(path.join(__dirname, "public")));
 
-// ===== FIX CSP ERROR =====
-app.use((req, res, next) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self' 'unsafe-inline' http://localhost:3000 http://localhost:5173 https://accounts.google.com; " +
-    "connect-src 'self' http://localhost:3000 ws://localhost:3000 http://localhost:5173 https://accounts.google.com; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com; " +
-    "style-src 'self' 'unsafe-inline' https://accounts.google.com; " +
-    "img-src 'self' data: https:;"
-  );
-  next();
-});
-
-// ===== CLEAN ROUTES - UPDATED =====
-app.use("/api/auth", authRoutes);
-app.use("/api/class", classRoutes);
-app.use("/api/exams", examRoutes);
-app.use("/api/classwork", classworkRoutes);
-app.use("/api/announcements", announcementRoutes);
-app.use("/api/student-management", studentManagementRoutes);
-app.use("/api/notifications", notificationRoutes);
+// ===== ROUTES =====
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/class", require("./routes/classes"));
+app.use("/api/exams", require("./routes/examRoutes"));
+app.use("/api/classwork", require("./routes/classwork"));
+app.use("/api/announcements", require("./routes/announcements"));
+app.use("/api/student-management", require("./routes/studentManagement"));
+app.use("/api/notifications", require("./routes/notifications"));
 
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Server is running with Classwork Create system & Student Management",
-    googleAuth: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-    emailService: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS),
-    classworkCreateEnabled: true,
-    announcementsEnabled: true,
-    studentManagementEnabled: true,
-    notificationsEnabled: true,
+    message: "Server is running",
+    socketIO: "ENABLED",
     timestamp: new Date().toISOString()
   });
 });
 
-// ===== SOCKET.IO EVENTS =====
+// ===== SOCKET.IO ROOM MANAGEMENT =====
+// ===== SOCKET.IO ROOM MANAGEMENT =====
+const examRooms = new Map(); // Store active exam rooms
+const pendingCameraRequests = new Set(); // ✅ ADD THIS FOR DUPLICATE PREVENTION
+
+// ✅ FIXED: Socket.io Events with Room Management
 io.on("connection", (socket) => {
-  console.log("Socket connected:", socket.id);
+  console.log("✅ Socket connected:", socket.id, "User:", socket.userName);
 
   let currentRoom = null;
-  let userInfo = {};
 
-  socket.on("join-room", ({ roomId, userName = "User", userId }) => {
-    currentRoom = roomId;
-    userInfo = { id: socket.id, name: userName, userId };
-    socket.join(roomId);
-    socket.userInfo = userInfo;
+  // Join exam room
+  socket.on("join-exam-room", ({ roomId, userName, userId, userRole }) => {
+    try {
+      currentRoom = roomId;
+      socket.join(roomId);
+      
+      // Initialize room if not exists
+      if (!examRooms.has(roomId)) {
+        examRooms.set(roomId, {
+          teacher: null,
+          students: new Map()
+        });
+      }
 
-    const others = Array.from(io.sockets.adapter.rooms.get(roomId) || [])
-      .filter(sid => sid !== socket.id)
-      .map(sid => io.sockets.sockets.get(sid)?.userInfo || { id: sid, name: "User" });
+      const room = examRooms.get(roomId);
+      
+      if (userRole === 'teacher') {
+        room.teacher = socket.id;
+        console.log(`👨‍🏫 Teacher ${userName} joined room ${roomId}`);
+      } else if (userRole === 'student') {
+        room.students.set(socket.id, {
+          studentId: userId || socket.userId,
+          studentName: userName || socket.userName,
+          socketId: socket.id,
+          joinedAt: new Date(),
+          cameraEnabled: false
+        });
+        console.log(`👨‍🎓 Student ${userName} joined room ${roomId}`);
+        
+        // Notify teacher about student joining
+        if (room.teacher) {
+          socket.to(room.teacher).emit("student-joined", {
+            studentId: userId || socket.userId,
+            studentName: userName || socket.userName,
+            socketId: socket.id,
+            joinedAt: new Date()
+          });
+        }
+      }
 
-    socket.emit("room-participants", others);
-    socket.to(roomId).emit("peer-joined", userInfo);
+      // Send current room state to the new user
+      const participants = {
+        teacher: room.teacher,
+        students: Array.from(room.students.values())
+      };
+      socket.emit("room-participants", participants);
 
-    console.log(`${userName} (${socket.id}) joined room ${roomId}`);
+    } catch (error) {
+      console.error('❌ Error joining room:', error);
+      socket.emit("room-join-error", { message: "Failed to join room" });
+    }
   });
 
-  ["offer", "answer", "ice-candidate"].forEach(event => {
-    socket.on(event, (data) => {
-      if (data.target) {
-        io.to(data.target).emit(event, { ...data, from: socket.id });
+  // ✅ FIXED: Request student camera (teacher to student) - INSIDE CONNECTION HANDLER
+  socket.on("request-student-camera", ({ studentSocketId, roomId }) => {
+    // ✅ PREVENT DUPLICATE REQUESTS ON SERVER SIDE
+    const requestKey = `${studentSocketId}-${roomId}`;
+    
+    if (pendingCameraRequests.has(requestKey)) {
+      console.log('⚠️ Duplicate camera request blocked:', requestKey);
+      return;
+    }
+    
+    pendingCameraRequests.add(requestKey);
+    console.log('📹 Teacher requesting camera from student:', studentSocketId);
+    
+    socket.to(studentSocketId).emit("camera-request", {
+      from: socket.id,
+      roomId
+    });
+    
+    // Remove from pending after 10 seconds
+    setTimeout(() => {
+      pendingCameraRequests.delete(requestKey);
+    }, 10000);
+  });
+
+  // WebRTC Signaling Events
+  socket.on("webrtc-offer", (data) => {
+    console.log('📹 WebRTC offer from:', socket.id, 'to:', data.target);
+    socket.to(data.target).emit("webrtc-offer", {
+      offer: data.offer,
+      from: socket.id,
+      userInfo: {
+        userId: socket.userId,
+        name: socket.userName
       }
     });
   });
 
-  socket.on("send-message", ({ roomId, message }) => {
-    io.to(roomId).emit("receive-message", { id: socket.id, name: userInfo.name, message });
-  });
-
-  socket.on("proctoring-alert", ({ roomId, studentId, studentName, alert, timestamp }) => {
-    console.log(`🚨 Proctoring Alert from ${studentName}: ${alert}`);
-    socket.to(roomId).emit("proctoring-alert", { 
-      studentId, 
-      studentName, 
-      alert, 
-      timestamp 
+  socket.on("webrtc-answer", (data) => {
+    console.log('📹 WebRTC answer from:', socket.id, 'to:', data.target);
+    socket.to(data.target).emit("webrtc-answer", {
+      answer: data.answer,
+      from: socket.id
     });
   });
 
-  socket.on("media-status", ({ roomId, camOn, micOn }) => {
-    socket.to(roomId).emit("media-status-update", {
-      userId: socket.id,
-      name: userInfo.name,
-      camOn,
-      micOn
+  socket.on("ice-candidate", (data) => {
+    socket.to(data.target).emit("ice-candidate", {
+      candidate: data.candidate,
+      from: socket.id
     });
   });
 
-  socket.on("disconnect", () => {
-    if (currentRoom) {
-      socket.to(currentRoom).emit("peer-left", socket.id);
-      console.log(`${userInfo.name} (${socket.id}) left room ${currentRoom}`);
+  // Student camera response
+  socket.on("camera-response", (data) => {
+    console.log('📹 Student camera response from:', socket.id, 'Enabled:', data.enabled);
+    socket.to(data.teacherSocketId).emit("camera-response", {
+      enabled: data.enabled,
+      socketId: socket.id,
+      studentId: socket.userId,
+      studentName: socket.userName
+    });
+
+    // Update room state
+    if (currentRoom && examRooms.has(currentRoom)) {
+      const room = examRooms.get(currentRoom);
+      if (room.students.has(socket.id)) {
+        room.students.get(socket.id).cameraEnabled = data.enabled;
+      }
     }
   });
-});
 
-// ===== ERROR HANDLING MIDDLEWARE =====
-app.use((err, req, res, next) => {
-  console.error("❌ Server Error:", err);
-  res.status(500).json({
-    success: false,
-    message: "Internal server error",
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  // Get room participants
+  socket.on("get-room-participants", (roomId) => {
+    if (examRooms.has(roomId)) {
+      const room = examRooms.get(roomId);
+      socket.emit("room-participants", {
+        teacher: room.teacher,
+        students: Array.from(room.students.values())
+      });
+    }
+  });
+
+  // Disconnect
+  socket.on("disconnect", (reason) => {
+    console.log(`🔌 Socket disconnected: ${socket.id} - Reason: ${reason}`);
+    
+    if (currentRoom && examRooms.has(currentRoom)) {
+      const room = examRooms.get(currentRoom);
+      
+      // Remove from room
+      if (room.teacher === socket.id) {
+        room.teacher = null;
+        console.log(`👨‍🏫 Teacher left room ${currentRoom}`);
+        // Notify all students that teacher left
+        socket.to(currentRoom).emit("teacher-left");
+      } else if (room.students.has(socket.id)) {
+        const studentInfo = room.students.get(socket.id);
+        room.students.delete(socket.id);
+        console.log(`👨‍🎓 Student ${studentInfo.studentName} left room ${currentRoom}`);
+        
+        // Notify teacher that student left
+        if (room.teacher) {
+          socket.to(room.teacher).emit("student-left", {
+            socketId: socket.id,
+            studentId: studentInfo.studentId
+          });
+        }
+      }
+
+      // Clean up empty rooms
+      if (!room.teacher && room.students.size === 0) {
+        examRooms.delete(currentRoom);
+        console.log(`🗑️ Room ${currentRoom} cleaned up`);
+      }
+    }
+  });
+
+  // Connection error handling
+  socket.on("connect_error", (error) => {
+    console.error('❌ Socket connection error:', error);
+  });
+
+  socket.on("error", (error) => {
+    console.error('❌ Socket error:', error);
   });
 });
 
-// ===== FIXED 404 HANDLER =====
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`
-  });
-});
-
-// ===== MONGODB & START SERVER =====
+// ===== START SERVER =====
 const startServer = async () => {
   try {
-    // Connect to MongoDB
     await mongoose.connect(process.env.MONGO_URL);
     console.log("✅ MongoDB connected");
-
-    // Verify email service configuration (non-blocking)
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      EmailService.verifyTransporter().then(isReady => {
-        if (isReady) {
-          console.log('✅ Email service is ready');
-        } else {
-          console.log('⚠️ Email service configuration issues - emails may not send');
-        }
-      }).catch(err => {
-        console.log('⚠️ Email service verification failed:', err.message);
-      });
-    } else {
-      console.log('⚠️ Email credentials not configured - email notifications disabled');
-    }
 
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => {
       console.log(`✅ Server running at http://localhost:${PORT}`);
-      console.log(`✅ Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? 'ENABLED' : 'DISABLED'}`);
-      console.log(`✅ Email Service: ${process.env.EMAIL_USER ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
-      console.log(`✅ All routes under: /api`);
-      console.log(`✅ Auth Routes: /api/auth`);
-      console.log(`✅ Class Routes: /api/class`);
-      console.log(`✅ Exam Routes: /api/exams`);
-      console.log(`✅ Classwork Routes: /api/classwork`);
-      console.log(`✅ Announcement Routes: /api/announcements`);
-      console.log(`✅ Student Management Routes: /api/student-management`);
-      console.log(`✅ Notification Routes: /api/notifications`);
+      console.log(`✅ Socket.IO: ENABLED with room management`);
+      console.log(`✅ CORS: Enabled for ${process.env.FRONTEND_URL || "http://localhost:5173"}`);
     });
   } catch (err) {
     console.error("❌ Server startup error:", err);
@@ -211,5 +312,4 @@ const startServer = async () => {
   }
 };
 
-// Start the server
 startServer();

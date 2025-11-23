@@ -1,33 +1,43 @@
-// src/lib/api.js - COMPLETE FIXED VERSION
+// src/lib/api.js - FIXED VERSION WITH DEFAULT EXPORT
 import axios from "axios";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000/api",
   withCredentials: true,
+  timeout: 10000, // ✅ ADD TIMEOUT
 });
 
-// Request interceptor
+// SINGLE Request interceptor
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
+  
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    console.log('✅ Token added to request');
+  } else {
+    console.warn('⚠️ No token found in localStorage');
+    
+    // Don't block the request, let the server handle authentication
+    // This prevents infinite loops when token is expired
   }
+  
   return config;
+}, (error) => {
+  return Promise.reject(error);
 });
 
-// Response interceptor
+// Response interceptor for handling auth errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
+      console.log('🔐 Authentication failed, redirecting to login');
+      localStorage.removeItem('token');
       window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
-
-export default api;
 
 // ===== NOTIFICATION FUNCTIONS =====
 export const getNotifications = async (page = 1, limit = 20) => {
@@ -433,7 +443,7 @@ export const getExamAnalytics = async (examId) => {
 // ===== EXAM SESSION FUNCTIONS =====
 export const startExamSession = async (examId) => {
   try {
-    const response = await api.post(`/exams/${examId}/start`);
+    const response = await api.post(`/exams/${examId}/start-session`);
     return response.data;
   } catch (error) {
     throw error;
@@ -540,3 +550,6 @@ export const analyzeProctoringFrame = async (imageData) => {
     throw error;
   }
 };
+
+// ✅ ADD THIS LINE - DEFAULT EXPORT FOR THE API INSTANCE
+export default api;

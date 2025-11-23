@@ -1,3 +1,4 @@
+// routes/examRoutes.js - FIXED VERSION
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -13,12 +14,10 @@ const axios = require('axios');
 // ===== INITIALIZE ROUTER FIRST =====
 const router = express.Router();
 
-// ===== DEBUG MIDDLEWARE - ADD AFTER ROUTER INIT =====
-router.use((req, res, next) => {
-  console.log(`🔍 EXAM ROUTE ACCESSED: ${req.method} ${req.originalUrl}`);
-  console.log(`🔍 Full URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
-  next();
-});
+// ===== APPLY AUTH MIDDLEWARE TO ALL ROUTES =====
+router.use(auth);
+
+// ✅ REMOVED DUPLICATE DEBUG MIDDLEWARE - CAUSING DOUBLE REQUESTS
 
 // ===== MULTER SETUP =====
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -49,12 +48,13 @@ const upload = multer({
   }
 });
 
-// ===== TEST ROUTE - ADD THIS FIRST =====
-router.get("/test-session-routes", (req, res) => {
+// ===== TEST ROUTE =====
+router.get("/test-session-routes", async (req, res) => {
   console.log("✅ TEST ROUTE HIT - Session routes are working");
   res.json({
     success: true,
     message: "Session routes are working correctly",
+    user: req.user,
     availableRoutes: [
       "POST /api/exams/:examId/start-session",
       "POST /api/exams/:examId/end-session", 
@@ -65,14 +65,24 @@ router.get("/test-session-routes", (req, res) => {
   });
 });
 
-// ===== EXAM SESSION ROUTES - ADD THESE NEXT =====
+// ===== EXAM SESSION ROUTES =====
 
-// ✅ START EXAM SESSION ROUTE
-router.post("/:examId/start-session", auth, async (req, res) => {
+// ✅ DEBUG ENDPOINT
+router.get("/debug/token-check", (req, res) => {
+  console.log("✅ Token is valid for user:", req.user);
+  res.json({
+    success: true,
+    message: "Token is valid",
+    user: req.user
+  });
+});
+
+// ✅ GET EXAM DETAILS
+router.get("/:examId/details", async (req, res) => {
   try {
     const { examId } = req.params;
     
-    console.log("🎯 START EXAM SESSION ROUTE HIT:", examId);
+    console.log("🎯 GET EXAM DETAILS ROUTE HIT:", examId);
     console.log("🔍 User ID:", req.user.id);
 
     // Validate examId
@@ -82,6 +92,52 @@ router.post("/:examId/start-session", auth, async (req, res) => {
         message: "Invalid exam ID format"
       });
     }
+
+    const exam = await Exam.findById(examId).populate('classId');
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+
+    // Check if user has access to this exam
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this exam"
+      });
+    }
+
+    console.log("✅ Exam details loaded for teacher session:", exam.title);
+
+    res.json({
+      success: true,
+      data: exam
+    });
+
+  } catch (err) {
+    console.error("❌ Get exam details error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load exam details"
+    });
+  }
+});
+
+// ✅ START EXAM SESSION
+router.post("/:examId/start-session", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    
+    console.log("🎯 START EXAM SESSION ROUTE HIT:", examId);
+    console.log("🔍 User ID:", req.user.id);
 
     const exam = await Exam.findById(examId);
     if (!exam) {
@@ -100,7 +156,7 @@ router.post("/:examId/start-session", auth, async (req, res) => {
       });
     }
 
-    // Update exam to active session
+    // Update exam to active
     const updatedExam = await Exam.findByIdAndUpdate(
       examId,
       { 
@@ -125,27 +181,18 @@ router.post("/:examId/start-session", auth, async (req, res) => {
     console.error("❌ Start exam session error:", err);
     res.status(500).json({
       success: false,
-      message: "Failed to start exam session",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: "Failed to start exam session"
     });
   }
 });
 
-// ✅ END EXAM SESSION ROUTE
-router.post("/:examId/end-session", auth, async (req, res) => {
+// ✅ END EXAM SESSION
+router.post("/:examId/end-session", async (req, res) => {
   try {
     const { examId } = req.params;
     
     console.log("🎯 END EXAM SESSION ROUTE HIT:", examId);
-    console.log("🔍 User ID:", req.user.id);
-
-    // Validate examId
-    if (!mongoose.Types.ObjectId.isValid(examId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid exam ID format"
-      });
-    }
+    console.log("🔍 User ID:", req.user.id); 
 
     const exam = await Exam.findById(examId);
     if (!exam) {
@@ -164,7 +211,7 @@ router.post("/:examId/end-session", auth, async (req, res) => {
       });
     }
 
-    // Update exam to inactive session and clear joined students
+    // Update exam to inactive and clear joined students
     const updatedExam = await Exam.findByIdAndUpdate(
       examId,
       { 
@@ -188,16 +235,200 @@ router.post("/:examId/end-session", auth, async (req, res) => {
     console.error("❌ End exam session error:", err);
     res.status(500).json({
       success: false,
-      message: "Failed to end exam session",
+      message: "Failed to end exam session"
+    });
+  }
+});
+
+// ✅ STUDENT JOIN EXAM SESSION
+router.post("/:examId/join", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const studentId = req.user.id;
+    
+    console.log("🎯 STUDENT JOINING EXAM:", examId, "Student:", studentId);
+    
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+    
+    // Check if user is student in this class
+    const classData = await Class.findById(exam.classId);
+    const isStudent = classData.members.some(member => 
+      member.userId && member.userId.toString() === studentId
+    );
+    
+    if (!isStudent) {
+      return res.status(403).json({
+        success: false,
+        message: "Only students in this class can join the exam"
+      });
+    }
+    
+    // Check if exam session is active
+    if (!exam.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Exam session is not active"
+      });
+    }
+    
+    // Check if student already joined
+    const alreadyJoined = exam.joinedStudents.some(js => 
+      js.studentId.toString() === studentId
+    );
+    
+    if (!alreadyJoined) {
+      // Add student to joined students
+      exam.joinedStudents.push({
+        studentId: studentId,
+        joinedAt: new Date(),
+        status: "connected",
+        cameraEnabled: true,
+        microphoneEnabled: true
+      });
+      
+      await exam.save();
+    }
+    
+    console.log("✅ Student joined exam session:", studentId);
+    
+    res.json({
+      success: true,
+      message: "Joined exam session successfully",
+      data: {
+        exam: {
+          _id: exam._id,
+          title: exam.title,
+          timeLimit: exam.timeLimit || 60
+        },
+        requiresCamera: true,
+        isExamSession: true
+      }
+    });
+    
+  } catch (err) {
+    console.error("❌ Join exam session error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to join exam session"
+    });
+  }
+});
+
+// ✅ GET EXAM SESSION STATUS
+router.get("/:examId/session-status", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    
+    console.log("🎯 EXAM SESSION STATUS ROUTE HIT:", examId);
+
+    const exam = await Exam.findById(examId).populate('classId');
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+
+    // Check if user has access to this exam
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this exam session"
+      });
+    }
+
+    console.log("✅ Exam session status loaded:", examId, "Active:", exam.isActive);
+
+    res.json({
+      success: true,
+      data: {
+        exam: {
+          _id: exam._id,
+          title: exam.title,
+          isActive: exam.isActive || false,
+          isDeployed: exam.isDeployed,
+          startedAt: exam.startedAt,
+          timeLimit: exam.timeLimit || 60
+        },
+        isActive: exam.isActive || false,
+        timeLeft: exam.timeLimit ? exam.timeLimit * 60 : 3600
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Exam session status error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get exam session status",
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ✅ GET JOINED STUDENTS
+router.get("/:examId/joined-students", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    
+    const exam = await Exam.findById(examId)
+      .populate('joinedStudents.studentId', 'name email')
+      .populate('classId', 'name');
+    
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+    
+    // Check if user is teacher for this class
+    const classData = await Class.findById(exam.classId);
+    const isTeacher = classData.ownerId.toString() === req.user.id;
+    
+    if (!isTeacher) {
+      return res.status(403).json({
+        success: false,
+        message: "Only teachers can view joined students"
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        exam: {
+          _id: exam._id,
+          title: exam.title,
+          isActive: exam.isActive
+        },
+        joinedStudents: exam.joinedStudents || []
+      }
+    });
+    
+  } catch (err) {
+    console.error("❌ Get joined students error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get joined students"
     });
   }
 });
 
 // ===== CONTINUE WITH THE REST OF YOUR EXISTING ROUTES =====
 
-// ✅ 1. GET EXAM FOR STUDENT TO TAKE - ADD THIS ROUTE
-router.get("/take/:examId", auth, async (req, res) => {
+// ✅ GET EXAM FOR STUDENT TO TAKE
+router.get("/take/:examId", async (req, res) => {
   try {
     const { examId } = req.params;
     
@@ -281,6 +512,8 @@ router.get("/take/:examId", auth, async (req, res) => {
       totalPoints: exam.totalPoints,
       isPublished: exam.isPublished,
       isDeployed: exam.isDeployed,
+      isActive: exam.isActive,
+      timeLimit: exam.timeLimit,
       createdAt: exam.createdAt,
       updatedAt: exam.updatedAt
     };
@@ -301,272 +534,8 @@ router.get("/take/:examId", auth, async (req, res) => {
   }
 });
 
-// ✅ 2. SUBMIT EXAM ANSWERS - ADD THIS ROUTE
-router.post("/:examId/submit", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    const { answers } = req.body;
-
-    console.log("📝 Student submitting answers for exam:", examId, "User:", req.user.id);
-
-    if (!answers || typeof answers !== 'object') {
-      return res.status(400).json({
-        success: false,
-        message: "Answers are required"
-      });
-    }
-
-    const exam = await Exam.findById(examId);
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-
-    // Check if user is student in the class
-    const classData = await Class.findById(exam.classId);
-    const isStudent = classData.members.some(member => 
-      member.userId && member.userId.toString() === req.user.id
-    );
-
-    if (!isStudent) {
-      return res.status(403).json({
-        success: false,
-        message: "Only students can submit answers"
-      });
-    }
-
-    // Check if exam is available
-    if (!exam.isPublished && !exam.isDeployed) {
-      return res.status(403).json({
-        success: false,
-        message: "This exam is not available for submission"
-      });
-    }
-
-    // Calculate score (basic implementation)
-    let score = 0;
-    let maxScore = exam.totalPoints || exam.questions.reduce((sum, q) => sum + (q.points || 1), 0);
-    
-    exam.questions.forEach((question, index) => {
-      const studentAnswer = answers[index];
-      
-      if (studentAnswer) {
-        // Basic scoring logic
-        if (question.type === 'multiple-choice' && question.correctAnswer !== undefined) {
-          if (studentAnswer === question.options[question.correctAnswer]) {
-            score += question.points || 1;
-          }
-        } else if (question.type === 'checkboxes' && question.correctAnswers) {
-          // For checkboxes, check if all correct answers are selected
-          const correctOptions = question.correctAnswers.map(idx => question.options[idx]);
-          const isCorrect = correctOptions.every(opt => studentAnswer.includes(opt)) && 
-                           correctOptions.length === studentAnswer.length;
-          if (isCorrect) {
-            score += question.points || 1;
-          }
-        }
-        // For essay/short-answer questions, you might want manual grading
-      }
-    });
-
-    console.log("✅ Answers submitted. Score:", score, "/", maxScore);
-
-    res.json({
-      success: true,
-      message: "Answers submitted successfully",
-      data: {
-        score,
-        maxScore,
-        percentage: Math.round((score / maxScore) * 100)
-      }
-    });
-
-  } catch (err) {
-    console.error("❌ Submit answers error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to submit answers",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-
-// ✅ END EXAM SESSION ROUTE - MOVE THIS UP
-router.post("/:examId/end-session", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    
-    console.log("🎯 END EXAM SESSION ROUTE HIT:", examId);
-    console.log("🔍 User ID:", req.user.id);
-
-    // Validate examId
-    if (!mongoose.Types.ObjectId.isValid(examId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid exam ID format"
-      });
-    }
-
-    const exam = await Exam.findById(examId);
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-
-    // Check if user is teacher for this class
-    const classData = await Class.findById(exam.classId);
-    if (!classData || classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: "Only teachers can end exam sessions"
-      });
-    }
-
-    // Update exam to inactive session and clear joined students
-    const updatedExam = await Exam.findByIdAndUpdate(
-      examId,
-      { 
-        isActive: false,
-        endedAt: new Date(),
-        joinedStudents: [], // Clear joined students
-        updatedAt: new Date()
-      },
-      { new: true }
-    );
-
-    console.log("✅ Exam session ended:", examId);
-
-    res.json({
-      success: true,
-      message: "Exam session ended successfully",
-      data: updatedExam
-    });
-
-  } catch (err) {
-    console.error("❌ End exam session error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to end exam session",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ===== ✅ CRITICAL MISSING ROUTES =====
-
-// ✅ 1. GET EXAM FOR STUDENT TO TAKE - ADD THIS ROUTE
-// ✅ ADD THIS ROUTE TO YOUR examRoutes.js FILE
-router.get("/take/:examId", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    
-    console.log("🎯 STUDENT QUIZ ACCESS - Take route HIT!");
-    console.log("🔍 Exam ID:", examId);
-    console.log("🔍 User ID:", req.user.id);
-
-    // Validate examId
-    if (!mongoose.Types.ObjectId.isValid(examId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid exam ID format"
-      });
-    }
-
-    const exam = await Exam.findById(examId);
-    if (!exam) {
-      console.log("❌ Exam not found:", examId);
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-
-    // Check if user has access to this exam's class
-    const classData = await Class.findById(exam.classId);
-    if (!classData) {
-      return res.status(404).json({
-        success: false,
-        message: "Class not found"
-      });
-    }
-
-    const isTeacher = classData.ownerId.toString() === req.user.id;
-    const isStudent = classData.members.some(member => 
-      member.userId && member.userId.toString() === req.user.id
-    );
-
-    if (!isTeacher && !isStudent) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not enrolled in this class"
-      });
-    }
-
-    // Check if exam is available for students
-    if (!isTeacher && !exam.isPublished && !exam.isDeployed) {
-      return res.status(403).json({
-        success: false,
-        message: "This exam is not available yet"
-      });
-    }
-
-    console.log("✅ Exam access granted:", exam.title, "for user:", req.user.id);
-
-    // Prepare exam data for student (hide correct answers)
-    const examForStudent = {
-      _id: exam._id,
-      title: exam.title,
-      description: exam.description,
-      classId: exam.classId,
-      questions: exam.questions.map((question, index) => {
-        // For students, hide correct answers but keep question structure
-        if (isTeacher) {
-          return question; // Teachers see everything
-        } else {
-          return {
-            type: question.type,
-            title: question.title,
-            required: question.required,
-            points: question.points,
-            options: question.options,
-            order: question.order,
-            // Hide correct answers from students
-            correctAnswer: undefined,
-            correctAnswers: undefined,
-            answerKey: undefined
-          };
-        }
-      }),
-      totalPoints: exam.totalPoints,
-      isPublished: exam.isPublished,
-      isDeployed: exam.isDeployed,
-      createdAt: exam.createdAt,
-      updatedAt: exam.updatedAt
-    };
-
-    res.json({
-      success: true,
-      data: examForStudent,
-      userRole: isTeacher ? "teacher" : "student"
-    });
-
-  } catch (err) {
-    console.error("❌ Student exam access error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load exam",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ✅ 2. SUBMIT EXAM ANSWERS - ADD THIS ROUTE
-router.post("/:examId/submit", auth, async (req, res) => {
+// ✅ SUBMIT EXAM ANSWERS
+router.post("/:examId/submit", async (req, res) => {
   try {
     const { examId } = req.params;
     const { answers } = req.body;
@@ -660,7 +629,7 @@ router.post("/:examId/submit", auth, async (req, res) => {
 // ===== EXISTING QUIZ CREATION ROUTES =====
 
 // ✅ CREATE QUIZ
-router.post("/create/:classId", auth, async (req, res) => {
+router.post("/create/:classId", async (req, res) => {
   try {
     const { classId } = req.params;
     const { title, description, questions, settings, theme, isPublished, totalPoints } = req.body;
@@ -750,7 +719,7 @@ router.post("/create/:classId", auth, async (req, res) => {
 });
 
 // ✅ UPDATE QUIZ QUESTIONS
-router.put("/:examId/quiz-questions", auth, async (req, res) => {
+router.put("/:examId/quiz-questions", async (req, res) => {
   try {
     const { examId } = req.params;
     const { title, description, questions, settings, theme, isPublished, totalPoints } = req.body;
@@ -825,7 +794,7 @@ router.put("/:examId/quiz-questions", auth, async (req, res) => {
 });
 
 // ✅ DEPLOY/PUBLISH EXAM
-router.patch("/deploy/:examId", auth, async (req, res) => {
+router.patch("/deploy/:examId", async (req, res) => {
   try {
     const { examId } = req.params;
 
@@ -878,7 +847,7 @@ router.patch("/deploy/:examId", auth, async (req, res) => {
 });
 
 // ✅ GET QUIZ FOR EDITING
-router.get("/:examId/edit", auth, async (req, res) => {
+router.get("/:examId/edit", async (req, res) => {
   try {
     const { examId } = req.params;
 
@@ -933,9 +902,8 @@ router.get("/:examId/edit", auth, async (req, res) => {
 
 // ===== FILE UPLOAD & PARSING ROUTES =====
 
-
 // Updated upload-parse route using Python service
-router.post("/upload-parse", auth, upload.single("file"), async (req, res) => {
+router.post("/upload-parse", upload.single("file"), async (req, res) => {
   try {
     console.log("🎯 UPLOAD-PARSE STARTED");
     
@@ -1032,10 +1000,11 @@ router.post("/upload-parse", auth, upload.single("file"), async (req, res) => {
     });
   }
 });
+
 // ===== OTHER EXISTING ROUTES =====
 
 // ✅ GET ALL EXAMS FOR A CLASS
-router.get("/:classId", auth, async (req, res) => {
+router.get("/:classId", async (req, res) => {
   try {
     const classId = new mongoose.Types.ObjectId(req.params.classId);
     
@@ -1087,7 +1056,7 @@ router.get("/:classId", auth, async (req, res) => {
 });
 
 // ✅ GET DEPLOYED EXAM FOR A CLASS
-router.get("/deployed/:classId", auth, async (req, res) => {
+router.get("/deployed/:classId", async (req, res) => {
   try {
     const classId = new mongoose.Types.ObjectId(req.params.classId);
     
@@ -1134,7 +1103,7 @@ router.get("/deployed/:classId", auth, async (req, res) => {
 });
 
 // ✅ DELETE EXAM
-router.delete("/:examId", auth, async (req, res) => {
+router.delete("/:examId", async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
     if (!exam) return res.status(404).json({ 
@@ -1178,7 +1147,7 @@ router.delete("/:examId", auth, async (req, res) => {
 });
 
 // ✅ GET PARSED QUESTIONS
-router.get("/:examId/questions", auth, async (req, res) => {
+router.get("/:examId/questions", async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
     if (!exam) return res.status(404).json({ 
@@ -1221,13 +1190,14 @@ router.get("/health", (req, res) => {
   res.json({
     success: true,
     message: "Exam routes are working with STUDENT QUIZ features",
+    user: req.user,
     routes: [
       "POST /create/:classId",
       "POST /upload-parse",
       "PUT /:examId/quiz-questions", 
       "GET /:examId/edit",
-      "GET /take/:examId", // ✅ STUDENT QUIZ ACCESS - ADDED
-      "POST /:examId/submit", // ✅ STUDENT SUBMIT - ADDED
+      "GET /take/:examId",
+      "POST /:examId/submit",
       "GET /:examId/results",
       "GET /form/:examId",
       "GET /deployed/:classId", 
@@ -1236,7 +1206,12 @@ router.get("/health", (req, res) => {
       "DELETE /:examId",
       "DELETE /class/:classId/delete-all",
       "GET /:examId/questions",
-      "PATCH /deploy/:examId"
+      "PATCH /deploy/:examId",
+      "POST /:examId/start",
+      "POST /:examId/end",
+      "POST /:examId/join",
+      "GET /:examId/session-status",
+      "GET /:examId/joined-students"
     ],
     timestamp: new Date().toISOString()
   });
@@ -1402,6 +1377,7 @@ function parseFormattedDocument(text) {
   
   return questions;
 }
+
 // ✅ DOCX PARSING FUNCTION
 const parseDOCX = async (filePath) => {
   try {
@@ -1473,509 +1449,5 @@ const parseDOCX = async (filePath) => {
     throw error;
   }
 };
-// Backend routes para sa exam session
-router.post('/exams/:id/start', async (req, res) => {
-  try {
-    const exam = await Exam.findByIdAndUpdate(
-      req.params.id,
-      { 
-        isActive: true,
-        startedAt: new Date(),
-        isDeployed: true 
-      },
-      { new: true }
-    );
-    res.json({ success: true, data: exam });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-router.post('/exams/:id/end', async (req, res) => {
-  try {
-    const exam = await Exam.findByIdAndUpdate(
-      req.params.id,
-      { 
-        isActive: false,
-        endedAt: new Date(),
-        isDeployed: false 
-      },
-      { new: true }
-    );
-    res.json({ success: true, data: exam });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// ===== TEACHER EXAM SESSION ENDPOINTS =====
-
-// ✅ GET EXAM DETAILS FOR TEACHER SESSION
-router.get("/:examId/details", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    
-    console.log("🎯 TEACHER EXAM SESSION - Details route HIT!");
-    console.log("🔍 Exam ID:", examId);
-    console.log("🔍 User ID:", req.user.id);
-
-    // Validate examId
-    if (!mongoose.Types.ObjectId.isValid(examId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid exam ID format"
-      });
-    }
-
-    const exam = await Exam.findById(examId).populate('classId');
-    if (!exam) {
-      console.log("❌ Exam not found:", examId);
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-
-    // Check if user is teacher for this class
-    const classData = await Class.findById(exam.classId);
-    if (!classData) {
-      return res.status(404).json({
-        success: false,
-        message: "Class not found"
-      });
-    }
-
-    if (classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: "Only teachers can access exam session details"
-      });
-    }
-
-    console.log("✅ Exam details loaded for teacher session:", exam.title);
-
-    res.json({
-      success: true,
-      data: {
-        _id: exam._id,
-        title: exam.title,
-        description: exam.description,
-        classId: exam.classId,
-        timeLimit: exam.timeLimit || 60,
-        totalPoints: exam.totalPoints,
-        questions: exam.questions,
-        isPublished: exam.isPublished,
-        isDeployed: exam.isDeployed,
-        isActive: exam.isActive || false,
-        startedAt: exam.startedAt,
-        createdAt: exam.createdAt,
-        updatedAt: exam.updatedAt
-      }
-    });
-
-  } catch (err) {
-    console.error("❌ Teacher exam session details error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load exam details",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ✅ START EXAM SESSION
-router.post("/:examId/start", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    
-    console.log("🎯 START EXAM SESSION ROUTE HIT:", examId);
-    console.log("🔍 User ID:", req.user.id);
-
-    const exam = await Exam.findById(examId);
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-
-    // Check if user is teacher for this class
-    const classData = await Class.findById(exam.classId);
-    if (!classData || classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: "Only teachers can start exam sessions"
-      });
-    }
-
-    // Update exam to active session
-    const updatedExam = await Exam.findByIdAndUpdate(
-      examId,
-      { 
-        isActive: true,
-        isDeployed: true,
-        isPublished: true,
-        startedAt: new Date(),
-        updatedAt: new Date()
-      },
-      { new: true }
-    );
-
-    console.log("✅ Exam session started:", examId);
-
-    res.json({
-      success: true,
-      message: "Exam session started successfully",
-      data: updatedExam
-    });
-
-  } catch (err) {
-    console.error("❌ Start exam session error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to start exam session",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ✅ END EXAM SESSION
-router.post("/:examId/end", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    
-    console.log("🎯 END EXAM SESSION ROUTE HIT:", examId);
-    console.log("🔍 User ID:", req.user.id);
-
-    const exam = await Exam.findById(examId);
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-
-    // Check if user is teacher for this class
-    const classData = await Class.findById(exam.classId);
-    if (!classData || classData.ownerId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: "Only teachers can end exam sessions"
-      });
-    }
-
-    // Update exam to inactive session
-    const updatedExam = await Exam.findByIdAndUpdate(
-      examId,
-      { 
-        isActive: false,
-        endedAt: new Date(),
-        updatedAt: new Date()
-      },
-      { new: true }
-    );
-
-    console.log("✅ Exam session ended:", examId);
-
-    res.json({
-      success: true,
-      message: "Exam session ended successfully",
-      data: updatedExam
-    });
-
-  } catch (err) {
-    console.error("❌ End exam session error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to end exam session",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ✅ GET EXAM SESSION STATUS - UPDATED
-router.get("/:examId/session-status", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    
-    console.log("🎯 EXAM SESSION STATUS ROUTE HIT:", examId);
-
-    const exam = await Exam.findById(examId).populate('classId');
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-
-    // Check if user has access to this exam
-    const classData = await Class.findById(exam.classId);
-    const hasAccess = classData && (
-      classData.ownerId.toString() === req.user.id ||
-      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
-    );
-
-    if (!hasAccess) {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized to access this exam session"
-      });
-    }
-
-    console.log("✅ Exam session status loaded:", examId, "Active:", exam.isActive);
-
-    res.json({
-      success: true,
-      data: {
-        exam: {
-          _id: exam._id,
-          title: exam.title,
-          isActive: exam.isActive || false,
-          isDeployed: exam.isDeployed,
-          startedAt: exam.startedAt,
-          timeLimit: exam.timeLimit || 60
-        },
-        isActive: exam.isActive || false,
-        timeLeft: exam.timeLimit ? exam.timeLimit * 60 : 3600
-      }
-    });
-
-  } catch (err) {
-    console.error("❌ Exam session status error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get exam session status",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ✅ JOIN EXAM SESSION (FOR STUDENTS)
-router.post("/:examId/join-session", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    
-    console.log("🎯 STUDENT JOIN EXAM SESSION ROUTE HIT:", examId);
-    console.log("🔍 User ID:", req.user.id);
-
-    const exam = await Exam.findById(examId);
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-
-    // Check if user is student in this class
-    const classData = await Class.findById(exam.classId);
-    const isStudent = classData.members.some(member => 
-      member.userId && member.userId.toString() === req.user.id
-    );
-
-    if (!isStudent) {
-      return res.status(403).json({
-        success: false,
-        message: "Only students can join exam sessions"
-      });
-    }
-
-    // Check if exam session is active
-    if (!exam.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: "Exam session is not active"
-      });
-    }
-
-    console.log("✅ Student joined exam session:", examId, "Student:", req.user.id);
-
-    res.json({
-      success: true,
-      message: "Joined exam session successfully",
-      data: {
-        exam: {
-          _id: exam._id,
-          title: exam.title,
-          timeLimit: exam.timeLimit || 60
-        },
-        sessionId: `session_${examId}_${Date.now()}`,
-        timeLeft: exam.timeLimit ? exam.timeLimit * 60 : 3600
-      }
-    });
-
-  } catch (err) {
-    console.error("❌ Join exam session error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to join exam session",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-
-// backend/routes/examRoutes.js - ADD THESE ROUTES
-
-// ✅ GET ACTIVE EXAM SESSIONS FOR TEACHER
-router.get("/teacher/active-sessions", auth, async (req, res) => {
-  try {
-    const teacherId = req.user.id;
-    
-    // Find classes where user is teacher
-    const teacherClasses = await Class.find({ 
-      "members.userId": teacherId,
-      "members.role": "teacher"
-    });
-    
-    const classIds = teacherClasses.map(c => c._id);
-    
-    // Find active exams in those classes
-    const activeExams = await Exam.find({
-      classId: { $in: classIds },
-      isActive: true
-    }).populate('classId', 'name');
-    
-    res.json({
-      success: true,
-      data: activeExams
-    });
-    
-  } catch (err) {
-    console.error("❌ Get active sessions error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get active sessions"
-    });
-  }
-});
-
-// ✅ GET STUDENTS JOINED IN EXAM SESSION
-router.get("/:examId/joined-students", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    
-    const exam = await Exam.findById(examId)
-      .populate('joinedStudents.studentId', 'name email')
-      .populate('classId', 'name');
-    
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-    
-    // Check if user is teacher for this class
-    const classData = await Class.findById(exam.classId);
-    const isTeacher = classData.ownerId.toString() === req.user.id;
-    
-    if (!isTeacher) {
-      return res.status(403).json({
-        success: false,
-        message: "Only teachers can view joined students"
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: {
-        exam: {
-          _id: exam._id,
-          title: exam.title,
-          isActive: exam.isActive
-        },
-        joinedStudents: exam.joinedStudents || []
-      }
-    });
-    
-  } catch (err) {
-    console.error("❌ Get joined students error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get joined students"
-    });
-  }
-});
-
-// ✅ STUDENT JOIN EXAM SESSION
-router.post("/:examId/join", auth, async (req, res) => {
-  try {
-    const { examId } = req.params;
-    const studentId = req.user.id;
-    
-    console.log("🎯 STUDENT JOINING EXAM:", examId, "Student:", studentId);
-    
-    const exam = await Exam.findById(examId);
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found"
-      });
-    }
-    
-    // Check if user is student in this class
-    const classData = await Class.findById(exam.classId);
-    const isStudent = classData.members.some(member => 
-      member.userId && member.userId.toString() === studentId
-    );
-    
-    if (!isStudent) {
-      return res.status(403).json({
-        success: false,
-        message: "Only students in this class can join the exam"
-      });
-    }
-    
-    // Check if exam session is active
-    if (!exam.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: "Exam session is not active"
-      });
-    }
-    
-    // Check if student already joined
-    const alreadyJoined = exam.joinedStudents.some(js => 
-      js.studentId.toString() === studentId
-    );
-    
-    if (!alreadyJoined) {
-      // Add student to joined students
-      exam.joinedStudents.push({
-        studentId: studentId,
-        joinedAt: new Date(),
-        status: "connected",
-        cameraEnabled: true,
-        microphoneEnabled: true
-      });
-      
-      await exam.save();
-    }
-    
-    console.log("✅ Student joined exam session:", studentId);
-    
-    res.json({
-      success: true,
-      message: "Joined exam session successfully",
-      data: {
-        exam: {
-          _id: exam._id,
-          title: exam.title,
-          timeLimit: exam.timeLimit || 60
-        },
-        requiresCamera: true,
-        isExamSession: true
-      }
-    });
-    
-  } catch (err) {
-    console.error("❌ Join exam session error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to join exam session"
-    });
-  }
-});
-
 
 module.exports = router;

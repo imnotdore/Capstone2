@@ -1,10 +1,11 @@
-// src/components/StudentQuizPage.jsx - FIXED WITH ERROR HANDLING
+// StudentQuizPage.jsx - FIXED CAMERA SHARING VERSION
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { getQuizForStudent } from '../lib/api';
+import { io } from 'socket.io-client';
+import { getQuizForStudent, submitQuizAnswers } from '../lib/api';
 import './StudentQuizPage.css';
 
-// OPTIMIZED CAMERA COMPONENT
+// Simplified Camera Component without detection
 const CameraComponent = React.memo(({ 
   requiresCamera, 
   onCameraStateChange,
@@ -12,8 +13,6 @@ const CameraComponent = React.memo(({
 }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const canvasRef = useRef(null);
-  const detectionIntervalRef = useRef(null);
   const [cameraState, setCameraState] = useState({
     isConnected: false,
     isInitializing: false,
@@ -21,74 +20,6 @@ const CameraComponent = React.memo(({
     hasCamera: false
   });
   const [camOn, setCamOn] = useState(true);
-  const [micOn, setMicOn] = useState(false);
-  const [detections, setDetections] = useState({
-    face: false,
-    eyes: false,
-    status: 'Initializing...',
-    faceCount: 0,
-    lookingAway: false
-  });
-
-  const PYTHON_BACKEND = 'http://localhost:5000';
-
-  // Optimized detection function
-// In the captureAndDetect function, update the fetch call:
-const captureAndDetect = useCallback(async () => {
-  if (!videoRef.current || !camOn || !cameraState.isConnected || videoRef.current.readyState < 2) {
-    return;
-  }
-
-  try {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    if (!canvas || video.videoWidth === 0 || video.videoHeight === 0) return;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    const imageData = canvas.toDataURL('image/jpeg', 0.7);
-    
-    // FIXED: Use the correct endpoint
-    const response = await fetch(`${PYTHON_BACKEND}/detect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: imageData })
-    });
-
-    if (!response.ok) {
-      console.error('Detection request failed:', response.status);
-      return;
-    }
-
-    const result = await response.json();
-    
-    // Update detections with the correct field names from your Python backend
-    const newDetections = {
-      face: result.faceDetected,
-      eyes: result.eyeDetected,
-      status: result.suspiciousActivities?.length > 0 ? result.suspiciousActivities[0] : 'Normal',
-      faceCount: result.faceCount || 0,
-      lookingAway: !result.gazeForward  // Convert gazeForward to lookingAway
-    };
-
-    setDetections(newDetections);
-
-    // Only send new alerts
-    if (result.suspiciousActivities?.length > 0) {
-      result.suspiciousActivities.forEach(alert => {
-        onProctoringAlert?.(alert);
-      });
-    }
-
-  } catch (error) {
-    console.error('Detection error:', error);
-  }
-}, [camOn, cameraState.isConnected, onProctoringAlert]);
 
   const initializeCamera = useCallback(async () => {
     if (!requiresCamera) return;
@@ -96,54 +27,33 @@ const captureAndDetect = useCallback(async () => {
     try {
       setCameraState(prev => ({ ...prev, isInitializing: true, error: '' }));
 
-      // Wait for video element
-      let attempts = 0;
-      while (!videoRef.current && attempts < 10) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-      }
-
-      if (!videoRef.current) throw new Error('Video element not available');
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera not supported');
-
-      // Cleanup existing stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
 
-      // Get camera stream
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Camera not supported');
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        video: { 
+          width: { ideal: 640 }, 
+          height: { ideal: 480 }, 
+          facingMode: 'user',
+          frameRate: { ideal: 15, max: 30 }
+        },
         audio: false
       });
       
       streamRef.current = stream;
 
-      if (!videoRef.current) throw new Error('Video element lost');
+      if (!videoRef.current) {
+        throw new Error('Video element not available');
+      }
 
-      // Setup video element
       const videoElement = videoRef.current;
       videoElement.srcObject = stream;
-      
-      await new Promise((resolve, reject) => {
-        const onLoaded = () => {
-          videoElement.removeEventListener('loadedmetadata', onLoaded);
-          videoElement.removeEventListener('error', onError);
-          resolve();
-        };
-
-        const onError = () => {
-          videoElement.removeEventListener('loadedmetadata', onLoaded);
-          videoElement.removeEventListener('error', onError);
-          reject(new Error('Video failed to load'));
-        };
-
-        videoElement.addEventListener('loadedmetadata', onLoaded);
-        videoElement.addEventListener('error', onError);
-
-        setTimeout(() => reject(new Error('Video loading timeout')), 5000);
-      });
 
       await videoElement.play();
 
@@ -154,13 +64,8 @@ const captureAndDetect = useCallback(async () => {
         hasCamera: true,
         error: ''
       }));
+      
       onCameraStateChange?.(true);
-
-      // Start detection with optimized interval
-      if (detectionIntervalRef.current) {
-        clearInterval(detectionIntervalRef.current);
-      }
-      detectionIntervalRef.current = setInterval(captureAndDetect, 3000);
 
     } catch (error) {
       console.error('Camera initialization failed:', error);
@@ -168,6 +73,7 @@ const captureAndDetect = useCallback(async () => {
       let userMessage = 'Camera access failed';
       if (error.name === 'NotAllowedError') userMessage = 'Camera permission denied';
       else if (error.name === 'NotFoundError') userMessage = 'No camera found';
+      else if (error.name === 'NotReadableError') userMessage = 'Camera is busy';
       
       setCameraState(prev => ({
         ...prev,
@@ -177,7 +83,7 @@ const captureAndDetect = useCallback(async () => {
       }));
       onCameraStateChange?.(false);
     }
-  }, [requiresCamera, onCameraStateChange, captureAndDetect]);
+  }, [requiresCamera, onCameraStateChange]);
 
   useEffect(() => {
     if (!requiresCamera) return;
@@ -193,27 +99,36 @@ const captureAndDetect = useCallback(async () => {
           setCameraState(prev => ({ ...prev, hasCamera: cameras.length > 0 }));
         }
 
-        if (cameras.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-          if (mounted) await initializeCamera();
+        if (cameras.length > 0 && mounted) {
+          await initializeCamera();
+        } else if (mounted) {
+          setCameraState(prev => ({ 
+            ...prev, 
+            error: 'No camera found', 
+            isInitializing: false 
+          }));
         }
       } catch (error) {
         if (mounted) {
-          setCameraState(prev => ({ ...prev, error: 'Camera setup failed', isInitializing: false }));
+          setCameraState(prev => ({ 
+            ...prev, 
+            error: 'Camera setup failed', 
+            isInitializing: false 
+          }));
         }
       }
     };
 
-    const timer = setTimeout(initCamera, 100);
+    initCamera();
 
     return () => {
       mounted = false;
-      clearTimeout(timer);
-      if (detectionIntervalRef.current) {
-        clearInterval(detectionIntervalRef.current);
-      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
       }
     };
   }, [requiresCamera, initializeCamera]);
@@ -230,13 +145,8 @@ const captureAndDetect = useCallback(async () => {
     }
   };
 
-  const toggleMic = () => {
-    setMicOn(!micOn);
-  };
-
   const retryCamera = async () => {
     setCameraState(prev => ({ ...prev, error: '', isInitializing: true }));
-    await new Promise(resolve => setTimeout(resolve, 500));
     await initializeCamera();
   };
 
@@ -244,19 +154,14 @@ const captureAndDetect = useCallback(async () => {
 
   return (
     <div className="camera-section">
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
-      
       <div className="camera-header">
         <div className="user-info">
           <span className="user-name">Student</span>
-          <span className={`detection-status ${detections.status === 'Normal' ? 'normal' : 'warning'}`}>
-            {detections.status}
+          <span className={`detection-status ${cameraState.isConnected ? 'normal' : 'bad'}`}>
+            {cameraState.isConnected ? 'Camera Active' : 'Camera Off'}
           </span>
         </div>
         <div className="camera-controls-mini">
-          <button className={`control-icon ${micOn ? 'active' : ''}`} onClick={toggleMic}>
-            {micOn ? '🎤' : '🎤❌'}
-          </button>
           <button 
             className={`control-icon ${camOn ? 'active' : ''}`}
             onClick={toggleCam}
@@ -266,7 +171,7 @@ const captureAndDetect = useCallback(async () => {
           </button>
         </div>
       </div>
-      
+
       <div className="camera-preview">
         <video 
           ref={videoRef}
@@ -274,7 +179,9 @@ const captureAndDetect = useCallback(async () => {
           muted 
           playsInline
           className="camera-video"
-          style={{ display: (cameraState.isConnected && camOn) ? 'block' : 'none' }}
+          style={{ 
+            display: (cameraState.isConnected && camOn) ? 'block' : 'none'
+          }}
         />
         
         {(!cameraState.isConnected || !camOn) ? (
@@ -288,50 +195,12 @@ const captureAndDetect = useCallback(async () => {
               </div>
             )}
           </div>
-        ) : (
-          <div className="detection-overlay">
-            <div className="detection-indicators">
-              <div className={`detection-indicator ${detections.face ? 'good' : 'bad'}`}>
-                {detections.face ? '👤' : '👤❌'}
-                <span className="indicator-count">{detections.faceCount}</span>
-              </div>
-              <div className={`detection-indicator ${detections.eyes ? 'good' : 'bad'}`}>
-                {detections.eyes ? '👀' : '👀❌'}
-              </div>
-              <div className={`detection-indicator ${!detections.lookingAway ? 'good' : 'bad'}`}>
-                {detections.lookingAway ? '👁️❌' : '👁️'}
-              </div>
-            </div>
-          </div>
-        )}
+        ) : null}
       </div>
-
-      {cameraState.isConnected && camOn && (
-        <div className="detection-status-bar">
-          <div className="status-item">
-            <span>Face:</span>
-            <span className={detections.face ? 'status-good' : 'status-bad'}>
-              {detections.face ? `Detected (${detections.faceCount})` : 'Not found'}
-            </span>
-          </div>
-          <div className="status-item">
-            <span>Eyes:</span>
-            <span className={detections.eyes ? 'status-good' : 'status-bad'}>
-              {detections.eyes ? 'Visible' : 'Not visible'}
-            </span>
-          </div>
-          <div className="status-item">
-            <span>Gaze:</span>
-            <span className={!detections.lookingAway ? 'status-good' : 'status-bad'}>
-              {detections.lookingAway ? 'Looking away' : 'Forward'}
-            </span>
-          </div>
-        </div>
-      )}
 
       {cameraState.error && (
         <div className="camera-error-footer">
-          <button className="retry-btn" onClick={retryCamera}>🔄 Retry</button>
+          <button className="retry-btn" onClick={retryCamera}>🔄 Retry Camera</button>
           <span className="error-message">{cameraState.error}</span>
         </div>
       )}
@@ -339,7 +208,24 @@ const captureAndDetect = useCallback(async () => {
   );
 });
 
-// MAIN COMPONENT - FIXED WITH ERROR HANDLING
+// Header Alerts Component
+const HeaderAlerts = React.memo(({ alerts }) => {
+  if (alerts.length === 0) return null;
+
+  const latestAlerts = alerts.slice(0, 2);
+
+  return (
+    <div className="header-alerts">
+      {latestAlerts.map((alert) => (
+        <div key={alert.id} className={`alert-text ${alert.type || 'warning'}`}>
+          {alert.message}
+        </div>
+      ))}
+    </div>
+  );
+});
+
+// MAIN COMPONENT - FIXED CAMERA SHARING
 export default function StudentQuizPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
@@ -359,7 +245,178 @@ export default function StudentQuizPage() {
   const [submitting, setSubmitting] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [error, setError] = useState('');
+  const [timeRemaining, setTimeRemaining] = useState(null);
 
+  // ✅ FIXED STATES FOR WEBCAM SHARING
+  const socketRef = useRef(null);
+  const [peerConnection, setPeerConnection] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  const [cameraRequested, setCameraRequested] = useState(false);
+  const [isSharingCamera, setIsSharingCamera] = useState(false);
+  const [teacherSocketId, setTeacherSocketId] = useState(null);
+
+  // ✅ FIXED: Initialize Socket.io with useRef
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      console.error('❌ No token available for socket connection');
+      return;
+    }
+
+    console.log('🔑 Connecting student socket...');
+
+    const newSocket = io('http://localhost:3000', {
+      auth: { 
+        token: token 
+      },
+      query: { 
+        examId: examId,
+        userRole: 'student' 
+      },
+      transports: ['websocket', 'polling']
+    });
+
+    newSocket.on('connect', () => {
+      console.log('✅ Student Socket connected successfully');
+      
+      // Join exam room after connection
+      newSocket.emit('join-exam-room', {
+        roomId: `exam-${examId}`,
+        userName: 'Student',
+        userId: 'student-user',
+        userRole: 'student'
+      });
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ Student Socket connection failed:', error);
+    });
+
+    // ✅ FIXED: Socket event listeners
+    newSocket.on('camera-request', handleCameraRequest);
+    newSocket.on('webrtc-answer', handleWebRTCAnswer);
+    newSocket.on('ice-candidate', handleICECandidate);
+
+    // Store socket in ref for reliable access
+    socketRef.current = newSocket;
+
+    return () => {
+      console.log('🛑 Cleaning up student socket');
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+      if (peerConnection) {
+        peerConnection.close();
+      }
+    };
+  }, [examId]);
+
+// ✅ FIXED: PREVENT MULTIPLE CAMERA RESPONSES
+const handleCameraRequest = async (data) => {
+  // ✅ PREVENT DUPLICATE PROCESSING
+  if (isSharingCamera && teacherSocketId === data.from) {
+    console.log('📹 Already sharing camera with this teacher');
+    return;
+  }
+  
+  console.log('📹 Camera request from teacher:', data);
+  setCameraRequested(true);
+  setTeacherSocketId(data.from);
+  
+  try {
+    // Stop existing stream if any
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+    }
+    if (peerConnection) {
+      peerConnection.close();
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        width: { ideal: 640 }, 
+        height: { ideal: 480 },
+        facingMode: 'user'
+      }, 
+      audio: false 
+    });
+    
+    console.log('🎥 Camera accessed successfully');
+    
+    setLocalStream(stream);
+    setIsSharingCamera(true);
+    setCameraActive(true);
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+      ]
+    });
+
+    // Add tracks
+    stream.getTracks().forEach(track => {
+      pc.addTrack(track, stream);
+    });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current) {
+        socketRef.current.emit('ice-candidate', {
+          target: data.from,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    // Create and send offer
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    if (socketRef.current) {
+      socketRef.current.emit('webrtc-offer', {
+        target: data.from,
+        offer: offer
+      });
+      console.log('✅ Sent WebRTC offer to teacher');
+      setPeerConnection(pc);
+    }
+
+  } catch (error) {
+    console.error('❌ Error accessing camera:', error);
+    setIsSharingCamera(false);
+    setCameraActive(false);
+  }
+};
+
+  // ✅ FIXED: Handle WebRTC answer from teacher
+  const handleWebRTCAnswer = async (data) => {
+    if (peerConnection) {
+      try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        console.log('✅ Set remote description from teacher answer');
+      } catch (error) {
+        console.error('❌ Error setting remote description:', error);
+      }
+    }
+  };
+
+  // ✅ FIXED: Handle ICE candidate from teacher
+  const handleICECandidate = async (data) => {
+    if (peerConnection && data.candidate) {
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        console.log('✅ Added ICE candidate from teacher');
+      } catch (error) {
+        console.error('❌ Error adding ICE candidate:', error);
+      }
+    }
+  };
+
+  // Load quiz data
   const loadQuiz = useCallback(async () => {
     try {
       setLoading(true);
@@ -368,7 +425,7 @@ export default function StudentQuizPage() {
       
       if (response.success) {
         setQuiz(response.data);
-        // Initialize answers based on question types
+        
         const initialAnswers = {};
         if (response.data.questions) {
           response.data.questions.forEach((question, index) => {
@@ -380,6 +437,10 @@ export default function StudentQuizPage() {
           });
         }
         setAnswers(initialAnswers);
+
+        if (response.data.duration) {
+          setTimeRemaining(response.data.duration * 60);
+        }
       } else {
         setError(response.message || 'Failed to load quiz');
       }
@@ -391,36 +452,37 @@ export default function StudentQuizPage() {
     }
   }, [examId]);
 
-  const handleCameraStateChange = (isActive) => {
+  const handleCameraStateChange = useCallback((isActive) => {
     setCameraActive(isActive);
     if (!isActive && requiresCamera) {
       setProctoringAlerts(prev => [{
         id: Date.now(),
-        message: '⚠️ Camera disconnected',
+        message: '⚠️ Camera disconnected - Monitoring paused',
         timestamp: new Date().toLocaleTimeString(),
         type: 'warning'
       }, ...prev.slice(0, 4)]);
     }
-  };
+  }, [requiresCamera]);
 
-  const handleProctoringAlert = useCallback((alert) => {
+  const handleProctoringAlert = useCallback((alertData) => {
     setProctoringAlerts(prev => {
-      if (prev.some(a => a.message === alert)) return prev;
+      if (prev.some(a => a.message === alertData.message)) return prev;
       
-      return [{
+      const newAlert = {
         id: Date.now(),
-        message: alert,
+        message: alertData.message,
         timestamp: new Date().toLocaleTimeString(),
-        type: 'warning'
-      }, ...prev.slice(0, 4)];
+        type: alertData.type || 'warning'
+      };
+      
+      return [newAlert, ...prev.slice(0, 4)];
     });
   }, []);
 
-  const handleAnswerChange = (questionIndex, value) => {
+  const handleAnswerChange = useCallback((questionIndex, value) => {
     setAnswers(prev => {
       const newAnswers = { ...prev, [questionIndex]: value };
       
-      // Update answered count
       const count = Object.values(newAnswers).filter(answer => 
         answer && (typeof answer === 'string' ? answer.trim() !== '' : Array.isArray(answer) ? answer.length > 0 : true)
       ).length;
@@ -428,33 +490,74 @@ export default function StudentQuizPage() {
       
       return newAnswers;
     });
-  };
+  }, []);
 
-  const handleCheckboxChange = (questionIndex, option, isChecked) => {
+  const handleCheckboxChange = useCallback((questionIndex, option, isChecked) => {
     const currentAnswers = Array.isArray(answers[questionIndex]) ? answers[questionIndex] : [];
     const newAnswers = isChecked
       ? [...currentAnswers, option]
       : currentAnswers.filter(opt => opt !== option);
     handleAnswerChange(questionIndex, newAnswers);
-  };
+  }, [answers, handleAnswerChange]);
 
   const handleSubmitQuiz = async () => {
     if (!window.confirm('Are you sure you want to submit your answers?')) return;
+    
     if (requiresCamera && !cameraActive) {
-      if (!window.confirm('Camera is not active. Submit without monitoring?')) return;
+      const proceed = window.confirm(
+        'Camera monitoring is not active. This may be reported to your instructor. Continue with submission?'
+      );
+      if (!proceed) return;
     }
 
     setSubmitting(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      alert('✅ Answers submitted successfully!');
-      navigate('/dashboard');
+      const submissionResponse = await submitQuizAnswers(examId, answers);
+      
+      if (submissionResponse.success) {
+        alert('✅ Answers submitted successfully!');
+        
+        // Stop camera sharing
+        if (localStream) {
+          localStream.getTracks().forEach(track => track.stop());
+        }
+        if (peerConnection) {
+          peerConnection.close();
+        }
+        
+        navigate('/dashboard');
+      } else {
+        throw new Error(submissionResponse.message || 'Submission failed');
+      }
     } catch (error) {
       console.error('Submission error:', error);
-      alert('Failed to submit answers. Please try again.');
+      alert('❌ Failed to submit answers. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  useEffect(() => {
+    if (timeRemaining === null || timeRemaining <= 0) return;
+
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleSubmitQuiz();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeRemaining]);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   useEffect(() => {
@@ -468,7 +571,7 @@ export default function StudentQuizPage() {
       <div className="quiz-loading">
         <div className="loading-spinner"></div>
         <p>Loading quiz...</p>
-        {requiresCamera && <small>📹 Camera access required</small>}
+        {requiresCamera && <small>📹 Camera access required for this exam</small>}
       </div>
     );
   }
@@ -478,9 +581,14 @@ export default function StudentQuizPage() {
       <div className="quiz-error">
         <h2>❌ Error Loading Quiz</h2>
         <p>{error}</p>
-        <button onClick={() => navigate('/dashboard')} className="back-btn">
-          ← Back to Dashboard
-        </button>
+        <div className="error-actions">
+          <button onClick={loadQuiz} className="retry-btn">
+            🔄 Try Again
+          </button>
+          <button onClick={() => navigate('/dashboard')} className="back-btn">
+            ← Back to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -489,7 +597,7 @@ export default function StudentQuizPage() {
     return (
       <div className="quiz-error">
         <h2>❌ Quiz Not Found</h2>
-        <p>The quiz you're trying to access is not available.</p>
+        <p>The quiz you're trying to access is not available or has been removed.</p>
         <button onClick={() => navigate('/dashboard')} className="back-btn">
           ← Back to Dashboard
         </button>
@@ -501,6 +609,9 @@ export default function StudentQuizPage() {
 
   return (
     <div className={`student-quiz-container ${requiresCamera ? 'exam-mode' : 'quiz-mode'}`}>
+      
+      <HeaderAlerts alerts={proctoringAlerts} />
+
       <div className="quiz-header">
         <div className="header-left">
           <button className="back-btn" onClick={() => navigate('/dashboard')}>
@@ -514,6 +625,9 @@ export default function StudentQuizPage() {
               {quiz.totalPoints > 0 && (
                 <span>Total points: {quiz.totalPoints}</span>
               )}
+              {timeRemaining !== null && (
+                <span className="timer">Time: {formatTime(timeRemaining)}</span>
+              )}
             </div>
           </div>
         </div>
@@ -521,17 +635,47 @@ export default function StudentQuizPage() {
         {requiresCamera && (
           <div className="camera-status-header">
             <span className={`camera-indicator ${cameraActive ? 'active' : 'inactive'}`}>
-              {cameraActive ? '📹 Monitoring' : '📹 Camera Off'}
+              {cameraActive ? '📹 Live Monitoring' : '📹 Camera Off'}
             </span>
+            {isSharingCamera && (
+              <span className="sharing-indicator">
+                🔄 Sharing with Teacher
+              </span>
+            )}
+            {proctoringAlerts.length > 0 && (
+              <span className="alert-count">
+                Alerts: {proctoringAlerts.length}
+              </span>
+            )}
           </div>
         )}
       </div>
       
-      {/* Progress Bar */}
+      {/* Camera Sharing Status Indicator */}
+      {cameraRequested && (
+        <div className="camera-sharing-status">
+          <div className={`sharing-indicator ${isSharingCamera ? 'active' : 'denied'}`}>
+            <span className="sharing-icon">
+              {isSharingCamera ? '📹' : '📹❌'}
+            </span>
+            <span className="sharing-text">
+              {isSharingCamera ? 'Camera shared with teacher' : 'Camera access denied'}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="quiz-progress">
-        <span className="progress-text">
-          Answered: {answeredCount} / {quiz.questions?.length || 0}
-        </span>
+        <div className="progress-info">
+          <span className="progress-text">
+            Answered: {answeredCount} / {quiz.questions?.length || 0}
+          </span>
+          {timeRemaining !== null && (
+            <span className="time-remaining">
+              Time Left: {formatTime(timeRemaining)}
+            </span>
+          )}
+        </div>
         <div className="progress-bar">
           <div 
             className="progress-fill"
@@ -546,12 +690,19 @@ export default function StudentQuizPage() {
             <div key={`question-${examId}-${index}`} className="question-card">
               <div className="question-header">
                 <h3>Question {index + 1}</h3>
-                {question.points > 0 && (
-                  <span className="points-badge">{question.points} points</span>
-                )}
+                <div className="question-meta">
+                  {question.points > 0 && (
+                    <span className="points-badge">{question.points} points</span>
+                  )}
+                  <span className="question-type">{question.type}</span>
+                </div>
               </div>
               <div className="question-content">
                 <p className="question-text">{question.title}</p>
+                
+                {question.description && (
+                  <p className="question-description">{question.description}</p>
+                )}
                 
                 {question.type === 'multiple-choice' && question.options && (
                   <div className="options-list">
@@ -589,11 +740,36 @@ export default function StudentQuizPage() {
                 {(question.type === 'short-answer' || question.type === 'paragraph') && (
                   <textarea
                     className="answer-textarea"
-                    placeholder="Type your answer here..."
+                    placeholder={question.type === 'short-answer' ? "Type your short answer here..." : "Type your detailed answer here..."}
                     rows={question.type === 'paragraph' ? 4 : 2}
                     value={answers[index] || ''}
                     onChange={(e) => handleAnswerChange(index, e.target.value)}
                   />
+                )}
+                
+                {question.type === 'true-false' && (
+                  <div className="options-list">
+                    <label className="option-label">
+                      <input 
+                        type="radio" 
+                        name={`question-${index}`} 
+                        value="true"
+                        onChange={(e) => handleAnswerChange(index, e.target.value)}
+                        checked={answers[index] === 'true'}
+                      />
+                      <span className="option-text">True</span>
+                    </label>
+                    <label className="option-label">
+                      <input 
+                        type="radio" 
+                        name={`question-${index}`} 
+                        value="false"
+                        onChange={(e) => handleAnswerChange(index, e.target.value)}
+                        checked={answers[index] === 'false'}
+                      />
+                      <span className="option-text">False</span>
+                    </label>
+                  </div>
                 )}
               </div>
             </div>
@@ -601,12 +777,29 @@ export default function StudentQuizPage() {
         </div>
 
         <div className="quiz-footer">
+          <div className="footer-info">
+            <span className="answered-count">
+              {answeredCount} of {quiz.questions?.length || 0} questions answered
+            </span>
+            {timeRemaining !== null && timeRemaining < 300 && (
+              <span className="time-warning">
+                ⚠️ {formatTime(timeRemaining)} remaining
+              </span>
+            )}
+          </div>
           <button 
-            className="submit-quiz-btn"
+            className={`submit-quiz-btn ${answeredCount === 0 ? 'disabled' : ''}`}
             onClick={handleSubmitQuiz}
-            disabled={submitting}
+            disabled={submitting || answeredCount === 0}
           >
-            {submitting ? 'Submitting...' : 'Submit Quiz'}
+            {submitting ? (
+              <>
+                <div className="loading-spinner-small"></div>
+                Submitting...
+              </>
+            ) : (
+              `Submit Quiz ${answeredCount > 0 ? `(${answeredCount} answers)` : ''}`
+            )}
           </button>
         </div>
       </div>

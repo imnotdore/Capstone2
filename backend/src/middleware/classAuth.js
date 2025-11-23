@@ -1,5 +1,5 @@
 // middleware/classAuth.js - NEW FILE
-const Class = require("../models/class");
+const Class = require("../models/Class");
 
 const checkClassAccess = async (req, res, next) => {
   try {
