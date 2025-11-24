@@ -1,4 +1,4 @@
-// server.js - COMPLETE FIXED VERSION
+// server.js - COMPLETELY FIXED VERSION
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -41,7 +41,6 @@ const io = new Server(server, {
 });
 
 // ===== MIDDLEWARES =====
-// ✅ SINGLE CORS CONFIGURATION - NO DUPLICATES
 app.use(cors({ 
   origin: [
     "http://localhost:5173",
@@ -106,12 +105,77 @@ io.on("connection", (socket) => {
 
   let currentRoom = null;
 
+  // ===== TIMER SYNC HANDLERS =====
+  socket.on('student-time-request', (data) => {
+    console.log('🕒 Student requesting current time:', data.studentSocketId);
+    
+    // Get current room and send time
+    if (currentRoom && examRooms.has(currentRoom)) {
+      const room = examRooms.get(currentRoom);
+      if (room.teacher) {
+        // Forward request to teacher
+        socket.to(room.teacher).emit('student-time-request', {
+          studentSocketId: data.studentSocketId,
+          roomId: currentRoom
+        });
+      }
+    }
+  });
+
+  // Teacher sending time to specific student
+  socket.on('send-current-time', (data) => {
+    console.log('🕒 Teacher sending time to student:', data.studentSocketId);
+    socket.to(data.studentSocketId).emit('send-current-time', {
+      timeLeft: data.timeLeft,
+      isTimerRunning: data.isTimerRunning
+    });
+  });
+
+  // Broadcast timer updates to all students in room
+  socket.on('exam-time-update', (data) => {
+    console.log('🕒 Broadcasting timer update to room:', data.roomId);
+    socket.to(data.roomId).emit('exam-time-update', data);
+  });
+
+  // ===== DETECTION SETTINGS HANDLER =====
+  socket.on('update-detection-settings', (data) => {
+    console.log('🎯 Teacher updating detection settings for student:', data.studentSocketId);
+    
+    // Send to specific student
+    socket.to(data.studentSocketId).emit('detection-settings-update', {
+      settings: data.settings,
+      customMessage: data.customMessage,
+      examId: data.examId
+    });
+    
+    console.log(`Settings updated for student ${data.studentSocketId}:`, data.settings);
+  });
+// ✅ HANDLE TEACHER MANUAL DISCONNECT
+socket.on('disconnect-student', (data) => {
+  console.log(`🔌 Teacher disconnecting student: ${data.studentSocketId} - Reason: ${data.reason}`);
+  
+  // Send disconnect command to student
+  socket.to(data.studentSocketId).emit('teacher-disconnect', {
+    reason: data.reason,
+    examId: data.examId
+  });
+  
+  // Remove student from room
+  const room = examRooms.get(`exam-${data.examId}`);
+  if (room && room.students.has(data.studentSocketId)) {
+    room.students.delete(data.studentSocketId);
+  }
+});
+
 
   // Join exam room
   socket.on("join-exam-room", ({ roomId, userName, userId, userRole }) => {
     try {
       currentRoom = roomId;
       socket.join(roomId);
+      
+      // Store user role for chat
+      socket.userRole = userRole;
       
       // Initialize room if not exists
       if (!examRooms.has(roomId)) {
@@ -126,6 +190,18 @@ io.on("connection", (socket) => {
       if (userRole === 'teacher') {
         room.teacher = socket.id;
         console.log(`👨‍🏫 Teacher ${userName} joined room ${roomId}`);
+        
+        // Send current time to all students when teacher joins
+        setTimeout(() => {
+          socket.to(roomId).emit('exam-time-update', {
+            timeLeft: 3600, // Default 1 hour
+            isTimerRunning: false,
+            roomId: roomId,
+            timestamp: Date.now(),
+            teacherName: userName
+          });
+        }, 1000);
+        
       } else if (userRole === 'student') {
         room.students.set(socket.id, {
           studentId: userId || socket.userId,
@@ -135,6 +211,16 @@ io.on("connection", (socket) => {
           cameraEnabled: false
         });
         console.log(`👨‍🎓 Student ${userName} joined room ${roomId}`);
+        
+        // Request current time from teacher
+        setTimeout(() => {
+          if (room.teacher) {
+            socket.emit('student-time-request', {
+              studentSocketId: socket.id,
+              roomId: roomId
+            });
+          }
+        }, 1500);
         
         // Notify teacher about student joining
         if (room.teacher) {
@@ -160,9 +246,8 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ✅ FIXED: Request student camera (teacher to student) - INSIDE CONNECTION HANDLER
+  // ✅ FIXED: Request student camera (teacher to student)
   socket.on("request-student-camera", ({ studentSocketId, roomId }) => {
-    // ✅ PREVENT DUPLICATE REQUESTS ON SERVER SIDE
     const requestKey = `${studentSocketId}-${roomId}`;
     
     if (pendingCameraRequests.has(requestKey)) {
@@ -184,39 +269,35 @@ io.on("connection", (socket) => {
     }, 10000);
   });
 
-
-  //------------------------------------------------------------------------------------//
-// ✅ ENSURE PROPER SOCKET EVENT FORWARDING
-
-// WebRTC Signaling Events - MAKE SURE THESE EXIST
-socket.on("webrtc-offer", (data) => {
-  console.log('📹 Forwarding WebRTC offer to:', data.target);
-  socket.to(data.target).emit("webrtc-offer", {
-    offer: data.offer,
-    from: socket.id,
-    userInfo: {
-      userId: socket.userId,
-      name: socket.userName
-    }
+  // WebRTC Signaling Events
+  socket.on("webrtc-offer", (data) => {
+    console.log('📹 Forwarding WebRTC offer to:', data.target);
+    socket.to(data.target).emit("webrtc-offer", {
+      offer: data.offer,
+      from: socket.id,
+      userInfo: {
+        userId: socket.userId,
+        name: socket.userName
+      }
+    });
   });
-});
 
-socket.on("webrtc-answer", (data) => {
-  console.log('📹 Forwarding WebRTC answer to:', data.target);
-  socket.to(data.target).emit("webrtc-answer", {
-    answer: data.answer,
-    from: socket.id
+  socket.on("webrtc-answer", (data) => {
+    console.log('📹 Forwarding WebRTC answer to:', data.target);
+    socket.to(data.target).emit("webrtc-answer", {
+      answer: data.answer,
+      from: socket.id
+    });
   });
-});
 
-socket.on("ice-candidate", (data) => {
-  console.log('🧊 Forwarding ICE candidate to:', data.target);
-  socket.to(data.target).emit("ice-candidate", {
-    candidate: data.candidate,
-    from: socket.id
+  socket.on("ice-candidate", (data) => {
+    console.log('🧊 Forwarding ICE candidate to:', data.target);
+    socket.to(data.target).emit("ice-candidate", {
+      candidate: data.candidate,
+      from: socket.id
+    });
   });
-});
-//-----------------------------------------------------------------------------------------------//
+
   // Student camera response
   socket.on("camera-response", (data) => {
     console.log('📹 Student camera response from:', socket.id, 'Enabled:', data.enabled);
@@ -234,6 +315,39 @@ socket.on("ice-candidate", (data) => {
         room.students.get(socket.id).cameraEnabled = data.enabled;
       }
     }
+  });
+
+  // ===== CHAT MESSAGE HANDLING =====
+  socket.on("send-chat-message", (data) => {
+    console.log('💬 Chat message received from:', socket.userName);
+    console.log('📨 Message data:', {
+      roomId: data.roomId,
+      message: data.message,
+      sender: socket.userName
+    });
+
+    // Broadcast to all other users in the room
+    socket.to(data.roomId).emit("chat-message", {
+      message: data.message,
+      from: socket.id,
+      userName: socket.userName,
+      userRole: socket.userRole
+    });
+  });
+
+  // ✅ ADD: Handle typing indicators if needed
+  socket.on("typing-start", (data) => {
+    socket.to(data.roomId).emit("user-typing", {
+      userName: socket.userName,
+      isTyping: true
+    });
+  });
+
+  socket.on("typing-stop", (data) => {
+    socket.to(data.roomId).emit("user-typing", {
+      userName: socket.userName,
+      isTyping: false
+    });
   });
 
   // Get room participants
@@ -292,8 +406,6 @@ socket.on("ice-candidate", (data) => {
   });
 });
 
-
-
 // ===== START SERVER =====
 const startServer = async () => {
   try {
@@ -305,6 +417,9 @@ const startServer = async () => {
       console.log(`✅ Server running at http://localhost:${PORT}`);
       console.log(`✅ Socket.IO: ENABLED with room management`);
       console.log(`✅ CORS: Enabled for ${process.env.FRONTEND_URL || "http://localhost:5173"}`);
+      console.log(`✅ CHAT: Enabled with real-time messaging`);
+      console.log(`✅ TIMER SYNC: Enabled for exam sessions`);
+      console.log(`✅ DETECTION SETTINGS: Enabled for individual student control`);
     });
   } catch (err) {
     console.error("❌ Server startup error:", err);

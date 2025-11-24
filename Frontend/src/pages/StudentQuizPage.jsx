@@ -1,4 +1,4 @@
-// StudentQuizPage.jsx - UPDATED & OPTIMIZED
+// StudentQuizPage.jsx - COMPLETE FIXED VERSION WITH TIMER SYNC
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
@@ -572,7 +572,8 @@ const CameraComponent = React.memo(({
   requiresCamera, 
   onCameraStateChange,
   onProctoringAlert,
-  examId
+  examId,
+  teacherDetectionSettings
 }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -586,65 +587,75 @@ const CameraComponent = React.memo(({
 
   const captureIntervalRef = useRef(null);
   
-  const captureFrame = useCallback(async () => {
-    if (!videoRef.current || !requiresCamera || !cameraState.isConnected || !camOn) return;
-    
-    try {
-      const video = videoRef.current;
-      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+// In your captureFrame function in CameraComponent
+const captureFrame = useCallback(async () => {
+  if (!videoRef.current || !requiresCamera || !cameraState.isConnected || !camOn) return;
+  
+  try {
+    const video = videoRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const imageData = canvas.toDataURL('image/jpeg', 0.8);
+    
+    // ✅ CRITICAL: Send detection settings to backend
+    const detectionData = {
+      image: imageData,
+      exam_id: examId,
+      student_id: 'student-user',
+      timestamp: new Date().toISOString(),
+      // ✅ THIS IS THE KEY - send the actual settings object
+      detection_settings: teacherDetectionSettings
+    };
+    
+    console.log('📊 Sending detection with settings:', teacherDetectionSettings);
+    
+    const response = await fetch('http://localhost:5000/detect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(detectionData)
+    });
+    
+    if (response.ok) {
+      const results = await response.json();
+      console.log('📊 Proctoring results:', results);
       
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      const imageData = canvas.toDataURL('image/jpeg', 0.8);
-      
-      const response = await fetch('http://localhost:5000/detect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          image: imageData,
-          exam_id: examId,
-          student_id: 'student-user',
-          timestamp: new Date().toISOString()
-        })
-      });
-      
-      if (response.ok) {
-        const results = await response.json();
-        console.log('📊 Proctoring results:', results);
+      // ✅ ONLY PROCESS ALERTS FOR ENABLED DETECTIONS
+      if (results.suspiciousActivities && results.suspiciousActivities.length > 0) {
+        const filteredAlerts = results.suspiciousActivities.filter(activity => {
+          // Filter based on teacher's settings
+          if (activity.includes('face') && !teacherDetectionSettings.faceDetection) return false;
+          if (activity.includes('gaze') && !teacherDetectionSettings.gazeDetection) return false;
+          if (activity.includes('phone') && !teacherDetectionSettings.phoneDetection) return false;
+          if (activity.includes('mouth') && !teacherDetectionSettings.mouthDetection) return false;
+          if (activity.includes('Multiple') && !teacherDetectionSettings.multiplePeopleDetection) return false;
+          return true;
+        });
         
-        if (results.suspiciousActivities && results.suspiciousActivities.length > 0) {
-          results.suspiciousActivities.forEach(activity => {
-            onProctoringAlert({
-              message: activity,
-              type: activity.includes('phone') || activity.includes('Multiple') ? 'danger' : 'warning',
-              severity: activity.includes('phone') || activity.includes('Multiple') ? 'high' : 'medium',
-              timestamp: new Date().toLocaleTimeString()
-            });
-          });
-        }
-        
-        if (results.attentionScore < 70) {
+        filteredAlerts.forEach(activity => {
           onProctoringAlert({
-            message: `Low attention score: ${results.attentionScore}% - Focus on your exam`,
-            type: 'warning',
-            severity: 'medium',
+            message: activity,
+            type: activity.includes('phone') || activity.includes('Multiple') ? 'danger' : 'warning',
+            severity: activity.includes('phone') || activity.includes('Multiple') ? 'high' : 'medium',
             timestamp: new Date().toLocaleTimeString()
           });
-        }
+        });
       }
-    } catch (error) {
-      console.error('Proctoring capture error:', error);
     }
-  }, [requiresCamera, examId, onProctoringAlert, cameraState.isConnected, camOn]);
+  } catch (error) {
+    console.error('Proctoring capture error:', error);
+  }
+}, [requiresCamera, examId, onProctoringAlert, cameraState.isConnected, camOn, teacherDetectionSettings]);
   
   const startProctoring = useCallback(() => {
     if (!requiresCamera || !cameraState.isConnected) return;
@@ -675,18 +686,17 @@ const CameraComponent = React.memo(({
         throw new Error('Camera not supported');
       }
 
-     const stream = await navigator.mediaDevices.getUserMedia({
-  video: { 
-    width: { ideal: 640 },
-    height: { ideal: 480 },
-    facingMode: 'user',
-    frameRate: { ideal: 15, max: 30 },
-    // Add exposure compensation
-    exposureMode: 'continuous',
-    whiteBalanceMode: 'continuous'
-  },
-  audio: false
-});
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: 'user',
+          frameRate: { ideal: 15, max: 30 },
+          exposureMode: 'continuous',
+          whiteBalanceMode: 'continuous'
+        },
+        audio: false
+      });
       
       streamRef.current = stream;
 
@@ -939,6 +949,83 @@ const ProctoringAlertsPanel = React.memo(({ alerts, isOpen, onToggle }) => {
   );
 });
 
+// ==================== CHAT COMPONENT ====================
+const ChatComponent = React.memo(({ 
+  messages, 
+  newMessage, 
+  setNewMessage, 
+  handleSendMessage, 
+  showChat, 
+  toggleChat,
+  unreadCount 
+}) => {
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  if (!showChat) return null;
+
+  return (
+    <div className="student-chat-panel">
+      <div className="chat-header">
+        <h3>💬 Exam Chat</h3>
+        <button className="close-chat-btn" onClick={toggleChat}>✕</button>
+      </div>
+      
+      <div className="chat-messages">
+        {messages.length === 0 ? (
+          <div className="no-messages">
+            <div className="chat-icon">💬</div>
+            <p>No messages yet</p>
+            <small>Ask questions to your teacher</small>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div key={message.id} className={`message ${message.sender === 'student' ? 'sent' : 'received'}`}>
+              <div className="message-header">
+                <span className="sender-name">
+                  {message.sender === 'student' ? 'You' : message.senderName}
+                </span>
+                <span className="message-time">
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              <div className="message-content">
+                {message.text}
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+      
+      <form className="chat-input-form" onSubmit={handleSendMessage}>
+        <input
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Type a message to teacher..."
+          className="chat-input"
+          maxLength={500}
+        />
+        <button 
+          type="submit" 
+          className="send-message-btn"
+          disabled={!newMessage.trim()}
+        >
+          Send
+        </button>
+      </form>
+    </div>
+  );
+});
+
 // ==================== MAIN STUDENT QUIZ COMPONENT ====================
 export default function StudentQuizPage() {
   const { examId } = useParams();
@@ -952,15 +1039,36 @@ export default function StudentQuizPage() {
     className = 'Class'
   } = location.state || {};
 
-  // Quiz State Management
+  // ==================== STATE MANAGEMENT ====================
+  // Quiz State
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [error, setError] = useState('');
-  const [timeRemaining, setTimeRemaining] = useState(null);
 
+  // ✅ TIMER STATE (SYNCED WITH TEACHER)
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [timerInitialized, setTimerInitialized] = useState(false);
+
+ // DAGDAGIN ito sa useState declarations:
+const [teacherDetectionSettings, setTeacherDetectionSettings] = useState({
+  faceDetection: true,
+  gazeDetection: true,
+  phoneDetection: true,
+  mouthDetection: true,
+  multiplePeopleDetection: true,
+  audioDetection: true
+});
+
+const [studentAttempts, setStudentAttempts] = useState({
+  currentAttempts: 0,
+  maxAttempts: 10,
+  attemptsLeft: 10,
+  history: []
+});
   // Permission & Monitoring State
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
@@ -972,6 +1080,12 @@ export default function StudentQuizPage() {
   const [isSharingCamera, setIsSharingCamera] = useState(false);
   const [teacherSocketId, setTeacherSocketId] = useState(null);
   const [showAlertsPanel, setShowAlertsPanel] = useState(false);
+
+  // Chat State
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [showChat, setShowChat] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Refs
   const socketRef = useRef(null);
@@ -988,70 +1102,262 @@ export default function StudentQuizPage() {
     navigate('/dashboard');
   }, [navigate]);
 
-  // ==================== SOCKET.IO SETUP ====================
-  useEffect(() => {
-    if (!permissionsGranted) return;
+  // ==================== CHAT FUNCTIONS ====================
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !socketRef.current) return;
 
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      console.error('❌ No token available for socket connection');
-      return;
-    }
-
-    if (socketRef.current && socketRef.current.connected) {
-      console.log('✅ Socket already connected, skipping reconnection');
-      return;
-    }
-
-    console.log('🔑 Connecting student socket...');
-
-    const newSocket = io('http://localhost:3000', {
-      auth: { 
-        token: token 
-      },
-      query: { 
-        examId: examId,
-        userRole: 'student' 
-      },
-      transports: ['websocket', 'polling'],
-      timeout: 30000,
-      forceNew: true
-    });
-
-    newSocket.on('connect', () => {
-      console.log('✅ Student Socket connected successfully');
-      
-      newSocket.emit('join-exam-room', {
-        roomId: `exam-${examId}`,
-        userName: 'Student',
-        userId: 'student-user',
-        userRole: 'student'
-      });
-    });
-
-    newSocket.on('connect_error', (error) => {
-      console.error('❌ Student Socket connection failed:', error);
-    });
-
-    // WebRTC Event Listeners
-    newSocket.on('camera-request', handleCameraRequest);
-    newSocket.on('webrtc-answer', handleWebRTCAnswer);
-    newSocket.on('ice-candidate', handleICECandidate);
-    
-    // PROCTORING ALERTS LISTENER
-    newSocket.on('proctoring-alert', handleProctoringAlert);
-
-    socketRef.current = newSocket;
-
-    return () => {
-      console.log('🛑 Cleaning up student socket');
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
+    const messageData = {
+      id: Date.now().toString(),
+      text: newMessage.trim(),
+      sender: 'student',
+      senderName: 'Student',
+      timestamp: new Date(),
+      type: 'student'
     };
-  }, [examId, permissionsGranted]);
+
+    // Send to teacher and other students
+    socketRef.current.emit('send-chat-message', {
+      roomId: `exam-${examId}`,
+      message: messageData
+    });
+
+    // Add to local messages
+    setMessages(prev => [...prev, messageData]);
+    setNewMessage('');
+  };
+
+  const handleChatMessage = useCallback((data) => {
+    console.log('💬 Student received chat message:', data);
+    const newMessage = {
+      ...data.message,
+      timestamp: new Date(data.message.timestamp)
+    };
+    
+    setMessages(prev => [...prev, newMessage]);
+    
+    // Increment unread count if chat is closed
+    if (!showChat) {
+      setUnreadCount(prev => prev + 1);
+    }
+  }, [showChat]);
+
+  const toggleChat = () => {
+    setShowChat(prev => {
+      if (!prev) {
+        setUnreadCount(0); // Reset unread count when opening chat
+      }
+      return !prev;
+    });
+  };
+// ==================== SOCKET.IO SETUP ====================
+useEffect(() => {
+  if (!permissionsGranted) return;
+
+  const token = localStorage.getItem('token');
+  
+  if (!token) {
+    console.error('❌ No token available for socket connection');
+    return;
+  }
+
+  if (socketRef.current && socketRef.current.connected) {
+    console.log('✅ Socket already connected, skipping reconnection');
+    return;
+  }
+
+  console.log('🔑 Connecting student socket...');
+
+  const newSocket = io('http://localhost:3000', {
+    auth: { 
+      token: token 
+    },
+    query: { 
+      examId: examId,
+      userRole: 'student' 
+    },
+    transports: ['websocket', 'polling'],
+    timeout: 30000,
+    forceNew: true
+  });
+
+  newSocket.on('connect', () => {
+    console.log('✅ Student Socket connected successfully');
+    
+    newSocket.emit('join-exam-room', {
+      roomId: `exam-${examId}`,
+      userName: 'Student',
+      userId: 'student-user',
+      userRole: 'student'
+    });
+
+// ✅ DAGDAG SA SOCKET.IO SETUP:
+// DAGDAGIN ito sa socket event listeners:
+newSocket.on('student-violation', (data) => {
+  console.log('⚠️ Received violation:', data);
+  
+  setStudentAttempts(prev => {
+    const newAttempts = prev.currentAttempts + 1;
+    const attemptsLeft = Math.max(0, prev.maxAttempts - newAttempts);
+    
+    const updated = {
+      ...prev,
+      currentAttempts: newAttempts,
+      attemptsLeft: attemptsLeft,
+      history: [
+        ...prev.history,
+        {
+          timestamp: new Date().toISOString(),
+          violation: data.violationType,
+          attemptsLeft: attemptsLeft
+        }
+      ].slice(-10)
+    };
+    
+    // Auto-disconnect if attempts exhausted
+    if (attemptsLeft <= 0) {
+      alert('❌ You have been disconnected due to excessive violations.');
+      navigate('/dashboard');
+    }
+    
+    return updated;
+  });
+});
+
+
+    // ✅ REQUEST CURRENT TIME FROM TEACHER
+    setTimeout(() => {
+      if (newSocket.connected) {
+        console.log('🕒 Requesting current time from teacher...');
+        newSocket.emit('student-time-request', {
+          studentSocketId: newSocket.id,
+          roomId: `exam-${examId}`
+        });
+      }
+    }, 1000);
+  });
+
+  // ✅ FIXED DETECTION SETTINGS HANDLER
+
+  newSocket.on('detection-settings-update', (data) => {
+  console.log('🎯 Received detection settings from teacher:', data);
+  
+  if (data.settings) {
+    setTeacherDetectionSettings(prev => ({
+      ...prev,
+      ...data.settings
+    }));
+    
+    // ✅ UPDATE ATTEMPTS SETTINGS
+    if (data.settings.maxAttempts) {
+      setStudentAttempts(prev => ({
+        ...prev,
+        maxAttempts: data.settings.maxAttempts,
+        attemptsLeft: data.settings.maxAttempts - prev.currentAttempts
+      }));
+    }
+  }
+});
+
+  newSocket.on('detection-settings-update', (data) => {
+    console.log('🎯 Received detection settings from teacher:', data);
+    
+    if (data.settings) {
+      setTeacherDetectionSettings(prev => ({
+        ...prev,
+        ...data.settings
+      }));
+      
+      console.log('✅ UPDATED DETECTION SETTINGS:', data.settings);
+      
+      const changedSettings = Object.entries(data.settings)
+        .map(([key, value]) => `${key}: ${value ? '✅ ON' : '❌ OFF'}`)
+        .join(', ');
+      
+      setProctoringAlerts(prev => [{
+        id: Date.now(),
+        message: `🎯 Teacher updated: ${changedSettings}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'info'
+      }, ...prev.slice(0, 4)]);
+      
+      if (socketRef.current) {
+        socketRef.current.emit('detection-settings-confirmation', {
+          teacherSocketId: data.from,
+          studentName: 'Student',
+          settings: data.settings,
+          receivedAt: new Date().toISOString()
+        });
+      }
+    }
+    
+    if (data.customMessage) {
+      setProctoringAlerts(prev => [{
+        id: Date.now() + 1,
+        message: `📝 Teacher: ${data.customMessage}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'info'
+      }, ...prev.slice(0, 4)]);
+    }
+  });
+
+  // ✅ TIMER SYNC LISTENERS
+  newSocket.on('exam-time-update', (data) => {
+    console.log('🕒 Received timer update from teacher:', data);
+    setTimeLeft(data.timeLeft);
+    setIsTimerRunning(data.isTimerRunning);
+    setTimerInitialized(true);
+  });
+
+  newSocket.on('send-current-time', (data) => {
+    console.log('🕒 Received current time from teacher:', data);
+    setTimeLeft(data.timeLeft);
+    setIsTimerRunning(data.isTimerRunning);
+    setTimerInitialized(true);
+  });
+
+  // Other existing event listeners...
+  newSocket.on('camera-request', handleCameraRequest);
+  newSocket.on('webrtc-answer', handleWebRTCAnswer);
+  newSocket.on('ice-candidate', handleICECandidate);
+  newSocket.on('proctoring-alert', handleProctoringAlert);
+  newSocket.on('chat-message', handleChatMessage);
+
+
+
+
+
+
+
+
+  socketRef.current = newSocket;
+
+  return () => {
+    console.log('🛑 Cleaning up student socket');
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+  };
+}, [examId, permissionsGranted, handleChatMessage]);
+
+  // ==================== TIMER EFFECT ====================
+  useEffect(() => {
+    if (timeLeft === null || !isTimerRunning) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleSubmitQuiz();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeLeft, isTimerRunning]);
 
   // ==================== WEBRTC HANDLERS ====================
   const handleCameraRequest = async (data, isRetry = false) => {
@@ -1078,15 +1384,17 @@ export default function StudentQuizPage() {
       });
       
       console.log('🎥 Camera accessed successfully');
-     // After getting the stream
-const videoTrack = stream.getVideoTracks()[0];
-const capabilities = videoTrack.getCapabilities();
+      
+      // After getting the stream
+      const videoTrack = stream.getVideoTracks()[0];
+      const capabilities = videoTrack.getCapabilities();
 
-if (capabilities.exposureCompensation) {
-  await videoTrack.applyConstraints({
-    advanced: [{ exposureCompensation: -1.0 }]
-  });
-}
+      if (capabilities.exposureCompensation) {
+        await videoTrack.applyConstraints({
+          advanced: [{ exposureCompensation: -1.0 }]
+        });
+      }
+      
       setLocalStream(stream);
       setIsSharingCamera(true);
       setCameraActive(true);
@@ -1191,32 +1499,52 @@ if (capabilities.exposureCompensation) {
   };
 
   // ==================== PROCTORING ALERTS HANDLER ====================
-  const handleProctoringAlert = useCallback((alertData) => {
+// Update the handleProctoringAlert to include new detection types
+const handleProctoringAlert = useCallback((alertData) => {
     console.log('🚨 Received proctoring alert:', alertData);
     
+    // Check for head pose, eye gaze, or tab switching alerts
+    const isHeadPoseAlert = alertData.message?.includes('HEAD POSE');
+    const isEyeGazeAlert = alertData.message?.includes('EYE GAZE'); 
+    const isTabSwitchAlert = alertData.message?.includes('TAB SWITCHING');
+    
+    if (isHeadPoseAlert || isEyeGazeAlert || isTabSwitchAlert) {
+        setStudentAttempts(prev => {
+            const newAttempts = prev.currentAttempts + 1;
+            const attemptsLeft = Math.max(0, prev.maxAttempts - newAttempts);
+            
+            const updated = {
+                ...prev,
+                currentAttempts: newAttempts,
+                attemptsLeft: attemptsLeft,
+                history: [
+                    ...prev.history,
+                    {
+                        timestamp: new Date().toISOString(),
+                        violation: alertData.message,
+                        attemptsLeft: attemptsLeft
+                    }
+                ].slice(-10)
+            };
+            
+            if (attemptsLeft <= 3 && attemptsLeft > 0) {
+                alert(`⚠️ Warning: Only ${attemptsLeft} attempt(s) left!`);
+            }
+            
+            return updated;
+        });
+    }
+    
     const newAlert = {
-      id: Date.now(),
-      message: alertData.message || 'Suspicious activity detected',
-      timestamp: new Date().toLocaleTimeString(),
-      type: alertData.type || 'warning',
-      severity: alertData.severity || 'medium'
+        id: Date.now(),
+        message: alertData.message || 'Suspicious activity detected',
+        timestamp: new Date().toLocaleTimeString(),
+        type: alertData.type || 'warning',
+        severity: alertData.severity || 'medium'
     };
     
-    setProctoringAlerts(prev => {
-      if (prev.some(a => a.message === newAlert.message && 
-          (Date.now() - a.id) < 5000)) {
-        return prev;
-      }
-      
-      const updatedAlerts = [newAlert, ...prev.slice(0, 19)];
-      return updatedAlerts;
-    });
-
-    if (alertData.severity === 'high') {
-      setShowAlertsPanel(true);
-    }
-  }, []);
-
+    setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
+}, []);
   // ==================== MICROPHONE STATE HANDLER ====================
   const handleMicrophoneStateChange = useCallback((isActive) => {
     setMicrophoneActive(isActive);
@@ -1265,9 +1593,9 @@ if (capabilities.exposureCompensation) {
         }
         setAnswers(initialAnswers);
 
-        if (response.data.duration) {
-          setTimeRemaining(response.data.duration * 60);
-        }
+        // ✅ DON'T set local timer - wait for teacher's synced timer
+        console.log('🕒 Waiting for teacher timer sync...');
+
       } else {
         setError(response.message || 'Failed to load quiz');
       }
@@ -1337,28 +1665,19 @@ if (capabilities.exposureCompensation) {
     }
   };
 
-  // ==================== TIMER MANAGEMENT ====================
-  useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0) return;
-
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleSubmitQuiz();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeRemaining]);
-
+  // ==================== UTILITY FUNCTIONS ====================
   const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
+    if (seconds === null || seconds === undefined) return '00:00';
+    
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    
+    if (hrs > 0) {
+      return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    } else {
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
   };
 
   // ==================== INITIALIZATION ====================
@@ -1436,47 +1755,71 @@ if (capabilities.exposureCompensation) {
             ← Back to Dashboard
           </button>
           <div className="quiz-info">
-            <h1>{quiz.title || examTitle}</h1>
-            <p className="class-info">Class: {className}</p>
+             <h1 className="class-info">Class: {className}</h1>
             <div className="quiz-meta">
-              <span>{quiz.questions?.length || 0} questions</span>
-              {quiz.totalPoints > 0 && (
-                <span>Total points: {quiz.totalPoints}</span>
-              )}
-              {timeRemaining !== null && (
-                <span className="timer">Time: {formatTime(timeRemaining)}</span>
-              )}
+          
+              {/* ✅ SYNCED TIMER DISPLAY */}
             </div>
           </div>
         </div>
-        
-        {(requiresCamera || requiresMicrophone) && (
-          <div className="monitoring-status-header">
-            {requiresCamera && (
-              <span className={`camera-indicator ${cameraActive ? 'active' : 'inactive'}`}>
-                {cameraActive ? '📹 Live' : '📹 Off'}
+    
+        <div className="header-right">
+           {/* ✅ ATTEMPTS DISPLAY */}
+  <div className="attempts-display-student">
+    <span className="attempts-text">
+      Attempts: {studentAttempts.attemptsLeft}/{studentAttempts.maxAttempts}
+    </span>
+  </div>
+
+          {/* ✅ TIMER DISPLAY - SYNCED WITH TEACHER */}
+          <div className="timer-section-student">
+            <div className="timer-display-student">
+              <span className="timer-text">
+                {timeLeft !== null ? formatTime(timeLeft) : 'Loading...'}
               </span>
-            )}
-            {requiresMicrophone && (
-              <span className={`microphone-indicator ${microphoneActive ? 'active' : 'inactive'}`}>
-                {microphoneActive ? '🎤 Live' : '🎤 Muted'}
-              </span>
-            )}
-            {isSharingCamera && (
-              <span className="sharing-indicator">
-                🔄 Sharing with Teacher
-              </span>
-            )}
-            {proctoringAlerts.length > 0 && (
-              <button 
-                className={`alert-count-btn ${proctoringAlerts.length > 0 ? 'has-alerts' : ''}`}
-                onClick={() => setShowAlertsPanel(!showAlertsPanel)}
-              >
-                🚨 Alerts: {proctoringAlerts.length}
-              </button>
-            )}
+            
+            </div>
           </div>
-        )}
+
+          {(requiresCamera || requiresMicrophone) && (
+            <div className="monitoring-status-header">
+              {requiresCamera && (
+                <span className={`camera-indicator ${cameraActive ? 'active' : 'inactive'}`}>
+                  {cameraActive ? '' : ''}
+                </span>
+              )}
+              {requiresMicrophone && (
+                <span className={`microphone-indicator ${microphoneActive ? 'active' : 'inactive'}`}>
+                  {microphoneActive ? '' : ''}
+                </span>
+              )}
+              {isSharingCamera && (
+                <span className="sharing-indicator">
+                  
+                </span>
+              )}
+              {proctoringAlerts.length > 0 && (
+                <button 
+                  className={`alert-count-btn ${proctoringAlerts.length > 0 ? 'has-alerts' : ''}`}
+                  onClick={() => setShowAlertsPanel(!showAlertsPanel)}
+                >
+                  🚨 Alerts: {proctoringAlerts.length}
+                </button>
+              )}
+            </div>
+          )}
+          
+          {/* Chat Toggle Button */}
+          <button 
+            className={`chat-toggle-btn ${unreadCount > 0 ? 'has-unread' : ''}`}
+            onClick={toggleChat}
+          >
+            💬 Chat
+            {unreadCount > 0 && (
+              <span className="unread-badge">{unreadCount}</span>
+            )}
+          </button>
+        </div>
       </div>
       
       {/* Camera Sharing Status Indicator */}
@@ -1500,14 +1843,15 @@ if (capabilities.exposureCompensation) {
         onToggle={() => setShowAlertsPanel(!showAlertsPanel)}
       />
 
+      {/* ✅ USE SYNCED TIMER INSTEAD OF LOCAL TIMER */}
       <div className="quiz-progress">
         <div className="progress-info">
           <span className="progress-text">
             Answered: {answeredCount} / {quiz.questions?.length || 0}
           </span>
-          {timeRemaining !== null && (
+          {timeLeft !== null && (
             <span className="time-remaining">
-              Time Left: {formatTime(timeRemaining)}
+              Time Left: {formatTime(timeLeft)}
             </span>
           )}
         </div>
@@ -1620,9 +1964,10 @@ if (capabilities.exposureCompensation) {
             <span className="answered-count">
               {answeredCount} of {quiz.questions?.length || 0} questions answered
             </span>
-            {timeRemaining !== null && timeRemaining < 300 && (
+            {/* ✅ USE SYNCED TIMER FOR WARNINGS */}
+            {timeLeft !== null && timeLeft < 300 && (
               <span className="time-warning">
-                ⚠️ {formatTime(timeRemaining)} remaining
+                ⚠️ {formatTime(timeLeft)} remaining
               </span>
             )}
           </div>
@@ -1643,7 +1988,7 @@ if (capabilities.exposureCompensation) {
         </div>
       </div>
 
-      {/* ✅ ADD MICROPHONE COMPONENT HERE - BEFORE CAMERA */}
+      {/* Microphone Component */}
       {requiresMicrophone && permissionsGranted && (
         <MicrophoneComponent 
           requiresMicrophone={requiresMicrophone}
@@ -1652,16 +1997,27 @@ if (capabilities.exposureCompensation) {
           examId={examId}
         />
       )}
+{/* Camera Component for Exam Mode */}
+{requiresCamera && permissionsGranted && (
+  <CameraComponent 
+    requiresCamera={requiresCamera}
+    onCameraStateChange={handleCameraStateChange}
+    onProctoringAlert={handleProctoringAlert}
+    examId={examId}
+    teacherDetectionSettings={teacherDetectionSettings}
+  />
+)}
 
-      {/* Camera Component for Exam Mode */}
-      {requiresCamera && permissionsGranted && (
-        <CameraComponent 
-          requiresCamera={requiresCamera}
-          onCameraStateChange={handleCameraStateChange}
-          onProctoringAlert={handleProctoringAlert}
-          examId={examId}
-        />
-      )}
+      {/* Chat Component */}
+      <ChatComponent 
+        messages={messages}
+        newMessage={newMessage}
+        setNewMessage={setNewMessage}
+        handleSendMessage={handleSendMessage}
+        showChat={showChat}
+        toggleChat={toggleChat}
+        unreadCount={unreadCount}
+      />
     </div>
   );
 }

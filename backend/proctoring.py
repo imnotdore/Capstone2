@@ -17,7 +17,16 @@ import tempfile
 import threading
 from collections import deque
 import time
+from collections import defaultdict
 
+
+# Add this global variable to track mouse movement
+mouse_movement_tracker = defaultdict(lambda: {
+    'last_movement_time': None,
+    'last_position': None,
+    'stationary_start_time': None,
+    'is_stationary_alert_sent': False
+})
 # Initialize Flask app FIRST
 app = Flask(__name__)
 CORS(app)
@@ -78,6 +87,42 @@ def connect(sid, environ):
             'recent_head_pose': []
         }
     }
+
+# Sa server.py - ADD THESE SOCKET EVENTS:
+
+@sio.event
+def manual_violation(sid, data):
+    """Teacher manually adds violation"""
+    student_socket_id = data.get('studentSocketId')
+    violation_type = data.get('violationType', 'Manual Violation')
+    exam_id = data.get('examId')
+    
+    print(f"⚠️ Manual violation for {student_socket_id}: {violation_type}")
+    
+    # Forward to teacher
+    sio.emit('student-violation', {
+        'studentSocketId': student_socket_id,
+        'violationType': violation_type,
+        'severity': 'manual',
+        'examId': exam_id,
+        'timestamp': datetime.now().isoformat()
+    }, room=f"exam-{exam_id}")
+
+@sio.event
+def disconnect_student(sid, data):
+    """Teacher disconnects student"""
+    student_socket_id = data.get('studentSocketId')
+    reason = data.get('reason', 'Teacher disconnected')
+    exam_id = data.get('examId')
+    
+    print(f"🔌 Disconnecting student {student_socket_id}: {reason}")
+    
+    # Send disconnect command to student
+    sio.emit('teacher-disconnect', {
+        'reason': reason,
+        'examId': exam_id
+    }, room=student_socket_id)
+
 
 @sio.event
 def join_exam(sid, data):
@@ -631,7 +676,8 @@ def process_audio():
         print(f"Audio processing error: {e}")
         return jsonify({"error": str(e)}), 500
 
-# Enhanced main detection endpoint
+
+# Enhanced main detection endpoint - COMPLETELY UPDATED VERSION
 @app.route('/detect', methods=['POST'])
 def detect():
     try:
@@ -640,9 +686,40 @@ def detect():
         if not data or 'image' not in data:
             return jsonify({"error": "No image data provided"}), 400
             
-        # Extract exam_id from request
+        # ✅ CRITICAL: Extract detection settings from request
+        detection_settings = data.get('detection_settings', {})
         exam_id = data.get('exam_id')
         student_id = data.get('student_id')
+        
+        print(f"🎯 Received detection settings: {detection_settings}")
+        
+        # ✅ CHECK IF ALL DETECTIONS ARE DISABLED - RETURN EARLY
+        if detection_settings and not any([
+            detection_settings.get('faceDetection', True),
+            detection_settings.get('gazeDetection', True), 
+            detection_settings.get('phoneDetection', True),
+            detection_settings.get('mouthDetection', True),
+            detection_settings.get('multiplePeopleDetection', True),
+            detection_settings.get('audioDetection', True)
+        ]):
+            print("🛑 ALL DETECTIONS DISABLED - Returning minimal response")
+            return jsonify({
+                "faceDetected": False,
+                "faceCount": 0,
+                "gaze": "unknown",
+                "eyesOpen": True,
+                "headPose": "unknown",
+                "phoneDetected": False,
+                "mouseDetected": False,
+                "mouthMoving": False,
+                "multiplePeople": False,
+                "blinking": False,
+                "suspiciousActivities": [],
+                "attentionScore": 100,
+                "detectionConfidence": 0.0,
+                "processingTime": round((time.time() - start_time) * 1000, 2),
+                "message": "All detections disabled by teacher settings"
+            })
             
         img = decode_image(data['image'])
         if img is None:
@@ -682,29 +759,46 @@ def detect():
             }
         }
 
-        # ENHANCED FACE DETECTION
-        face_results = face_detector.process(rgb_img)
-        
-        if face_results.detections:
+        # ✅ ONLY PROCESS FACE DETECTION IF ENABLED
+        face_results = None
+        if detection_settings.get('faceDetection', True):
+            face_results = face_detector.process(rgb_img)
+        else:
+            # Skip face detection entirely
+            print("🛑 Face detection disabled - skipping")
+            results["faceDetected"] = False
+            results["faceCount"] = 0
+
+        # If face detection is disabled, skip ALL face-related processing
+        if not detection_settings.get('faceDetection', True):
+            print("🛑 All face-related processing skipped due to settings")
+            results["processingTime"] = round((time.time() - start_time) * 1000, 2)
+            return jsonify(results)
+
+        # Continue with face detection if enabled
+        if face_results and face_results.detections:
             results["faceCount"] = len(face_results.detections)
             results["faceDetected"] = True
 
-            # ENHANCED Multiple faces detection
-            multiple_people, multiple_confidence = detect_multiple_people_enhanced(face_results, img, w, h)
-            results["multiplePeople"] = multiple_people
-            results["enhancedFeatures"]["multiplePeopleConfidence"] = multiple_confidence
-            
-            if multiple_people and multiple_confidence > 0.5:
-                results["suspiciousActivities"].append(f"👥 MULTIPLE PEOPLE DETECTED ({results['faceCount']} faces, confidence: {multiple_confidence:.1%})")
+            # ✅ ONLY DO MULTIPLE PEOPLE DETECTION IF ENABLED
+            if detection_settings.get('multiplePeopleDetection', True):
+                multiple_people, multiple_confidence = detect_multiple_people_enhanced(face_results, img, w, h)
+                results["multiplePeople"] = multiple_people
+                results["enhancedFeatures"]["multiplePeopleConfidence"] = multiple_confidence
                 
-                if exam_id and multiple_confidence > 0.6:
-                    send_proctoring_alert(exam_id, {
-                        "message": f"👥 Multiple people detected ({results['faceCount']} faces)",
-                        "type": "danger",
-                        "severity": "high",
-                        "timestamp": datetime.now().isoformat(),
-                        "confidence": multiple_confidence
-                    })
+                if multiple_people and multiple_confidence > 0.5:
+                    results["suspiciousActivities"].append(f"👥 MULTIPLE PEOPLE DETECTED ({results['faceCount']} faces, confidence: {multiple_confidence:.1%})")
+                    
+                    if exam_id and multiple_confidence > 0.6:
+                        send_proctoring_alert(exam_id, {
+                            "message": f"👥 Multiple people detected ({results['faceCount']} faces)",
+                            "type": "danger",
+                            "severity": "high",
+                            "timestamp": datetime.now().isoformat(),
+                            "confidence": multiple_confidence
+                        })
+            else:
+                print("🛑 Multiple people detection disabled")
 
             # Process first face for detailed analysis
             detection = face_results.detections[0]
@@ -726,120 +820,144 @@ def detect():
             
             cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-            # ENHANCED FACE MESH for advanced detection
+            # ✅ ENHANCED FACE MESH - ONLY IF FACE DETECTION ENABLED
             mesh_results = face_mesh.process(rgb_img)
             if mesh_results.multi_face_landmarks:
                 landmarks = mesh_results.multi_face_landmarks[0]
                 results["eyeDetected"] = True
                 
-                # ENHANCED gaze detection
-                gaze_direction, eyes_open, is_blinking, gaze_confidence = get_gaze_direction_enhanced(landmarks, w, h)
-                results["gaze"] = gaze_direction
-                results["eyesOpen"] = eyes_open
-                results["blinking"] = is_blinking
-                results["gazeForward"] = (gaze_direction == "forward")
-                results["enhancedFeatures"]["gazeConfidence"] = abs(gaze_confidence)
-                
-                # Enhanced gaze monitoring
-                if gaze_direction != "forward" and abs(gaze_confidence) > 0.03:
-                    results["suspiciousActivities"].append(f"👀 GAZE DEVIATION: {gaze_direction} (confidence: {abs(gaze_confidence):.3f})")
+                # ✅ ONLY DO GAZE DETECTION IF ENABLED
+                if detection_settings.get('gazeDetection', True):
+                    gaze_direction, eyes_open, is_blinking, gaze_confidence = get_gaze_direction_enhanced(landmarks, w, h)
+                    results["gaze"] = gaze_direction
+                    results["eyesOpen"] = eyes_open
+                    results["blinking"] = is_blinking
+                    results["gazeForward"] = (gaze_direction == "forward")
+                    results["enhancedFeatures"]["gazeConfidence"] = abs(gaze_confidence)
                     
-                    if exam_id and any(direction in gaze_direction for direction in ["left", "right"]) and abs(gaze_confidence) > 0.05:
+                    # Enhanced gaze monitoring - ONLY IF ENABLED
+                    if gaze_direction != "forward" and abs(gaze_confidence) > 0.03:
+                        results["suspiciousActivities"].append(f"👀 GAZE DEVIATION: {gaze_direction} (confidence: {abs(gaze_confidence):.3f})")
+                        
+                        if exam_id and any(direction in gaze_direction for direction in ["left", "right"]) and abs(gaze_confidence) > 0.05:
+                            send_proctoring_alert(exam_id, {
+                                "message": f"👀 Eye movement detected: {gaze_direction}",
+                                "type": "warning",
+                                "severity": "medium",
+                                "timestamp": datetime.now().isoformat(),
+                                "confidence": abs(gaze_confidence)
+                            })
+                else:
+                    print("🛑 Gaze detection disabled")
+                    results["gaze"] = "disabled"
+                    results["eyesOpen"] = True
+                    results["blinking"] = False
+
+                # ✅ ONLY DO HEAD POSE DETECTION IF ENABLED
+                if detection_settings.get('gazeDetection', True):  # Head pose usually tied to gaze
+                    head_pose, head_pose_confidence = detect_head_pose_enhanced(landmarks, w, h)
+                    results["headPose"] = head_pose
+                    results["enhancedFeatures"]["headPoseConfidence"] = head_pose_confidence
+                    
+                    if head_pose != "head forward" and head_pose_confidence > 0.5:
+                        results["suspiciousActivities"].append(f"🙄 HEAD POSE: {head_pose} (confidence: {head_pose_confidence:.1%})")
+                        
+                        if exam_id and head_pose_confidence > 0.6:
+                            send_proctoring_alert(exam_id, {
+                                "message": f"🙄 Head movement: {head_pose}",
+                                "type": "warning", 
+                                "severity": "medium",
+                                "timestamp": datetime.now().isoformat(),
+                                "confidence": head_pose_confidence
+                            })
+                else:
+                    print("🛑 Head pose detection disabled")
+                    results["headPose"] = "disabled"
+
+                # ✅ ONLY DO MOUTH MOVEMENT DETECTION IF ENABLED
+                if detection_settings.get('mouthDetection', True):
+                    is_talking, mouth_openness, mouth_confidence = detect_mouth_movement_enhanced(landmarks)
+                    results["mouthMoving"] = is_talking
+                    results["enhancedFeatures"]["mouthMovementConfidence"] = mouth_confidence / 4.0  # Normalize to 0-1
+                    
+                    if is_talking and mouth_confidence >= 2:
+                        results["suspiciousActivities"].append(f"🗣️ MOUTH MOVEMENT: Possible talking (confidence: {mouth_confidence}/4)")
+                        
+                        if exam_id and mouth_confidence >= 3:
+                            send_proctoring_alert(exam_id, {
+                                "message": "🗣️ Suspicious mouth movement detected - Possible communication",
+                                "type": "warning",
+                                "severity": "medium",
+                                "timestamp": datetime.now().isoformat(),
+                                "confidence": mouth_confidence / 4.0
+                            })
+                else:
+                    print("🛑 Mouth detection disabled")
+                    results["mouthMoving"] = False
+
+            # ✅ ONLY DO HAND DETECTION FOR PHONE/MOUSE IF ENABLED
+            if detection_settings.get('phoneDetection', True):
+                hand_results = hand_detector.process(rgb_img)
+                pose_results = pose_detector.process(rgb_img)
+                
+                # ✅ ONLY DO PHONE DETECTION IF ENABLED
+                phone_detected, phone_confidence = detect_phone_usage_enhanced(hand_results, face_center_x, face_center_y, w, h)
+                results["phoneDetected"] = phone_detected
+                results["enhancedFeatures"]["phoneConfidence"] = phone_confidence
+                
+                if phone_detected and phone_confidence > 0.5:
+                    results["suspiciousActivities"].append(f"📱 POTENTIAL PHONE USAGE (confidence: {phone_confidence:.1%})")
+                    
+                    if exam_id and phone_confidence > 0.6:
                         send_proctoring_alert(exam_id, {
-                            "message": f"👀 Eye movement detected: {gaze_direction}",
+                            "message": "📱 Potential phone usage detected",
+                            "type": "danger",
+                            "severity": "high", 
+                            "timestamp": datetime.now().isoformat(),
+                            "confidence": phone_confidence
+                        })
+            else:
+                print("🛑 Phone detection disabled")
+                results["phoneDetected"] = False
+
+            # ✅ ONLY DO MOUSE DETECTION IF ENABLED (usually tied to phone detection)
+            if detection_settings.get('phoneDetection', True):
+                mouse_detected, mouse_confidence = detect_mouse_usage_enhanced(hand_results, pose_results, w, h)
+                results["mouseDetected"] = mouse_detected
+                results["enhancedFeatures"]["mouseConfidence"] = mouse_confidence
+                
+                if mouse_detected and mouse_confidence > 0.6:
+                    results["suspiciousActivities"].append(f"🖱️ POTENTIAL MOUSE USAGE (confidence: {mouse_confidence:.1%})")
+                    
+                    if exam_id and mouse_confidence > 0.7:
+                        send_proctoring_alert(exam_id, {
+                            "message": "🖱️ Potential unauthorized device usage detected",
                             "type": "warning",
-                            "severity": "medium",
+                            "severity": "medium", 
                             "timestamp": datetime.now().isoformat(),
-                            "confidence": abs(gaze_confidence)
+                            "confidence": mouse_confidence
                         })
-
-                # ENHANCED head pose detection
-                head_pose, head_pose_confidence = detect_head_pose_enhanced(landmarks, w, h)
-                results["headPose"] = head_pose
-                results["enhancedFeatures"]["headPoseConfidence"] = head_pose_confidence
-                
-                if head_pose != "head forward" and head_pose_confidence > 0.5:
-                    results["suspiciousActivities"].append(f"🙄 HEAD POSE: {head_pose} (confidence: {head_pose_confidence:.1%})")
-                    
-                    if exam_id and head_pose_confidence > 0.6:
-                        send_proctoring_alert(exam_id, {
-                            "message": f"🙄 Head movement: {head_pose}",
-                            "type": "warning", 
-                            "severity": "medium",
-                            "timestamp": datetime.now().isoformat(),
-                            "confidence": head_pose_confidence
-                        })
-
-                # ENHANCED mouth movement detection
-                is_talking, mouth_openness, mouth_confidence = detect_mouth_movement_enhanced(landmarks)
-                results["mouthMoving"] = is_talking
-                results["enhancedFeatures"]["mouthMovementConfidence"] = mouth_confidence / 4.0  # Normalize to 0-1
-                
-                if is_talking and mouth_confidence >= 2:
-                    results["suspiciousActivities"].append(f"🗣️ MOUTH MOVEMENT: Possible talking (confidence: {mouth_confidence}/4)")
-                    
-                    if exam_id and mouth_confidence >= 3:
-                        send_proctoring_alert(exam_id, {
-                            "message": "🗣️ Suspicious mouth movement detected - Possible communication",
-                            "type": "warning",
-                            "severity": "medium",
-                            "timestamp": datetime.now().isoformat(),
-                            "confidence": mouth_confidence / 4.0
-                        })
-
-            # ENHANCED HAND DETECTION for phone and mouse
-            hand_results = hand_detector.process(rgb_img)
-            pose_results = pose_detector.process(rgb_img)
-            
-            # ENHANCED phone detection
-            phone_detected, phone_confidence = detect_phone_usage_enhanced(hand_results, face_center_x, face_center_y, w, h)
-            results["phoneDetected"] = phone_detected
-            results["enhancedFeatures"]["phoneConfidence"] = phone_confidence
-            
-            if phone_detected and phone_confidence > 0.5:
-                results["suspiciousActivities"].append(f"📱 POTENTIAL PHONE USAGE (confidence: {phone_confidence:.1%})")
-                
-                if exam_id and phone_confidence > 0.6:
-                    send_proctoring_alert(exam_id, {
-                        "message": "📱 Potential phone usage detected",
-                        "type": "danger",
-                        "severity": "high", 
-                        "timestamp": datetime.now().isoformat(),
-                        "confidence": phone_confidence
-                    })
-
-            # ENHANCED mouse detection
-            mouse_detected, mouse_confidence = detect_mouse_usage_enhanced(hand_results, pose_results, w, h)
-            results["mouseDetected"] = mouse_detected
-            results["enhancedFeatures"]["mouseConfidence"] = mouse_confidence
-            
-            if mouse_detected and mouse_confidence > 0.6:
-                results["suspiciousActivities"].append(f"🖱️ POTENTIAL MOUSE USAGE (confidence: {mouse_confidence:.1%})")
-                
-                if exam_id and mouse_confidence > 0.7:
-                    send_proctoring_alert(exam_id, {
-                        "message": "🖱️ Potential unauthorized device usage detected",
-                        "type": "warning",
-                        "severity": "medium", 
-                        "timestamp": datetime.now().isoformat(),
-                        "confidence": mouse_confidence
-                    })
+            else:
+                print("🛑 Mouse detection disabled")
+                results["mouseDetected"] = False
 
         else:
-            results["suspiciousActivities"].append("❌ NO FACE: Face not visible in camera")
-            
-            if exam_id:
-                send_proctoring_alert(exam_id, {
-                    "message": "❌ Face not visible - Please adjust camera position",
-                    "type": "warning",
-                    "severity": "high",
-                    "timestamp": datetime.now().isoformat()
-                })
+            # Only show no face alert if face detection is enabled
+            if detection_settings.get('faceDetection', True):
+                results["suspiciousActivities"].append("❌ NO FACE: Face not visible in camera")
+                
+                if exam_id:
+                    send_proctoring_alert(exam_id, {
+                        "message": "❌ Face not visible - Please adjust camera position",
+                        "type": "warning",
+                        "severity": "high",
+                        "timestamp": datetime.now().isoformat()
+                    })
 
-        # ENHANCED attention score calculation with confidence weighting
+        # ✅ ENHANCED attention score calculation - ONLY COUNT ENABLED DETECTIONS
         violation_count = len(results["suspiciousActivities"])
         
-        # Calculate weighted penalty based on confidence
+        # Calculate weighted penalty based on confidence - ONLY FOR ENABLED DETECTIONS
         confidence_penalty = 0
         for activity in results["suspiciousActivities"]:
             if "confidence:" in activity:
@@ -861,7 +979,12 @@ def detect():
         results["attentionScore"] = max(0, 100 - confidence_penalty)
         results["detectionConfidence"] = calculate_overall_confidence(results)
         
-        if exam_id and results["attentionScore"] < 70:
+        # Only send low attention alert if relevant detections are enabled
+        if exam_id and results["attentionScore"] < 70 and any([
+            detection_settings.get('gazeDetection', True),
+            detection_settings.get('phoneDetection', True),
+            detection_settings.get('multiplePeopleDetection', True)
+        ]):
             send_proctoring_alert(exam_id, {
                 "message": f"📉 Low attention score: {results['attentionScore']}% - High distraction level",
                 "type": "danger",
@@ -870,19 +993,21 @@ def detect():
                 "confidence": results["detectionConfidence"]
             })
 
-        # Enhanced debug image with confidence information
+        # Enhanced debug image with settings information
         try:
+            settings_status = f"Settings: Face:{detection_settings.get('faceDetection',True)} Gaze:{detection_settings.get('gazeDetection',True)}"
             status_text = f"Faces: {results['faceCount']} | Gaze: {results['gaze']} | Head: {results['headPose']}"
             confidence_text = f"Overall Confidence: {results['detectionConfidence']:.1%}"
             score_text = f"Attention: {results['attentionScore']}% | Alerts: {violation_count}"
             
             cv2.putText(img, "ENHANCED PROCTORING SYSTEM", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            cv2.putText(img, status_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            cv2.putText(img, confidence_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            cv2.putText(img, score_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(img, settings_status, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            cv2.putText(img, status_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(img, confidence_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(img, score_text, (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             
             # Display confidence levels
-            y_offset = 150
+            y_offset = 180
             for feature, confidence in results["enhancedFeatures"].items():
                 if confidence > 0:
                     feature_name = feature.replace("Confidence", "").replace("_", " ").title()
@@ -904,6 +1029,7 @@ def detect():
         # Calculate processing time
         results["processingTime"] = round((time.time() - start_time) * 1000, 2)
 
+        print(f"✅ Detection completed - Settings: {detection_settings}, Alerts: {len(results['suspiciousActivities'])}")
         return jsonify(results)
 
     except Exception as e:
@@ -941,8 +1067,16 @@ def health_check():
     return jsonify({
         "status": "healthy", 
         "timestamp": datetime.now().isoformat(),
-        "version": "enhanced-proctoring",
-        "connected_clients": len(connected_clients)
+        "version": "enhanced-proctoring-with-settings",
+        "connected_clients": len(connected_clients),
+        "features": [
+            "Respects teacher detection settings",
+            "Configurable face detection",
+            "Configurable gaze detection", 
+            "Configurable phone detection",
+            "Configurable mouth detection",
+            "Configurable multiple people detection"
+        ]
     })
 
 @app.route('/test', methods=['GET'])

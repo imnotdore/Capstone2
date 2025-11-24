@@ -1,9 +1,10 @@
-// TeacherExamSession.jsx - WITH CHAT FEATURE
-import React, { useState, useEffect, useRef } from 'react';
+// TeacherExamSession.jsx - UPDATED WITH PROCTORING POPUP
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import api, { startExamSession, endExamSession } from '../lib/api';
 import './TeacherExamSession.css';
+import TeacherProctoringControls from './TeacherProctoringControls';
 
 export default function TeacherExamSession() {
   const { examId } = useParams();
@@ -21,11 +22,20 @@ export default function TeacherExamSession() {
   const [studentStreams, setStudentStreams] = useState({});
   const [peerConnections, setPeerConnections] = useState({});
   
-  // ✅ NEW: Chat State
+  // Chat State
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showChat, setShowChat] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Timer Control State
+  const [showTimerControls, setShowTimerControls] = useState(false);
+  const [timerEditMode, setTimerEditMode] = useState(false);
+  const [customTime, setCustomTime] = useState({ hours: 1, minutes: 0, seconds: 0 });
+
+  // PROCTORING CONTROLS POPUP STATE
+  const [showProctoringControls, setShowProctoringControls] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
 
   // Refs
   const timerRef = useRef(null);
@@ -33,6 +43,163 @@ export default function TeacherExamSession() {
   const socketRef = useRef(null);
   const activeConnections = useRef(new Set());
   const messagesEndRef = useRef(null);
+
+  // ==================== PROCTORING CONTROLS FUNCTIONS ====================
+  const openProctoringControls = (student) => {
+    console.log('🎯 Opening proctoring controls for:', student);
+    setSelectedStudent(student);
+    setShowProctoringControls(true);
+  };
+
+  const closeProctoringControls = () => {
+    setShowProctoringControls(false);
+    setSelectedStudent(null);
+  };
+
+  // ==================== TIMER SYNC FUNCTIONS ====================
+  const broadcastTimeUpdate = useCallback((newTime, runningState = null) => {
+    if (socketRef.current) {
+      const broadcastData = {
+        roomId: `exam-${examId}`,
+        timeLeft: newTime,
+        isTimerRunning: runningState !== null ? runningState : isTimerRunning,
+        timestamp: Date.now(),
+        teacherName: 'Teacher'
+      };
+      
+      socketRef.current.emit('exam-time-update', broadcastData);
+      console.log('🕒 Broadcasting time to students:', {
+        time: newTime,
+        running: runningState !== null ? runningState : isTimerRunning,
+        formatted: formatTime(newTime)
+      });
+    }
+  }, [examId, isTimerRunning]);
+
+  // ==================== TIMER CONTROL FUNCTIONS ====================
+  const toggleTimerControls = () => {
+    setShowTimerControls(!showTimerControls);
+    // Close proctoring controls if open
+    if (showProctoringControls) {
+      setShowProctoringControls(false);
+    }
+  };
+
+  const startTimerEdit = () => {
+    const hrs = Math.floor(timeLeft / 3600);
+    const mins = Math.floor((timeLeft % 3600) / 60);
+    const secs = timeLeft % 60;
+    
+    setCustomTime({
+      hours: hrs,
+      minutes: mins,
+      seconds: secs
+    });
+    setTimerEditMode(true);
+    setShowTimerControls(false);
+  };
+
+  const applyCustomTime = () => {
+    const totalSeconds = (customTime.hours * 3600) + (customTime.minutes * 60) + customTime.seconds;
+    
+    if (totalSeconds <= 0) {
+      alert('Please enter a valid time (greater than 0 seconds)');
+      return;
+    }
+
+    console.log('⏰ Teacher setting new time:', {
+      hours: customTime.hours,
+      minutes: customTime.minutes,
+      seconds: customTime.seconds,
+      totalSeconds: totalSeconds,
+      formatted: formatTime(totalSeconds)
+    });
+
+    setTimeLeft(totalSeconds);
+    setTimerEditMode(false);
+    
+    // BROADCAST NEW TIME TO ALL STUDENTS
+    broadcastTimeUpdate(totalSeconds, isTimerRunning);
+    
+    // Show confirmation
+    alert(`✅ Timer set to ${formatTime(totalSeconds)}. All students will see this time.`);
+  };
+
+  const cancelTimerEdit = () => {
+    setTimerEditMode(false);
+  };
+
+  const handleTimeInputChange = (field, value) => {
+    const numValue = parseInt(value) || 0;
+    
+    let limitedValue = numValue;
+    if (field === 'hours') limitedValue = Math.min(23, Math.max(0, numValue));
+    if (field === 'minutes') limitedValue = Math.min(59, Math.max(0, numValue));
+    if (field === 'seconds') limitedValue = Math.min(59, Math.max(0, numValue));
+    
+    setCustomTime(prev => ({
+      ...prev,
+      [field]: limitedValue
+    }));
+  };
+
+  const addTime = (minutes) => {
+    const additionalSeconds = minutes * 60;
+    const newTime = timeLeft + additionalSeconds;
+    
+    console.log('➕ Adding time:', {
+      minutes: minutes,
+      additionalSeconds: additionalSeconds,
+      currentTime: timeLeft,
+      newTime: newTime,
+      formatted: formatTime(newTime)
+    });
+
+    setTimeLeft(newTime);
+    
+    // BROADCAST ADDED TIME TO ALL STUDENTS
+    broadcastTimeUpdate(newTime);
+    
+    // Show confirmation
+    alert(`✅ Added ${minutes} minutes. New time: ${formatTime(newTime)}`);
+  };
+
+  const pauseTimer = () => {
+    console.log('⏸️ Teacher pausing timer');
+    setIsTimerRunning(false);
+    setShowTimerControls(false);
+    
+    // BROADCAST PAUSE TO ALL STUDENTS
+    broadcastTimeUpdate(timeLeft, false);
+  };
+
+  const resumeTimer = () => {
+    console.log('▶️ Teacher resuming timer');
+    setIsTimerRunning(true);
+    setShowTimerControls(false);
+    
+    // BROADCAST RESUME TO ALL STUDENTS
+    broadcastTimeUpdate(timeLeft, true);
+  };
+
+  const resetTimer = () => {
+    if (!window.confirm('Are you sure you want to reset the timer to the original exam duration?')) {
+      return;
+    }
+    
+    const originalTime = exam?.timeLimit * 60 || 3600;
+    console.log('🔄 Resetting timer to original:', {
+      originalTime: originalTime,
+      formatted: formatTime(originalTime)
+    });
+
+    setTimeLeft(originalTime);
+    setIsTimerRunning(false);
+    setShowTimerControls(false);
+    
+    // BROADCAST RESET TO ALL STUDENTS
+    broadcastTimeUpdate(originalTime, false);
+  };
 
   // ==================== UTILITY FUNCTIONS ====================
   const getAvatarColor = (index) => {
@@ -63,7 +230,12 @@ export default function TeacherExamSession() {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    
+    if (hrs > 0) {
+      return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    } else {
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
   };
 
   // ==================== CHAT FUNCTIONS ====================
@@ -95,29 +267,38 @@ export default function TeacherExamSession() {
     setNewMessage('');
   };
 
-  const handleChatMessage = (data) => {
-    console.log('💬 Received chat message:', data);
-    const newMessage = {
-      ...data.message,
-      timestamp: new Date(data.message.timestamp)
-    };
-    
-    setMessages(prev => [...prev, newMessage]);
-    
-    // Increment unread count if chat is closed
-    if (!showChat) {
-      setUnreadCount(prev => prev + 1);
-    }
-  };
-
   const toggleChat = () => {
     setShowChat(prev => {
       if (!prev) {
-        setUnreadCount(0); // Reset unread count when opening chat
+        setUnreadCount(0);
       }
       return !prev;
     });
   };
+
+  const handleChatMessage = useCallback((data) => {
+    console.log('💬 Received chat message:', data);
+    
+    if (!data.message) {
+      console.error('❌ Invalid chat message format:', data);
+      return;
+    }
+
+    const newMessage = {
+      id: data.message.id || Date.now().toString(),
+      text: data.message.text,
+      sender: data.message.sender,
+      senderName: data.message.senderName || data.userName || 'Unknown',
+      timestamp: new Date(data.message.timestamp || Date.now()),
+      type: data.message.type
+    };
+    
+    setMessages(prev => [...prev, newMessage]);
+    
+    if (!showChat) {
+      setUnreadCount(prev => prev + 1);
+    }
+  }, [showChat]);
 
   // ==================== SOCKET.IO SETUP ====================
   useEffect(() => {
@@ -140,7 +321,6 @@ export default function TeacherExamSession() {
       forceNew: true
     });
 
-    // Socket Event Handlers
     newSocket.on('connect', () => {
       console.log('✅ Teacher Socket connected successfully with ID:', newSocket.id);
       setSocketStatus('connected');
@@ -162,7 +342,21 @@ export default function TeacherExamSession() {
       console.log('🔌 Teacher Socket disconnected. Reason:', reason);
       setSocketStatus('disconnected');
     });
-
+// In the socket.on('connect') section, add:
+newSocket.on('detection-settings-update', (data) => {
+  console.log('✅ Detection settings applied to student:', data);
+});
+// In TeacherExamSession.jsx - Add this socket listener:
+newSocket.on('detection-settings-confirmation', (data) => {
+  console.log('✅ Student confirmed settings received:', {
+    studentName: data.studentName,
+    settings: data.settings,
+    receivedAt: data.receivedAt
+  });
+  
+  // Optional: Show confirmation to teacher
+  alert(`✅ ${data.studentName} received the detection settings update!`);
+});
     // Application Event Handlers
     newSocket.on('student-joined', handleStudentJoined);
     newSocket.on('student-left', handleStudentLeft);
@@ -171,9 +365,18 @@ export default function TeacherExamSession() {
     newSocket.on('webrtc-answer', handleWebRTCAnswer);
     newSocket.on('ice-candidate', handleICECandidate);
     newSocket.on('camera-response', handleCameraResponse);
-    
-    // ✅ NEW: Chat Event Handler
     newSocket.on('chat-message', handleChatMessage);
+    newSocket.on('send-detection-settings', handleDetectionSettingsUpdate);
+    
+    // Handle student time requests
+    newSocket.on('student-time-request', (data) => {
+      console.log('🕒 Student requesting current time:', data.studentSocketId);
+      newSocket.emit('send-current-time', {
+        studentSocketId: data.studentSocketId,
+        timeLeft: timeLeft,
+        isTimerRunning: isTimerRunning
+      });
+    });
 
     setSocket(newSocket);
     socketRef.current = newSocket;
@@ -189,6 +392,130 @@ export default function TeacherExamSession() {
       cleanupAllConnections();
     };
   }, [examId]);
+
+  // Handle detection settings updates from proctoring controls
+  const handleDetectionSettingsUpdate = useCallback((data) => {
+    console.log('🎯 Sending detection settings to student:', data);
+    
+    if (socketRef.current && data.studentSocketId) {
+      socketRef.current.emit('update-detection-settings', {
+        studentSocketId: data.studentSocketId,
+        settings: data.settings,
+        customMessage: data.customMessage,
+        examId: examId
+      });
+    }
+  }, [examId]);
+
+  // ==================== TIMER CONTROL ====================
+  useEffect(() => {
+    if (isTimerRunning && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          const newTime = prev - 1;
+          
+          // Auto-broadcast when time hits certain thresholds
+          if (newTime === 300 || newTime === 60 || newTime === 30 || newTime === 10) {
+            broadcastTimeUpdate(newTime);
+          }
+          
+          return newTime;
+        });
+      }, 1000);
+    } else if (timeLeft <= 0 && isTimerRunning) {
+      // Time's up - broadcast to all students
+      broadcastTimeUpdate(0, false);
+      handleEndExam();
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isTimerRunning, timeLeft]);
+
+  // ==================== EXAM SESSION MANAGEMENT ====================
+  useEffect(() => {
+    const loadExamData = async () => {
+      try {
+        setLoading(true);
+        
+        const token = localStorage.getItem('token');
+        if (!token) {
+          navigate('/login');
+          return;
+        }
+        
+        const examResponse = await api.get(`/exams/${examId}/details`);
+        
+        if (examResponse.success) {
+          setExam(examResponse.data);
+          const initialTime = examResponse.data.timeLimit * 60 || 3600;
+          setTimeLeft(initialTime);
+          setSessionStarted(examResponse.data.isActive || false);
+          
+          console.log('📊 Exam loaded with time:', {
+            timeLimit: examResponse.data.timeLimit,
+            initialTime: initialTime,
+            formatted: formatTime(initialTime)
+          });
+        }
+        
+      } catch (error) {
+        console.error('❌ Failed to load exam data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadExamData();
+  }, [examId, navigate]);
+
+  const handleStartExam = async () => {
+    try {
+      const response = await startExamSession(examId);
+      if (response.success) {
+        setSessionStarted(true);
+        setIsTimerRunning(true);
+        console.log('✅ Exam session started');
+        
+        // BROADCAST INITIAL TIME TO ALL STUDENTS
+        setTimeout(() => {
+          broadcastTimeUpdate(timeLeft, true);
+        }, 1000);
+        
+        // Request cameras for currently connected students
+        const connectedStudents = students.filter(student => student.socketId);
+        console.log(`📹 Requesting cameras from ${connectedStudents.length} connected students`);
+        
+        connectedStudents.forEach((student, index) => {
+          setTimeout(() => {
+            requestStudentCamera(student.socketId);
+          }, 1000 + (index * 1000));
+        });
+      }
+    } catch (error) {
+      console.error('Failed to start exam:', error);
+      alert('Failed to start exam session');
+    }
+  };
+
+  const handleEndExam = async () => {
+    try {
+      cleanupAllConnections();
+      
+      const response = await endExamSession(examId);
+      if (response.success) {
+        setSessionStarted(false);
+        setIsTimerRunning(false);
+        setStudents([]);
+        setStudentStreams({});
+        setPeerConnections({});
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Failed to end exam:', error);
+    }
+  };
 
   // ==================== WEBRTC HANDLERS ====================
   const handleWebRTCOffer = async (data) => {
@@ -520,8 +847,6 @@ export default function TeacherExamSession() {
       const videoElement = videoRefs.current[socketId];
       if (videoElement) {
         videoElement.srcObject = null;
-        
-        
       }
       delete videoRefs.current[socketId];
     }
@@ -533,93 +858,6 @@ export default function TeacherExamSession() {
     activeConnections.current.clear();
   };
 
-  // ==================== EXAM SESSION MANAGEMENT ====================
-  useEffect(() => {
-    const loadExamData = async () => {
-      try {
-        setLoading(true);
-        
-        const token = localStorage.getItem('token');
-        if (!token) {
-          navigate('/login');
-          return;
-        }
-        
-        const examResponse = await api.get(`/exams/${examId}/details`);
-        
-        if (examResponse.success) {
-          setExam(examResponse.data);
-          setTimeLeft(examResponse.data.timeLimit * 60 || 3600);
-          setSessionStarted(examResponse.data.isActive || false);
-        }
-        
-      } catch (error) {
-        console.error('❌ Failed to load exam data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadExamData();
-  }, [examId, navigate]);
-
-  const handleStartExam = async () => {
-    try {
-      const response = await startExamSession(examId);
-      if (response.success) {
-        setSessionStarted(true);
-        setIsTimerRunning(true);
-        console.log('✅ Exam session started');
-        
-        // Request cameras for currently connected students
-        const connectedStudents = students.filter(student => student.socketId);
-        console.log(`📹 Requesting cameras from ${connectedStudents.length} connected students`);
-        
-        connectedStudents.forEach((student, index) => {
-          setTimeout(() => {
-            requestStudentCamera(student.socketId);
-          }, 1000 + (index * 1000));
-        });
-      }
-    } catch (error) {
-      console.error('Failed to start exam:', error);
-      alert('Failed to start exam session');
-    }
-  };
-
-  const handleEndExam = async () => {
-    try {
-      cleanupAllConnections();
-      
-      const response = await endExamSession(examId);
-      if (response.success) {
-        setSessionStarted(false);
-        setIsTimerRunning(false);
-        setStudents([]);
-        setStudentStreams({});
-        setPeerConnections({});
-        setMessages([]);
-      }
-    } catch (error) {
-      console.error('Failed to end exam:', error);
-    }
-  };
-
-  // Timer control
-  useEffect(() => {
-    if (isTimerRunning && timeLeft > 0) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-    } else if (timeLeft <= 0 && isTimerRunning) {
-      handleEndExam();
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isTimerRunning, timeLeft]);
-
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     scrollToBottom();
@@ -627,8 +865,168 @@ export default function TeacherExamSession() {
 
   // ==================== RENDER FUNCTIONS ====================
   
-  // ✅ Only show connected students (those with socketId)
+  // Only show connected students
   const connectedStudents = students.filter(student => student.socketId && student.isConnected);
+
+  // Timer Controls Component
+  const renderTimerControls = () => {
+    if (!showTimerControls) return null;
+
+    return (
+      <div className="timer-controls-panel">
+        <div className="timer-controls-header">
+          <h4>⏰ Timer Controls</h4>
+          <button className="close-controls-btn" onClick={toggleTimerControls}>✕</button>
+        </div>
+        
+        <div className="timer-controls-content">
+          <div className="time-adjust-buttons">
+            <h5>➕ Add Time</h5>
+            <div className="time-buttons-grid">
+              <button className="time-btn" onClick={() => addTime(5)}>+5 min</button>
+              <button className="time-btn" onClick={() => addTime(10)}>+10 min</button>
+              <button className="time-btn" onClick={() => addTime(15)}>+15 min</button>
+              <button className="time-btn" onClick={() => addTime(30)}>+30 min</button>
+            </div>
+          </div>
+
+          <div className="timer-control-buttons">
+            <h5>⏱️ Timer Controls</h5>
+            <div className="control-buttons-grid">
+              {isTimerRunning ? (
+                <button className="control-btn pause" onClick={pauseTimer}>
+                  ⏸️ Pause Timer
+                </button>
+              ) : (
+                <button className="control-btn resume" onClick={resumeTimer}>
+                  ▶️ Resume Timer
+                </button>
+              )}
+              <button className="control-btn edit" onClick={startTimerEdit}>
+                ⚙️ Set Custom Time
+              </button>
+              <button className="control-btn reset" onClick={resetTimer}>
+                🔄 Reset to Original
+              </button>
+            </div>
+          </div>
+          
+          <div className="timer-info">
+            <p><strong>Current Time:</strong> {formatTime(timeLeft)}</p>
+            <p><strong>Status:</strong> {isTimerRunning ? 'Running' : 'Paused'}</p>
+            <p><strong>Students:</strong> Will see EXACTLY this time</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Timer Edit Modal
+  const renderTimerEditModal = () => {
+    if (!timerEditMode) return null;
+
+    return (
+      <div className="timer-edit-modal">
+        <div className="timer-edit-content">
+          <h3>⏰ Set Custom Time</h3>
+          <p className="edit-description">This time will be shown to ALL students</p>
+          
+          <div className="time-inputs">
+            <div className="time-input-group">
+              <label>Hours</label>
+              <input
+                type="number"
+                min="0"
+                max="23"
+                value={customTime.hours}
+                onChange={(e) => handleTimeInputChange('hours', e.target.value)}
+                className="time-input"
+              />
+            </div>
+            
+            <div className="time-input-group">
+              <label>Minutes</label>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={customTime.minutes}
+                onChange={(e) => handleTimeInputChange('minutes', e.target.value)}
+                className="time-input"
+              />
+            </div>
+            
+            <div className="time-input-group">
+              <label>Seconds</label>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={customTime.seconds}
+                onChange={(e) => handleTimeInputChange('seconds', e.target.value)}
+                className="time-input"
+              />
+            </div>
+          </div>
+
+          <div className="preview-time">
+            <strong>All students will see:</strong> 
+            <span className="preview-display">
+              {formatTime((customTime.hours * 3600) + (customTime.minutes * 60) + customTime.seconds)}
+            </span>
+          </div>
+
+          <div className="timer-edit-actions">
+            <button className="cancel-btn" onClick={cancelTimerEdit}>
+              Cancel
+            </button>
+            <button className="apply-btn" onClick={applyCustomTime}>
+              ✅ Apply to Everyone
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // PROCTORING CONTROLS POPUP
+  const renderProctoringControlsPopup = () => {
+    if (!showProctoringControls || !selectedStudent) return null;
+
+    return (
+      <div className="proctoring-controls-popup">
+        <div className="proctoring-popup-content">
+          <div className="proctoring-popup-header">
+            <h3>🎯 Proctoring Controls</h3>
+            <div className="student-info-popup">
+              <div 
+                className="student-avatar-popup"
+                style={{ backgroundColor: getAvatarColor(connectedStudents.findIndex(s => s.socketId === selectedStudent.socketId)) }}
+              >
+                {getSafeStudentName(selectedStudent).charAt(0).toUpperCase()}
+              </div>
+              <div className="student-details-popup">
+                <span className="student-name-popup">{getSafeStudentName(selectedStudent)}</span>
+                <span className="student-id-popup">ID: {getSafeStudentId(selectedStudent)}</span>
+              </div>
+            </div>
+            <button className="close-proctoring-btn" onClick={closeProctoringControls}>✕</button>
+          </div>
+          
+          <div className="proctoring-popup-body">
+            <TeacherProctoringControls 
+              examId={examId}
+              socket={socketRef.current}
+              students={[selectedStudent]} // Only show controls for selected student
+              onDetectionSettingsChange={(settings) => {
+                console.log('Detection settings updated for student:', selectedStudent.name, settings);
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderStudentVideos = () => {
     const studentsWithStreams = connectedStudents
@@ -641,14 +1039,10 @@ export default function TeacherExamSession() {
       return (
         <div className="no-videos">
           <div className="empty-state">
-            <div className="camera-icon">📹</div>
-            <h4>No Active Cameras</h4>
-            <p>Student cameras will appear here when they join and grant camera access</p>
-            <div className="connection-stats">
-              <p><strong>Connection Status:</strong></p>
-              <p>Connected Students: {connectedStudents.length}</p>
-              <p>Active Cameras: {studentsWithStreams.length}</p>
-            </div>
+            <div className="camera-icon"></div>
+            <h4>No one is here</h4>
+            
+          
           </div>
         </div>
       );
@@ -670,6 +1064,16 @@ export default function TeacherExamSession() {
                 <div className="video-header">
                   <span className="student-badge">#{index + 1}</span>
                   <span className="student-name">{getSafeStudentName(student)}</span>
+                  <button 
+                    className="student-settings-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openProctoringControls(student);
+                    }}
+                    title="Detection Settings"
+                  >
+                    ⚙️
+                  </button>
                 </div>
                 
                 <div className="video-container">
@@ -680,10 +1084,6 @@ export default function TeacherExamSession() {
                     playsInline
                     className="student-video"
                   />
-                  
-                  <div className="video-overlay-info">
-                    
-                  </div>
                 </div>
                 
                 <div className="video-footer">
@@ -707,7 +1107,7 @@ export default function TeacherExamSession() {
     );
   };
 
-  // ✅ NEW: Render Chat Component
+  // Render Chat Component
   const renderChat = () => {
     if (!showChat) return null;
 
@@ -789,11 +1189,22 @@ export default function TeacherExamSession() {
         </div>
         
         <div className="header-center">
-          <div className="timer-display">
-            <span className="timer-text">{formatTime(timeLeft)}</span>
+          {/* Timer with Controls */}
+          <div className="timer-section">
+            <div className="timer-display" onClick={toggleTimerControls}>
+              <span className="timer-text">{formatTime(timeLeft)}</span>
+            </div>
+            <button 
+              className="timer-controls-btn"
+              onClick={toggleTimerControls}
+              title="Timer Controls"
+            >
+              ⚙️
+            </button>
           </div>
+          
           <div className="student-count">
-            👥 {connectedStudents.length} Students Connected
+            👥 {connectedStudents.length} Students
           </div>
           <div className={`socket-status ${socketStatus}`}>
             {socketStatus === 'connected' && '🟢 Connected'}
@@ -804,7 +1215,7 @@ export default function TeacherExamSession() {
         </div>
         
         <div className="header-right">
-          {/* ✅ NEW: Chat Toggle Button */}
+          {/* Chat Toggle Button */}
           <button 
             className={`chat-toggle-btn ${unreadCount > 0 ? 'has-unread' : ''}`}
             onClick={toggleChat}
@@ -827,85 +1238,33 @@ export default function TeacherExamSession() {
         </div>
       </div>
 
-      <div className="teacher-exam-content">
-        <div className="videos-section">
-          {renderStudentVideos()}
-        </div>
-
-        <div className="students-section">
-          <div className="students-header">
-            <h3>Connected Students ({connectedStudents.length})</h3>
-            <div className="student-stats">
-              <span className="stat cameras">
-                📹 {connectedStudents.filter(s => s.cameraEnabled).length} Active Cameras
+      {/* UPDATED: Main Content Layout - Videos Only */}
+      <div className="teacher-exam-content-compact">
+        {/* Videos Column Only */}
+        <div className="content-column videos-column-full">
+          <div className="section-card">
+            <div className="card-section-header">
+              <h3></h3>
+              <span className="card-section-badge">
+                {connectedStudents.filter(s => studentStreams[s.socketId]).length} Active
               </span>
             </div>
-          </div>
-          
-          <div className="students-list">
-            {connectedStudents.length > 0 ? (
-              connectedStudents.map((student, index) => (
-                <div key={student.socketId} className="student-card">
-                  <div className="student-info">
-                    <div className="student-avatar" style={{backgroundColor: getAvatarColor(index)}}>
-                      {getSafeStudentName(student).charAt(0).toUpperCase()}
-                    </div>
-                    <div className="student-details">
-                      <span className="student-name">{getSafeStudentName(student)}</span>
-                      <div className="student-meta">
-                        <span className="student-id">
-                          ID: {getSafeStudentId(student)}
-                        </span>
-                        <span className="join-time">
-                          Joined: {student.joinedAt.toLocaleTimeString()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="student-status">
-                    <div className="connection-status-indicator">
-                      <span className={`status-dot ${student.connectionStatus}`}></span>
-                      <span className="status-text">
-                        {student.connectionStatus === 'connected' ? '🟢 Connected' : '🔴 Disconnected'}
-                      </span>
-                    </div>
-                    <span className={`camera-indicator ${student.cameraEnabled ? 'active' : 'inactive'}`}>
-                      {student.cameraEnabled ? '📹 Camera Live' : '📹 Camera Off'}
-                    </span>
-                  </div>
-                  {!student.cameraEnabled && (
-                    <button 
-                      className="request-camera-btn"
-                      onClick={() => requestStudentCamera(student.socketId)}
-                    >
-                      Request Camera
-                    </button>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="no-students">
-                <div className="empty-students">
-                  <div className="student-icon">👥</div>
-                  <h4>No Students Connected</h4>
-                  <p>Waiting for students to join the exam session...</p>
-                  <div className="connection-instructions">
-                    <p><strong>Students should:</strong></p>
-                    <ul>
-                      <li>Join using the exam code</li>
-                      <li>Grant camera permissions when prompted</li>
-                      <li>Stay connected throughout the exam</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
+            {renderStudentVideos()}
           </div>
         </div>
-
-        {/* ✅ NEW: Chat Panel */}
-        {renderChat()}
       </div>
+
+      {/* Chat Panel */}
+      {renderChat()}
+
+      {/* Timer Controls Panel */}
+      {renderTimerControls()}
+
+      {/* Timer Edit Modal */}
+      {renderTimerEditModal()}
+
+      {/* PROCTORING CONTROLS POPUP */}
+      {renderProctoringControlsPopup()}
     </div>
   );
 }
