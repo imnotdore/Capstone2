@@ -5,12 +5,15 @@ import { io } from 'socket.io-client';
 import { getQuizForStudent, submitQuizAnswers } from '../lib/api';
 import './StudentQuizPage.css';
 
-// ==================== PERMISSION CHECK COMPONENT ====================
-const PermissionCheckComponent = React.memo(({ 
+// ==================== WAITING ROOM COMPONENT ====================
+const WaitingRoomComponent = React.memo(({ 
   requiresCamera, 
   requiresMicrophone, 
-  onPermissionsGranted,
-  onCancel 
+  onExamStarted,
+  onCancel,
+  examTitle,
+  className,
+  teacherDetectionSettings
 }) => {
   const [checkingPermissions, setCheckingPermissions] = useState(true);
   const [permissionStatus, setPermissionStatus] = useState({
@@ -60,21 +63,12 @@ const PermissionCheckComponent = React.memo(({
 
       setPermissionStatus(newStatus);
       
-      // Auto-proceed if all required permissions are granted
-      const allGranted = 
-        (!requiresCamera || newStatus.camera.granted) && 
-        (!requiresMicrophone || newStatus.microphone.granted);
-      
-      if (allGranted) {
-        setTimeout(() => onPermissionsGranted(), 500);
-      }
-      
     } catch (error) {
       console.error('Permission check error:', error);
     } finally {
       setCheckingPermissions(false);
     }
-  }, [requiresCamera, requiresMicrophone, onPermissionsGranted]);
+  }, [requiresCamera, requiresMicrophone]);
 
   const getErrorMessage = (error) => {
     switch (error.name) {
@@ -96,15 +90,6 @@ const PermissionCheckComponent = React.memo(({
     checkPermissions();
   };
 
-  const handleManualProceed = () => {
-    const userConfirmed = window.confirm(
-      '⚠️ Without camera/microphone access, your exam may be flagged or invalidated. Continue anyway?'
-    );
-    if (userConfirmed) {
-      onPermissionsGranted();
-    }
-  };
-
   useEffect(() => {
     checkPermissions();
   }, [checkPermissions]);
@@ -114,55 +99,91 @@ const PermissionCheckComponent = React.memo(({
     (!requiresMicrophone || permissionStatus.microphone.granted);
 
   return (
-    <div className="permission-check-overlay">
-      <div className="permission-check-modal">
-        <div className="permission-header">
-          <h2>📋 Exam Requirements Check</h2>
-          <p>This exam requires the following permissions:</p>
+    <div className="waiting-room-overlay">
+      <div className="waiting-room-modal">
+        <div className="waiting-room-header">
+          <h2>🕒 Waiting for Exam to Start</h2>
+          <div className="exam-info-waiting">
+            <h3>{examTitle}</h3>
+            <p>Class: {className}</p>
+          </div>
         </div>
 
-        <div className="permission-requirements">
-          {requiresCamera && (
-            <div className={`requirement-item ${permissionStatus.camera.granted ? 'granted' : 'denied'}`}>
-              <div className="requirement-icon">
-                {permissionStatus.camera.granted ? '✅' : '❌'}
+        <div className="waiting-content">
+          <div className="permission-status">
+            <h4>📋 System Requirements Check</h4>
+            
+            {requiresCamera && (
+              <div className={`requirement-item ${permissionStatus.camera.granted ? 'granted' : 'denied'}`}>
+                <div className="requirement-icon">
+                  {permissionStatus.camera.granted ? '✅' : '❌'}
+                </div>
+                <div className="requirement-content">
+                  <h4>Camera Access</h4>
+                  <p>Required for proctoring and monitoring</p>
+                  {!permissionStatus.camera.granted && permissionStatus.camera.error && (
+                    <div className="error-message">{permissionStatus.camera.error}</div>
+                  )}
+                </div>
               </div>
-              <div className="requirement-content">
-                <h4>Camera Access</h4>
-                <p>Required for proctoring and monitoring</p>
-                {!permissionStatus.camera.granted && permissionStatus.camera.error && (
-                  <div className="error-message">{permissionStatus.camera.error}</div>
-                )}
+            )}
+
+            {requiresMicrophone && (
+              <div className={`requirement-item ${permissionStatus.microphone.granted ? 'granted' : 'denied'}`}>
+                <div className="requirement-icon">
+                  {permissionStatus.microphone.granted ? '✅' : '❌'}
+                </div>
+                <div className="requirement-content">
+                  <h4>Microphone Access</h4>
+                  <p>Required for audio monitoring</p>
+                  {!permissionStatus.microphone.granted && permissionStatus.microphone.error && (
+                    <div className="error-message">{permissionStatus.microphone.error}</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="detection-info">
+            <h4>🚨 Proctoring Information</h4>
+            <div className="detection-rules">
+              <div className="rule-item">
+                <span className="rule-icon">👁️</span>
+                <span className="rule-text">Face must be visible to camera at all times</span>
+              </div>
+              <div className="rule-item">
+                <span className="rule-icon">📵</span>
+                <span className="rule-text">No mobile phones or secondary devices allowed</span>
+              </div>
+              <div className="rule-item">
+                <span className="rule-icon">👥</span>
+                <span className="rule-text">No other people in the room</span>
+              </div>
+              <div className="rule-item">
+                <span className="rule-icon">👀</span>
+                <span className="rule-text">Eye gaze monitoring is active</span>
+              </div>
+              <div className="rule-item">
+                <span className="rule-icon">🎤</span>
+                <span className="rule-text">Audio is being monitored for suspicious sounds</span>
               </div>
             </div>
-          )}
+          </div>
 
-          {requiresMicrophone && (
-            <div className={`requirement-item ${permissionStatus.microphone.granted ? 'granted' : 'denied'}`}>
-              <div className="requirement-icon">
-                {permissionStatus.microphone.granted ? '✅' : '❌'}
-              </div>
-              <div className="requirement-content">
-                <h4>Microphone Access</h4>
-                <p>Required for audio monitoring</p>
-                {!permissionStatus.microphone.granted && permissionStatus.microphone.error && (
-                  <div className="error-message">{permissionStatus.microphone.error}</div>
-                )}
-              </div>
-            </div>
-          )}
+          <div className="attempts-info">
+            <h4>⚠️ Violation System</h4>
+            <p>You have <strong>{teacherDetectionSettings.maxAttempts || 10} attempts</strong> for violations.</p>
+            <p>Violations include: Looking away frequently, phone usage, multiple people detected, etc.</p>
+          </div>
+
+          <div className="waiting-indicator">
+            <div className="loading-spinner-large"></div>
+            <p>Waiting for teacher to start the exam...</p>
+            <small>Please stay on this page and ensure your camera/microphone are ready</small>
+          </div>
         </div>
 
-        <div className="permission-instructions">
-          <h4>How to enable permissions:</h4>
-          <ul>
-            <li>Click the camera/microphone icon in your browser's address bar</li>
-            <li>Select "Allow" for camera and microphone access</li>
-            <li>Refresh the page and try again</li>
-          </ul>
-        </div>
-
-        <div className="permission-actions">
+        <div className="waiting-actions">
           {checkingPermissions ? (
             <div className="checking-permissions">
               <div className="loading-spinner"></div>
@@ -170,22 +191,15 @@ const PermissionCheckComponent = React.memo(({
             </div>
           ) : (
             <>
-              {allRequiredGranted ? (
-                <button className="start-quiz-btn" onClick={() => onPermissionsGranted()}>
-                  🚀 Start Exam
-                </button>
-              ) : (
+              {!allRequiredGranted && (
                 <div className="action-buttons">
                   <button className="retry-btn" onClick={handleRetry}>
                     🔄 Retry Permission Check
                   </button>
-                  <button className="manual-proceed-btn" onClick={handleManualProceed}>
-                    ⚠️ Continue Anyway
-                  </button>
                 </div>
               )}
               <button className="cancel-btn" onClick={onCancel}>
-                ← Back to Dashboard
+                ← Leave Waiting Room
               </button>
             </>
           )}
@@ -1047,6 +1061,8 @@ export default function StudentQuizPage() {
   const [submitting, setSubmitting] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [error, setError] = useState('');
+  const [examStarted, setExamStarted] = useState(false);
+  const [userRole] = useState('teacher');
 
   // ✅ TIMER STATE (SYNCED WITH TEACHER)
   const [timeLeft, setTimeLeft] = useState(null);
@@ -1152,8 +1168,7 @@ const [studentAttempts, setStudentAttempts] = useState({
   };
 // ==================== SOCKET.IO SETUP ====================
 useEffect(() => {
-  if (!permissionsGranted) return;
-
+  // Connect socket immediately, not just after permissions
   const token = localStorage.getItem('token');
   
   if (!token) {
@@ -1166,12 +1181,10 @@ useEffect(() => {
     return;
   }
 
-  console.log('🔑 Connecting student socket...');
+  console.log('🔑 Connecting student socket IMMEDIATELY...');
 
   const newSocket = io('http://localhost:3000', {
-    auth: { 
-      token: token 
-    },
+    auth: { token: token },
     query: { 
       examId: examId,
       userRole: 'student' 
@@ -1190,6 +1203,19 @@ useEffect(() => {
       userId: 'student-user',
       userRole: 'student'
     });
+
+    // ✅ REQUEST CURRENT TIME FROM TEACHER IMMEDIATELY
+    setTimeout(() => {
+      if (newSocket.connected) {
+        console.log('🕒 Requesting current time from teacher...');
+        newSocket.emit('student-time-request', {
+          studentSocketId: newSocket.id,
+          roomId: `exam-${examId}`
+        });
+      }
+    }, 1000);
+
+
 
 // ✅ DAGDAG SA SOCKET.IO SETUP:
 // DAGDAGIN ito sa socket event listeners:
@@ -1257,6 +1283,54 @@ newSocket.on('student-violation', (data) => {
       }));
     }
   }
+});
+
+// Sa useEffect ng socket setup, idagdag ang mga sumusunod:
+newSocket.on('exam-started', (data) => {
+  console.log('✅ Exam started by teacher:', data);
+  setExamStarted(true);
+  setPermissionsGranted(true);
+  if (requiresCamera) setCameraActive(true);
+  if (requiresMicrophone) setMicrophoneActive(true);
+  
+  // Load the quiz when exam starts
+  loadQuiz();
+});
+
+newSocket.on('exam-ended', (data) => {
+  console.log('🛑 Exam ended by teacher:', data);
+  alert('❌ Exam has been ended by the teacher. You will be redirected.');
+  
+  // Clean up resources
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+  }
+  if (peerConnectionRef.current) {
+    peerConnectionRef.current.close();
+  }
+  
+  // Redirect to dashboard
+  setTimeout(() => {
+    navigate('/dashboard');
+  }, 3000);
+});
+
+newSocket.on('teacher-disconnect', (data) => {
+  console.log('🔌 Disconnected by teacher:', data);
+  alert(`❌ You have been disconnected by the teacher. Reason: ${data.reason}`);
+  
+  // Clean up resources
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+  }
+  if (peerConnectionRef.current) {
+    peerConnectionRef.current.close();
+  }
+  
+  // Redirect to dashboard
+  setTimeout(() => {
+    navigate('/dashboard');
+  }, 3000);
 });
 
   newSocket.on('detection-settings-update', (data) => {
@@ -1339,7 +1413,7 @@ newSocket.on('student-violation', (data) => {
       socketRef.current = null;
     }
   };
-}, [examId, permissionsGranted, handleChatMessage]);
+}, [examId, handleChatMessage]);
 
   // ==================== TIMER EFFECT ====================
   useEffect(() => {
@@ -1360,99 +1434,119 @@ newSocket.on('student-violation', (data) => {
   }, [timeLeft, isTimerRunning]);
 
   // ==================== WEBRTC HANDLERS ====================
-  const handleCameraRequest = async (data, isRetry = false) => {
-    console.log('📹 Camera request from teacher:', data);
-    setCameraRequested(true);
-    setTeacherSocketId(data.from);
-    
-    try {
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-      }
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 24 },
-          facingMode: 'user'
-        }, 
-        audio: false 
-      });
-      
-      console.log('🎥 Camera accessed successfully');
-      
-      // After getting the stream
-      const videoTrack = stream.getVideoTracks()[0];
-      const capabilities = videoTrack.getCapabilities();
-
-      if (capabilities.exposureCompensation) {
-        await videoTrack.applyConstraints({
-          advanced: [{ exposureCompensation: -1.0 }]
-        });
-      }
-      
-      setLocalStream(stream);
-      setIsSharingCamera(true);
-      setCameraActive(true);
-
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' }
-        ]
-      });
-
-      peerConnectionRef.current = pc;
-
-      stream.getTracks().forEach(track => {
-        console.log('➕ Adding track to peer connection:', track.kind);
-        pc.addTrack(track, stream);
-      });
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate && socketRef.current) {
-          console.log('🧊 Sending ICE candidate to teacher');
-          socketRef.current.emit('ice-candidate', {
-            target: data.from,
-            candidate: event.candidate
-          });
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        console.log('🔗 Student WebRTC state:', pc.connectionState);
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      console.log('✅ Created local offer');
-
-      if (socketRef.current) {
-        socketRef.current.emit('webrtc-offer', {
-          target: data.from,
-          offer: offer
-        });
-        console.log('✅ Sent WebRTC offer to teacher');
-      }
-
-      setPeerConnection(pc);
-
-    } catch (error) {
-      console.error('❌ Error accessing camera:', error);
-      setIsSharingCamera(false);
-      setCameraActive(false);
-      
-      if (socketRef.current) {
-        socketRef.current.emit('camera-response', {
-          teacherSocketId: data.from,
-          enabled: false
-        });
-      }
+const handleCameraRequest = async (data, isRetry = false) => {
+  console.log('📹 Camera request from teacher:', data);
+  setCameraRequested(true);
+  setTeacherSocketId(data.from || data.teacherSocketId);
+  
+  try {
+    // Clean up existing streams and connections
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
     }
-  };
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+
+    console.log('🎥 Attempting to access camera...');
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 24 },
+        facingMode: 'user'
+      }, 
+      audio: false 
+    });
+    
+    console.log('✅ Camera accessed successfully');
+    
+    // Apply camera constraints for better quality
+    const videoTrack = stream.getVideoTracks()[0];
+    const capabilities = videoTrack.getCapabilities();
+
+    if (capabilities.exposureCompensation) {
+      await videoTrack.applyConstraints({
+        advanced: [{ exposureCompensation: -1.0 }]
+      });
+    }
+    
+    setLocalStream(stream);
+    setIsSharingCamera(true);
+    setCameraActive(true);
+
+    // Create new peer connection
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+      ]
+    });
+
+    peerConnectionRef.current = pc;
+
+    // Add all tracks to peer connection
+    stream.getTracks().forEach(track => {
+      console.log('➕ Adding track to peer connection:', track.kind);
+      pc.addTrack(track, stream);
+    });
+
+    // Set up ICE candidate handler
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current) {
+        console.log('🧊 Sending ICE candidate to teacher');
+        socketRef.current.emit('ice-candidate', {
+          target: data.from || data.teacherSocketId,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    // Set up connection state handler
+    pc.onconnectionstatechange = () => {
+      console.log('🔗 Student WebRTC state:', pc.connectionState);
+    };
+
+    // Create and send offer
+    console.log('🤝 Creating WebRTC offer...');
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    console.log('✅ Created local offer');
+
+    // Send offer to teacher
+    if (socketRef.current) {
+      socketRef.current.emit('webrtc-offer', {
+        target: data.from || data.teacherSocketId,
+        offer: offer
+      });
+      console.log('✅ Sent WebRTC offer to teacher');
+    }
+
+    // Send camera response to teacher
+    socketRef.current.emit('camera-response', {
+      teacherSocketId: data.from || data.teacherSocketId,
+      enabled: true,
+      studentId: 'student-user'
+    });
+
+    setPeerConnection(pc);
+
+  } catch (error) {
+    console.error('❌ Error accessing camera:', error);
+    setIsSharingCamera(false);
+    setCameraActive(false);
+    
+    // Send failure response to teacher
+    if (socketRef.current) {
+      socketRef.current.emit('camera-response', {
+        teacherSocketId: data.from || data.teacherSocketId,
+        enabled: false,
+        error: error.message
+      });
+    }
+    
+    alert('❌ Failed to access camera. Please check permissions.');
+  }
+};
 
   const handleWebRTCAnswer = async (data) => {
     const pc = peerConnectionRef.current;
@@ -1498,6 +1592,22 @@ newSocket.on('student-violation', (data) => {
     }
   };
 
+  // ==================== CONNECTION STATUS CHECK ====================
+useEffect(() => {
+  const checkConnectionStatus = () => {
+    if (socketRef.current) {
+      console.log('🔌 Socket Status:', {
+        connected: socketRef.current.connected,
+        id: socketRef.current.id,
+        room: `exam-${examId}`
+      });
+    }
+  };
+
+  if (socketRef.current) {
+    setTimeout(checkConnectionStatus, 2000);
+  }
+}, [socketRef.current, examId]);
   // ==================== PROCTORING ALERTS HANDLER ====================
 // Update the handleProctoringAlert to include new detection types
 const handleProctoringAlert = useCallback((alertData) => {
@@ -1559,6 +1669,7 @@ const handleProctoringAlert = useCallback((alertData) => {
   }, [requiresMicrophone]);
 
   // ==================== CAMERA STATE HANDLER ====================
+  
   const handleCameraStateChange = useCallback((isActive) => {
     setCameraActive(isActive);
     if (!isActive && requiresCamera) {
@@ -1691,16 +1802,76 @@ const handleProctoringAlert = useCallback((alertData) => {
   const progressPercentage = (answeredCount / (quiz?.questions?.length || 1)) * 100;
 
   // Show permission check first
-  if ((requiresCamera || requiresMicrophone) && !permissionsGranted) {
-    return (
-      <PermissionCheckComponent 
-        requiresCamera={requiresCamera}
-        requiresMicrophone={requiresMicrophone}
-        onPermissionsGranted={handlePermissionsGranted}
-        onCancel={handleCancelExam}
-      />
-    );
-  }
+  // Palitan ang existing na permission check logic:
+if (!examStarted) {
+  return (
+    <WaitingRoomComponent 
+      requiresCamera={requiresCamera}
+      requiresMicrophone={requiresMicrophone}
+      onExamStarted={() => {
+        setExamStarted(true);
+        setPermissionsGranted(true);
+      }}
+      onCancel={handleCancelExam}
+      examTitle={examTitle}
+      className={className}
+      teacherDetectionSettings={teacherDetectionSettings}
+    />
+  );
+}
+const logEvent = (eventName, data) => {
+  console.log(`🎯 ${eventName} at ${new Date().toLocaleTimeString()}:`, data);
+};
+
+
+// Add this check after permissions are granted but before exam starts
+if (permissionsGranted && !examStarted) {
+  return (
+    <div className="ready-waiting-room">
+      <div className="ready-waiting-content">
+        <div className="waiting-header">
+          <h2>✅ Ready for Exam</h2>
+          <p>All systems are ready. Waiting for teacher to start the exam...</p>
+        </div>
+        
+        <div className="system-status">
+          <div className="status-item">
+            <span className="status-icon">📹</span>
+            <span className="status-text">Camera: {cameraActive ? 'Ready' : 'Checking...'}</span>
+          </div>
+          <div className="status-item">
+            <span className="status-icon">🎤</span>
+            <span className="status-text">Microphone: {microphoneActive ? 'Ready' : 'Checking...'}</span>
+          </div>
+          <div className="status-item">
+            <span className="status-icon">🔍</span>
+            <span className="status-text">Proctoring: Active</span>
+          </div>
+        </div>
+
+        <div className="waiting-rules">
+          <h4>Important Rules:</h4>
+          <ul>
+            <li>❌ Do not switch tabs or open new windows</li>
+            <li>❌ Do not use mobile phones or other devices</li>
+            <li>❌ Do not talk to other people</li>
+            <li>✅ Keep your face visible to the camera</li>
+            <li>✅ Stay in the frame throughout the exam</li>
+          </ul>
+        </div>
+
+        <div className="loading-waiting">
+          <div className="pulse-animation"></div>
+          <p>Standing by for exam start signal...</p>
+        </div>
+
+        <button className="cancel-btn" onClick={handleCancelExam}>
+          ← Leave Exam
+        </button>
+      </div>
+    </div>
+  );
+}
 
   // Loading state
   if (loading) {

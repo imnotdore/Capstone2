@@ -21,7 +21,7 @@ export default function TeacherExamSession() {
   const [socket, setSocket] = useState(null);
   const [studentStreams, setStudentStreams] = useState({});
   const [peerConnections, setPeerConnections] = useState({});
-  
+  const [userRole] = useState('student'); 
   // Chat State
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -226,17 +226,25 @@ export default function TeacherExamSession() {
     return socketRef.current && socketRef.current.connected;
   };
 
-  const formatTime = (seconds) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hrs > 0) {
-      return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    } else {
-      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-  };
+ // ==================== UTILITY FUNCTIONS ====================
+const formatTime = (seconds) => {
+  if (seconds === null || seconds === undefined) return '00:00';
+  
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  if (hrs > 0) {
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  } else {
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+};
+
+// Event logger utility
+const logEvent = (eventName, data) => {
+  console.log(`🎯 ${eventName} at ${new Date().toLocaleTimeString()}:`, data);
+};
 
   // ==================== CHAT FUNCTIONS ====================
   const scrollToBottom = () => {
@@ -353,10 +361,16 @@ newSocket.on('detection-settings-confirmation', (data) => {
     settings: data.settings,
     receivedAt: data.receivedAt
   });
-  
-  // Optional: Show confirmation to teacher
   alert(`✅ ${data.studentName} received the detection settings update!`);
 });
+
+// Sa useEffect ng socket setup, idagdag ito:
+newSocket.on('exam-started', (data) => {
+  console.log('✅ Exam started by teacher');
+  setSessionStarted(true);
+});
+
+
     // Application Event Handlers
     newSocket.on('student-joined', handleStudentJoined);
     newSocket.on('student-left', handleStudentLeft);
@@ -470,53 +484,113 @@ newSocket.on('detection-settings-confirmation', (data) => {
     loadExamData();
   }, [examId, navigate]);
 
-  const handleStartExam = async () => {
-    try {
-      const response = await startExamSession(examId);
-      if (response.success) {
-        setSessionStarted(true);
-        setIsTimerRunning(true);
-        console.log('✅ Exam session started');
+const handleStartExam = async () => {
+  try {
+    console.log('🚀 Starting exam session...');
+    
+    const response = await startExamSession(examId);
+    if (response.success) {
+      setSessionStarted(true);
+      setIsTimerRunning(true);
+      console.log('✅ Exam session started successfully');
+      
+      // BROADCAST EXAM START TO ALL STUDENTS
+      if (socketRef.current) {
+        console.log('📢 Broadcasting exam start to students...');
         
-        // BROADCAST INITIAL TIME TO ALL STUDENTS
-        setTimeout(() => {
-          broadcastTimeUpdate(timeLeft, true);
-        }, 1000);
+        const startData = {
+          roomId: `exam-${examId}`,
+          examId: examId,
+          examTitle: exam?.title || 'Exam',
+          timestamp: new Date().toISOString(),
+          requiresCamera: true,
+          requiresMicrophone: true
+        };
         
-        // Request cameras for currently connected students
+        console.log('🎯 Sending exam-started event:', startData);
+        
+        // Broadcast to entire room
+        socketRef.current.emit('exam-started', startData);
+        
+        // Also send to each connected student individually for redundancy
         const connectedStudents = students.filter(student => student.socketId);
-        console.log(`📹 Requesting cameras from ${connectedStudents.length} connected students`);
-        
-        connectedStudents.forEach((student, index) => {
-          setTimeout(() => {
-            requestStudentCamera(student.socketId);
-          }, 1000 + (index * 1000));
+        connectedStudents.forEach(student => {
+          if (student.socketId) {
+            socketRef.current.emit('exam-started', {
+              ...startData,
+              targetStudent: student.socketId
+            });
+          }
         });
       }
-    } catch (error) {
-      console.error('Failed to start exam:', error);
-      alert('Failed to start exam session');
-    }
-  };
-
-  const handleEndExam = async () => {
-    try {
-      cleanupAllConnections();
       
-      const response = await endExamSession(examId);
-      if (response.success) {
-        setSessionStarted(false);
-        setIsTimerRunning(false);
-        setStudents([]);
-        setStudentStreams({});
-        setPeerConnections({});
-        setMessages([]);
-      }
-    } catch (error) {
-      console.error('Failed to end exam:', error);
+      // BROADCAST INITIAL TIME TO ALL STUDENTS
+      setTimeout(() => {
+        broadcastTimeUpdate(timeLeft, true);
+      }, 1000);
+      
+      // Request cameras for currently connected students
+      const connectedStudents = students.filter(student => student.socketId);
+      console.log(`📹 Requesting cameras from ${connectedStudents.length} connected students`);
+      
+      connectedStudents.forEach((student, index) => {
+        setTimeout(() => {
+          requestStudentCamera(student.socketId);
+        }, 1000 + (index * 1000));
+      });
+      
+      alert('✅ Exam started! Students can now see the quiz.');
+    } else {
+      alert('❌ Failed to start exam session');
     }
-  };
+  } catch (error) {
+    console.error('Failed to start exam:', error);
+    alert('Failed to start exam session');
+  }
+};
 
+const handleEndExam = async () => {
+  try {
+    console.log('🛑 Ending exam session and disconnecting all students...');
+    
+    // BROADCAST EXAM END TO ALL STUDENTS
+    if (socketRef.current) {
+      socketRef.current.emit('exam-ended', {
+        roomId: `exam-${examId}`,
+        message: 'Exam has been ended by teacher',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Disconnect all students manually
+    const connectedStudents = students.filter(student => student.socketId);
+    connectedStudents.forEach(student => {
+      if (socketRef.current) {
+        socketRef.current.emit('disconnect-student', {
+          studentSocketId: student.socketId,
+          reason: 'Exam ended by teacher',
+          examId: examId
+        });
+      }
+    });
+    
+    cleanupAllConnections();
+    
+    const response = await endExamSession(examId);
+    if (response.success) {
+      setSessionStarted(false);
+      setIsTimerRunning(false);
+      setStudents([]);
+      setStudentStreams({});
+      setPeerConnections({});
+      setMessages([]);
+      alert('✅ Exam ended! All students have been disconnected.');
+    }
+  } catch (error) {
+    console.error('Failed to end exam:', error);
+    alert('Failed to end exam session');
+  }
+};
   // ==================== WEBRTC HANDLERS ====================
   const handleWebRTCOffer = async (data) => {
     console.log('🎯 Received WebRTC offer from:', data.from);
@@ -780,30 +854,37 @@ newSocket.on('detection-settings-confirmation', (data) => {
   };
 
   // ==================== CAMERA REQUEST MANAGEMENT ====================
-  const requestStudentCamera = (studentSocketId) => {
-    if (!isSocketConnected() || !studentSocketId) {
-      console.warn('⚠️ Socket not connected for camera request');
-      return;
-    }
+ const requestStudentCamera = (studentSocketId) => {
+  if (!isSocketConnected() || !studentSocketId) {
+    console.warn('⚠️ Socket not connected for camera request');
+    return;
+  }
 
-    if (studentStreams[studentSocketId]) {
-      console.log('✅ Already have stream for:', studentSocketId);
-      return;
-    }
+  if (studentStreams[studentSocketId]) {
+    console.log('✅ Already have stream for:', studentSocketId);
+    return;
+  }
 
-    if (activeConnections.current.has(studentSocketId)) {
-      console.log('⏳ Already processing camera for:', studentSocketId);
-      return;
-    }
+  if (activeConnections.current.has(studentSocketId)) {
+    console.log('⏳ Already processing camera for:', studentSocketId);
+    return;
+  }
 
-    console.log('📹 Requesting camera from student:', studentSocketId);
-    activeConnections.current.add(studentSocketId);
-    
-    socketRef.current.emit('request-student-camera', {
-      studentSocketId: studentSocketId,
-      roomId: `exam-${examId}`
-    });
-  };
+  console.log('📹 Requesting camera from student:', studentSocketId);
+  activeConnections.current.add(studentSocketId);
+  
+  // Send camera request to student
+  socketRef.current.emit('request-student-camera', {
+    studentSocketId: studentSocketId,
+    roomId: `exam-${examId}`,
+    teacherSocketId: socketRef.current.id
+  });
+  
+  // Remove from pending after 15 seconds
+  setTimeout(() => {
+    activeConnections.current.delete(studentSocketId);
+  }, 15000);
+};
 
   // ==================== CONNECTION CLEANUP ====================
   const cleanupStudentConnection = (socketId) => {
@@ -1033,7 +1114,6 @@ newSocket.on('detection-settings-confirmation', (data) => {
       .filter(student => studentStreams[student.socketId])
       .sort((a, b) => getSafeStudentName(a).localeCompare(getSafeStudentName(b)));
 
-    console.log('🎬 Rendering videos for connected students:', studentsWithStreams.length);
 
     if (studentsWithStreams.length === 0) {
       return (

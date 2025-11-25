@@ -122,6 +122,57 @@ io.on("connection", (socket) => {
     }
   });
 
+
+// ===== EXAM START/END HANDLERS =====
+// In server.js socket.io handlers
+socket.on('exam-started', (data) => {
+  console.log('📢 Teacher started exam, broadcasting to room:', data.roomId);
+  // Broadcast to all students in the room
+  socket.to(data.roomId).emit('exam-started', data);
+  
+  // Also log who's in the room
+  const room = examRooms.get(data.roomId);
+  if (room) {
+    console.log(`👥 Room ${data.roomId} has ${room.students.size} students`);
+  }
+});
+
+socket.on('exam-ended', (data) => {
+  console.log('🛑 Teacher ended exam, broadcasting to room:', data.roomId);
+  // Broadcast to all students in the room
+  socket.to(data.roomId).emit('exam-ended', data);
+  
+  // Disconnect all students in the room
+  if (examRooms.has(data.roomId)) {
+    const room = examRooms.get(data.roomId);
+    room.students.forEach((studentInfo, studentSocketId) => {
+      socket.to(studentSocketId).emit('teacher-disconnect', {
+        reason: data.message || 'Exam ended by teacher',
+        examId: data.examId
+      });
+    });
+    // Clear the room
+    room.students.clear();
+  }
+});
+
+// Handle teacher manually disconnecting students
+socket.on('disconnect-student', (data) => {
+  console.log(`🔌 Teacher disconnecting student: ${data.studentSocketId} - Reason: ${data.reason}`);
+  
+  // Send disconnect command to student
+  socket.to(data.studentSocketId).emit('teacher-disconnect', {
+    reason: data.reason,
+    examId: data.examId
+  });
+  
+  // Remove student from room
+  const room = examRooms.get(`exam-${data.examId}`);
+  if (room && room.students.has(data.studentSocketId)) {
+    room.students.delete(data.studentSocketId);
+  }
+});
+
   // Teacher sending time to specific student
   socket.on('send-current-time', (data) => {
     console.log('🕒 Teacher sending time to student:', data.studentSocketId);
